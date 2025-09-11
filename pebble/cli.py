@@ -135,7 +135,7 @@ def compute(config):
             db["blocks"].bulk_write(ops, ordered=False)
 
         blocks = list(db["blocks"].find({"night_id": night}, {"_id": 0}))
-        bench = bench_minutes_for_night(blocks, env)
+        bench = bench_minutes_for_night(blocks, split["pre_ms"], split["post_ms"])
 
         # Persist bench_night_totals for this night
         ops = []
