@@ -129,7 +129,7 @@ def ingest_reports(s: Settings | None = None) -> dict:
             if ops:
                 db["actors"].bulk_write(ops, ordered=False)
 
-        # fights (single unified collection)
+        # fights (single unified collection persisted to ``fights_all``)
         fights = bundle.get("fights", []) or []
         fops = []
         for f in fights:
@@ -168,7 +168,7 @@ def ingest_reports(s: Settings | None = None) -> dict:
             }
             fops.append(UpdateOne(doc_key, {"$set": base}, upsert=True))
         if fops:
-            db["fights"].bulk_write(fops, ordered=False)
+            db["fights_all"].bulk_write(fops, ordered=False)
         total_fights += len(fights)
 
     return {"reports": len(targets), "fights": total_fights}

@@ -295,7 +295,7 @@ Runtime: Python 3.12
   - `config_loader.py` — load `config.yaml`, overlay `.env`/env; return typed `Settings` (pydantic).
   - `logging_setup.py` — structured logging config.
   - `wcl_client.py` — WarcraftLogs GraphQL v2 client (requests/tenacity); conditional GET emulation via ETag/Last-Modified cache.
-  - `ingest.py` — fetch fights per report; write to Mongo (`fights_all`, `fights_mythic`); maintain `reports` metadata.
+  - `ingest.py` — fetch fights per report; write to Mongo (`fights_all`); maintain `reports` metadata.
   - `participation.py` — build per-main participation from Mythic fights (bridging trash time).
   - `breaks.py` — detect break from All-Fights; apply manual overrides.
   - `envelope.py` — compute Mythic envelope + pre/post split.

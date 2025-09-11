@@ -7,6 +7,7 @@ from .envelope import mythic_envelope, split_pre_post
 from .breaks import detect_break
 from .blocks import build_blocks
 from .bench_calc import bench_minutes_for_night
+from .participation import build_mythic_participation
 from .export_sheets import replace_values
 
 
@@ -27,8 +28,10 @@ def ingest(config):
 @cli.command()
 @click.option("--config", default="config.yaml", show_default=True)
 def compute(config):
-    """Compute Night QA, Bench Night Totals, and Week Totals from Mongo contents.
-    Now reads unified `fights` with embedded participants and absolute times.
+    """Compute Night QA and bench tables from staged Mongo collections.
+
+    Reads from ``fights_all`` then materializes ``participation_m`` and
+    ``blocks`` before aggregating bench minutes.
     """
     log = setup_logging()
     s = load_settings(config)
@@ -40,26 +43,48 @@ def compute(config):
     # Night loop: derive QA + bench
     nights = sorted(set([r["night_id"] for r in db["reports"].find({}, {"night_id": 1, "_id": 0})]))
 
-    night_qa_rows = [["Night ID", "Mythic Start (ms)", "Mythic End (ms)", "Break Start (ms)", "Break End (ms)", "Mythic Pre (min)", "Mythic Post (min)"]]
-    bench_rows = [["Night ID", "Main", "Played Pre (min)", "Played Post (min)", "Bench Pre (min)", "Bench Post (min)"]]
+    night_qa_rows = [[
+        "Night ID",
+        "Mythic Start (ms)",
+        "Mythic End (ms)",
+        "Break Start (ms)",
+        "Break End (ms)",
+        "Mythic Pre (min)",
+        "Mythic Post (min)",
+    ]]
+    bench_rows = [[
+        "Night ID",
+        "Main",
+        "Played Pre (min)",
+        "Played Post (min)",
+        "Bench Pre (min)",
+        "Bench Post (min)",
+    ]]
 
     for night in nights:
-        fights_all = list(db["fights"].find({"night_id": night}, {"_id": 0}))
+        fights_all = list(db["fights_all"].find({"night_id": night}, {"_id": 0}))
         fights_m = [f for f in fights_all if f.get("is_mythic")]
 
         env = mythic_envelope(fights_m)
         if not env:
             continue
 
-        br = detect_break(fights_all,
-                          window_start_min=s.time.break_window_start_min,
-                          window_end_min=s.time.break_window_end_min,
-                          min_break_min=s.time.break_min_minutes,
-                          max_break_min=s.time.break_max_minutes)
+        br = detect_break(
+            fights_all,
+            window_start_min=s.time.break_window_start_min,
+            window_end_min=s.time.break_window_end_min,
+            min_break_min=s.time.break_min_minutes,
+            max_break_min=s.time.break_max_minutes,
+        )
         split = split_pre_post(env, br)
         night_qa_rows.append([
-            night, env[0], env[1], br[0] if br else "", br[1] if br else "",
-            (split["pre_ms"] // 60000), (split["post_ms"] // 60000)
+            night,
+            env[0],
+            env[1],
+            br[0] if br else "",
+            br[1] if br else "",
+            (split["pre_ms"] // 60000),
+            (split["post_ms"] // 60000),
         ])
         # Persist Night QA to Mongo (idempotent)
         qa_doc = {
@@ -73,29 +98,58 @@ def compute(config):
         }
         db["night_qa"].update_one({"night_id": night}, {"$set": qa_doc}, upsert=True)
 
-        # per-fight participation rows from embedded participants
-        part_rows = []
-        for f in fights_m:
-            for p in (f.get("participants") or []):
-                name = p.get("name")
-                if not name:
-                    continue
-                part_rows.append({
-                    "main": name,
-                    "report_code": f.get("report_code"),
-                    "id": f.get("id"),
-                    "start_ms": f.get("fight_abs_start_ms"),
-                    "end_ms": f.get("fight_abs_end_ms"),
-                    "night_id": night,
-                })
+        # Participation stage: build per-fight rows and persist
+        part_rows = build_mythic_participation(fights_m)
+        ops = []
+        for r in part_rows:
+            key = {
+                "night_id": r["night_id"],
+                "report_code": r["report_code"],
+                "fight_id": r["fight_id"],
+                "main": r["main"],
+            }
+            ops.append(UpdateOne(key, {"$set": r}, upsert=True))
+        if ops:
+            db["participation_m"].bulk_write(ops, ordered=False)
 
+        part_rows = list(db["participation_m"].find({"night_id": night}, {"_id": 0}))
+
+        # Blocks stage
         blocks = build_blocks(part_rows, break_range=br)
+        from collections import defaultdict
+
+        seq = defaultdict(int)
+        ops = []
+        for b in blocks:
+            seq_key = (b["night_id"], b["main"], b["half"])
+            seq[seq_key] += 1
+            doc = {**b, "block_seq": seq[seq_key]}
+            key = {
+                "night_id": b["night_id"],
+                "main": b["main"],
+                "half": b["half"],
+                "block_seq": doc["block_seq"],
+            }
+            ops.append(UpdateOne(key, {"$set": doc}, upsert=True))
+        if ops:
+            db["blocks"].bulk_write(ops, ordered=False)
+
+        blocks = list(db["blocks"].find({"night_id": night}, {"_id": 0}))
         bench = bench_minutes_for_night(blocks, env)
 
         # Persist bench_night_totals for this night
         ops = []
         for row in bench:
-            bench_rows.append([night, row["main"], row["played_pre_min"], row["played_post_min"], row["bench_pre_min"], row["bench_post_min"]])
+            bench_rows.append(
+                [
+                    night,
+                    row["main"],
+                    row["played_pre_min"],
+                    row["played_post_min"],
+                    row["bench_pre_min"],
+                    row["bench_post_min"],
+                ]
+            )
             doc = {
                 "night_id": night,
                 "main": row["main"],
@@ -104,7 +158,11 @@ def compute(config):
                 "bench_pre_min": row["bench_pre_min"],
                 "bench_post_min": row["bench_post_min"],
             }
-            ops.append(UpdateOne({"night_id": night, "main": row["main"]}, {"$set": doc}, upsert=True))
+            ops.append(
+                UpdateOne(
+                    {"night_id": night, "main": row["main"]}, {"$set": doc}, upsert=True
+                )
+            )
         if ops:
             db["bench_night_totals"].bulk_write(ops, ordered=False)
 

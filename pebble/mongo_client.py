@@ -18,9 +18,33 @@ def ensure_indexes(db) -> None:
     db["reports"].create_index([("night_id", ASCENDING)])
 
     # fights (all difficulties), one doc per fight, participants embedded
-    db["fights"].create_index([("report_code", ASCENDING), ("id", ASCENDING)], unique=True)
-    db["fights"].create_index([("night_id", ASCENDING)])
-    db["fights"].create_index([("is_mythic", ASCENDING), ("night_id", ASCENDING)])
+    db["fights_all"].create_index([("report_code", ASCENDING), ("id", ASCENDING)], unique=True)
+    db["fights_all"].create_index([("night_id", ASCENDING)])
+    db["fights_all"].create_index([("is_mythic", ASCENDING), ("night_id", ASCENDING)])
+
+    # participation rows per Mythic fight
+    db["participation_m"].create_index(
+        [
+            ("night_id", ASCENDING),
+            ("report_code", ASCENDING),
+            ("fight_id", ASCENDING),
+            ("main", ASCENDING),
+        ],
+        unique=True,
+    )
+    db["participation_m"].create_index([("night_id", ASCENDING)])
+
+    # contiguous blocks of participation
+    db["blocks"].create_index(
+        [
+            ("night_id", ASCENDING),
+            ("main", ASCENDING),
+            ("half", ASCENDING),
+            ("block_seq", ASCENDING),
+        ],
+        unique=True,
+    )
+    db["blocks"].create_index([("night_id", ASCENDING)])
 
     # optional actor cache per report (kept small; useful for audits)
     db["actors"].create_index([("report_code", ASCENDING), ("actor_id", ASCENDING)], unique=True)
