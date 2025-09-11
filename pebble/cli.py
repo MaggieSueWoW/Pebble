@@ -2,11 +2,11 @@ import click
 from .config_loader import load_settings
 from .logging_setup import setup_logging
 from .mongo_client import get_db, ensure_indexes
-from .ingest import ingest_reports
+from .ingest import ingest_reports, _sheet_values
 from .envelope import mythic_envelope, split_pre_post
 from .breaks import detect_break
 from .blocks import build_blocks
-from .bench_calc import bench_minutes_for_night
+from .bench_calc import bench_minutes_for_night, last_non_mythic_boss_mains
 from .participation import build_mythic_participation
 from .export_sheets import replace_values
 
@@ -75,6 +75,58 @@ def compute(config):
     ensure_indexes(db)
 
     from pymongo import UpdateOne
+    from typing import Dict, Optional
+
+    def _parse_bool(val: str) -> Optional[bool]:
+        v = val.strip().lower()
+        if v in ("", "-", "na"):
+            return None
+        if v in ("y", "yes", "true", "1", "t"):
+            return True
+        if v in ("n", "no", "false", "0", "f"):
+            return False
+        return None
+
+    # Load roster map from Sheets (alt -> main)
+    roster_map: Dict[str, str] = {}
+    rows = _sheet_values(s, s.sheets.tabs.roster_map)
+    if rows:
+        header = rows[0]
+        try:
+            alt_idx = header.index("Character (Name-Realm)")
+            main_idx = header.index("Main (Name-Realm)")
+            for r in rows[1:]:
+                if alt_idx < len(r) and main_idx < len(r):
+                    alt = r[alt_idx].split("-")[0].strip()
+                    main = r[main_idx].split("-")[0].strip()
+                    if alt and main:
+                        roster_map[alt] = main
+        except ValueError:
+            pass
+
+    # Load availability overrides from Sheets
+    overrides_by_night: Dict[str, Dict[str, Dict[str, Optional[bool]]]] = {}
+    rows = _sheet_values(s, s.sheets.tabs.availability_overrides)
+    if rows:
+        header = rows[0]
+        try:
+            n_idx = header.index("Night ID")
+            m_idx = header.index("Main")
+            pre_idx = header.index("Avail Pre?")
+            post_idx = header.index("Avail Post?")
+            for r in rows[1:]:
+                night = r[n_idx].strip() if n_idx < len(r) else ""
+                name = r[m_idx].split("-")[0].strip() if m_idx < len(r) else ""
+                if not night or not name:
+                    continue
+                ov = {
+                    "pre": _parse_bool(r[pre_idx]) if pre_idx < len(r) else None,
+                    "post": _parse_bool(r[post_idx]) if post_idx < len(r) else None,
+                }
+                main = roster_map.get(name, name)
+                overrides_by_night.setdefault(night, {})[main] = ov
+        except ValueError:
+            pass
 
     # Night loop: derive QA + bench
     nights = sorted(set([r["night_id"] for r in db["reports"].find({}, {"night_id": 1, "_id": 0})]))
@@ -171,7 +223,18 @@ def compute(config):
             db["blocks"].bulk_write(ops, ordered=False)
 
         blocks = list(db["blocks"].find({"night_id": night}, {"_id": 0}))
-        bench = bench_minutes_for_night(blocks, split["pre_ms"], split["post_ms"])
+
+        # Determine participants from the last non-Mythic boss fight before Mythic start
+        last_nm_mains = last_non_mythic_boss_mains(fights_all, env[0], roster_map)
+
+        bench = bench_minutes_for_night(
+            blocks,
+            split["pre_ms"],
+            split["post_ms"],
+            overrides=overrides_by_night.get(night, {}),
+            last_fight_mains=last_nm_mains,
+            roster_map=roster_map,
+        )
 
         # Persist bench_night_totals for this night
         ops = []
