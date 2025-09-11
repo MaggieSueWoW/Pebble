@@ -16,6 +16,42 @@ def cli():
     pass
 
 
+@cli.group(help="Initialize external resources.")
+def bootstrap():
+    """Initialize external resources."""
+    pass
+
+
+@bootstrap.command()
+@click.option("--config", default="config.yaml", show_default=True)
+def sheets(config):
+    log = setup_logging()
+    s = load_settings(config)
+    try:
+        from .bootstrap.sheets_bootstrap import bootstrap_sheets
+        res = bootstrap_sheets(s)
+        log.info("sheets bootstrap complete", extra={"stage": "bootstrap.sheets", **res})
+    except Exception as exc:
+        log.info(
+            "TODO: bootstrap sheets", extra={"stage": "bootstrap.sheets", "error": str(exc)}
+        )
+
+
+@bootstrap.command()
+@click.option("--config", default="config.yaml", show_default=True)
+def mongo(config):
+    log = setup_logging()
+    s = load_settings(config)
+    try:
+        from .bootstrap.mongo_bootstrap import bootstrap_mongo
+        res = bootstrap_mongo(s)
+        log.info("mongo bootstrap complete", extra={"stage": "bootstrap.mongo", **res})
+    except Exception as exc:
+        log.info(
+            "TODO: bootstrap mongo", extra={"stage": "bootstrap.mongo", "error": str(exc)}
+        )
+
+
 @cli.command()
 @click.option("--config", default="config.yaml", show_default=True)
 def ingest(config):
@@ -194,6 +230,30 @@ def week(config):
     replace_values(s.sheets.spreadsheet_id, s.sheets.tabs.bench_week_totals, rows, s.service_account_json)
 
     log.info("week export complete", extra={"stage": "week", "rows": n})
+
+
+@cli.command()
+@click.option("--config", default="config.yaml", show_default=True)
+def export(config):
+    log = setup_logging()
+    load_settings(config)
+    log.info("TODO: export results", extra={"stage": "export"})
+
+
+@cli.command()
+@click.option("--config", default="config.yaml", show_default=True)
+def backfill(config):
+    log = setup_logging()
+    load_settings(config)
+    log.info("TODO: backfill", extra={"stage": "backfill"})
+
+
+@cli.command()
+@click.option("--config", default="config.yaml", show_default=True)
+def verify(config):
+    log = setup_logging()
+    load_settings(config)
+    log.info("TODO: verify", extra={"stage": "verify"})
 
 
 def main():
