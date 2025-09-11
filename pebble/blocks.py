@@ -1,5 +1,6 @@
 from __future__ import annotations
 from typing import List, Dict
+from .utils.time import ms_to_pt_iso
 
 
 def build_blocks(
@@ -37,6 +38,7 @@ def build_blocks(
                 and r["start_ms"] - current["end_ms"] <= 10 * 60 * 1000
             ):
                 current["end_ms"] = max(current["end_ms"], r["end_ms"])
+                current["end_pt"] = ms_to_pt_iso(current["end_ms"])
             else:
                 if current:
                     blocks.append(current)
@@ -46,6 +48,8 @@ def build_blocks(
                     "half": half,
                     "start_ms": r["start_ms"],
                     "end_ms": r["end_ms"],
+                    "start_pt": ms_to_pt_iso(r["start_ms"]),
+                    "end_pt": ms_to_pt_iso(r["end_ms"]),
                 }
         if current:
             blocks.append(current)

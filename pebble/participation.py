@@ -1,5 +1,6 @@
 from __future__ import annotations
 from typing import List
+from .utils.time import ms_to_pt_iso
 
 
 # TODO: V1 keeps participation simple (boss pulls only). Trash bridging handled in blocks.
@@ -28,6 +29,8 @@ def build_mythic_participation(fights_mythic: List[dict]) -> List[dict]:
                     "fight_id": f.get("id"),
                     "start_ms": f.get("fight_abs_start_ms"),
                     "end_ms": f.get("fight_abs_end_ms"),
+                    "start_pt": ms_to_pt_iso(f.get("fight_abs_start_ms")),
+                    "end_pt": ms_to_pt_iso(f.get("fight_abs_end_ms")),
                     "night_id": f.get("night_id"),
                 }
             )

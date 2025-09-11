@@ -1,11 +1,12 @@
 from __future__ import annotations
-import logging, json, sys, time
+import logging, json, sys
+from .utils.time import ms_to_pt_iso
 
 
 class JsonFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:
         payload = {
-            "ts": time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime(record.created)),
+            "ts": ms_to_pt_iso(int(record.created * 1000)),
             "lvl": record.levelname,
             "msg": record.getMessage(),
             "logger": record.name,

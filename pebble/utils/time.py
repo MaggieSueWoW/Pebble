@@ -17,6 +17,11 @@ def ms_to_pt(ms: int) -> datetime:
     return utc_to_pt(ms_to_dt_utc(ms))
 
 
+def ms_to_pt_iso(ms: int) -> str:
+    """Return ISO-8601 string of the given epoch ms in PT."""
+    return ms_to_pt(ms).isoformat()
+
+
 def night_id_from_ms(ms: int) -> str:
     # Night ID = local PT calendar date (YYYY-MM-DD) of the night start
     return ms_to_pt(ms).strftime("%Y-%m-%d")

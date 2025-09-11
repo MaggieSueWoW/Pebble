@@ -7,7 +7,7 @@ from googleapiclient.discovery import build
 from .config_loader import Settings, load_settings
 from .mongo_client import get_db, ensure_indexes
 from .wcl_client import WCLClient
-from .utils.time import night_id_from_ms
+from .utils.time import night_id_from_ms, ms_to_pt_iso, PT
 
 
 CONTROL_HEADERS = {
@@ -127,9 +127,11 @@ def ingest_reports(s: Settings | None = None) -> dict:
             "title": bundle.get("title"),
             "start_ms": report_start_ms,
             "end_ms": report_end_ms,
+            "start_pt": ms_to_pt_iso(report_start_ms),
+            "end_pt": ms_to_pt_iso(report_end_ms),
             "night_id": night_id,
             "notes": rep.get("notes", ""),
-            "ingested_at": datetime.utcnow(),
+            "ingested_at": datetime.now(PT),
         }
         db["reports"].update_one({"code": code}, {"$set": rep_doc}, upsert=True)
 
@@ -187,10 +189,13 @@ def ingest_reports(s: Settings | None = None) -> dict:
                 "kill": bool(f.get("kill")),
                 # times
                 "report_start_ms": report_start_ms,
+                "report_start_pt": ms_to_pt_iso(report_start_ms),
                 "fight_rel_start_ms": rel_s,
                 "fight_rel_end_ms": rel_e,
                 "fight_abs_start_ms": abs_s,
+                "fight_abs_start_pt": ms_to_pt_iso(abs_s),
                 "fight_abs_end_ms": abs_e,
+                "fight_abs_end_pt": ms_to_pt_iso(abs_e),
                 # participants (resolved names)
                 "participants": participants,
             }
