@@ -29,11 +29,15 @@ def sheets(config):
     s = load_settings(config)
     try:
         from .bootstrap.sheets_bootstrap import bootstrap_sheets
+
         res = bootstrap_sheets(s)
-        log.info("sheets bootstrap complete", extra={"stage": "bootstrap.sheets", **res})
+        log.info(
+            "sheets bootstrap complete", extra={"stage": "bootstrap.sheets", **res}
+        )
     except Exception as exc:
         log.info(
-            "TODO: bootstrap sheets", extra={"stage": "bootstrap.sheets", "error": str(exc)}
+            "TODO: bootstrap sheets",
+            extra={"stage": "bootstrap.sheets", "error": str(exc)},
         )
 
 
@@ -44,11 +48,13 @@ def mongo(config):
     s = load_settings(config)
     try:
         from .bootstrap.mongo_bootstrap import bootstrap_mongo
+
         res = bootstrap_mongo(s)
         log.info("mongo bootstrap complete", extra={"stage": "bootstrap.mongo", **res})
     except Exception as exc:
         log.info(
-            "TODO: bootstrap mongo", extra={"stage": "bootstrap.mongo", "error": str(exc)}
+            "TODO: bootstrap mongo",
+            extra={"stage": "bootstrap.mongo", "error": str(exc)},
         )
 
 
@@ -129,25 +135,31 @@ def compute(config):
             pass
 
     # Night loop: derive QA + bench
-    nights = sorted(set([r["night_id"] for r in db["reports"].find({}, {"night_id": 1, "_id": 0})]))
+    nights = sorted(
+        set([r["night_id"] for r in db["reports"].find({}, {"night_id": 1, "_id": 0})])
+    )
 
-    night_qa_rows = [[
-        "Night ID",
-        "Mythic Start (ms)",
-        "Mythic End (ms)",
-        "Break Start (ms)",
-        "Break End (ms)",
-        "Mythic Pre (min)",
-        "Mythic Post (min)",
-    ]]
-    bench_rows = [[
-        "Night ID",
-        "Main",
-        "Played Pre (min)",
-        "Played Post (min)",
-        "Bench Pre (min)",
-        "Bench Post (min)",
-    ]]
+    night_qa_rows = [
+        [
+            "Night ID",
+            "Mythic Start (ms)",
+            "Mythic End (ms)",
+            "Break Start (ms)",
+            "Break End (ms)",
+            "Mythic Pre (min)",
+            "Mythic Post (min)",
+        ]
+    ]
+    bench_rows = [
+        [
+            "Night ID",
+            "Main",
+            "Played Pre (min)",
+            "Played Post (min)",
+            "Bench Pre (min)",
+            "Bench Post (min)",
+        ]
+    ]
 
     for night in nights:
         fights_all = list(db["fights_all"].find({"night_id": night}, {"_id": 0}))
@@ -165,15 +177,17 @@ def compute(config):
             max_break_min=s.time.break_max_minutes,
         )
         split = split_pre_post(env, br)
-        night_qa_rows.append([
-            night,
-            env[0],
-            env[1],
-            br[0] if br else "",
-            br[1] if br else "",
-            (split["pre_ms"] // 60000),
-            (split["post_ms"] // 60000),
-        ])
+        night_qa_rows.append(
+            [
+                night,
+                env[0],
+                env[1],
+                br[0] if br else "",
+                br[1] if br else "",
+                (split["pre_ms"] // 60000),
+                (split["post_ms"] // 60000),
+            ]
+        )
         # Persist Night QA to Mongo (idempotent)
         qa_doc = {
             "night_id": night,
@@ -266,8 +280,18 @@ def compute(config):
             db["bench_night_totals"].bulk_write(ops, ordered=False)
 
     # Write to Sheets
-    replace_values(s.sheets.spreadsheet_id, s.sheets.tabs.night_qa, night_qa_rows, s.service_account_json)
-    replace_values(s.sheets.spreadsheet_id, s.sheets.tabs.bench_night_totals, bench_rows, s.service_account_json)
+    replace_values(
+        s.sheets.spreadsheet_id,
+        s.sheets.tabs.night_qa,
+        night_qa_rows,
+        s.service_account_json,
+    )
+    replace_values(
+        s.sheets.spreadsheet_id,
+        s.sheets.tabs.bench_night_totals,
+        bench_rows,
+        s.service_account_json,
+    )
 
     log.info("compute complete", extra={"stage": "compute", "nights": len(nights)})
 
@@ -288,9 +312,18 @@ def week(config):
 
     # export
     rows = [["Game Week", "Main", "Played (min)", "Bench (min)"]]
-    for r in db["bench_week_totals"].find({}, {"_id": 0}).sort([("game_week", 1), ("main", 1)]):
+    for r in (
+        db["bench_week_totals"]
+        .find({}, {"_id": 0})
+        .sort([("game_week", 1), ("main", 1)])
+    ):
         rows.append([r["game_week"], r["main"], r["played_min"], r["bench_min"]])
-    replace_values(s.sheets.spreadsheet_id, s.sheets.tabs.bench_week_totals, rows, s.service_account_json)
+    replace_values(
+        s.sheets.spreadsheet_id,
+        s.sheets.tabs.bench_week_totals,
+        rows,
+        s.service_account_json,
+    )
 
     log.info("week export complete", extra={"stage": "week", "rows": n})
 

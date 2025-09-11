@@ -5,10 +5,14 @@ from requests.auth import HTTPBasicAuth
 
 
 class WCLClient:
-    def __init__(self, client_id: str, client_secret: str,
-                 *,
-                 base_url: str = "https://www.warcraftlogs.com/api/v2/client",
-                 token_url: str = "https://www.warcraftlogs.com/oauth/token"):
+    def __init__(
+        self,
+        client_id: str,
+        client_secret: str,
+        *,
+        base_url: str = "https://www.warcraftlogs.com/api/v2/client",
+        token_url: str = "https://www.warcraftlogs.com/oauth/token",
+    ):
         self._session = requests.Session()
         self._client_id = client_id
         self._client_secret = client_secret
@@ -68,4 +72,6 @@ class WCLClient:
           }
         }
         """
-        return self._post(q, {"code": code, "translate": translate})["data"]["reportData"]["report"]
+        return self._post(q, {"code": code, "translate": translate})["data"][
+            "reportData"
+        ]["report"]

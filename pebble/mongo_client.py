@@ -18,7 +18,9 @@ def ensure_indexes(db) -> None:
     db["reports"].create_index([("night_id", ASCENDING)])
 
     # fights (all difficulties), one doc per fight, participants embedded
-    db["fights_all"].create_index([("report_code", ASCENDING), ("id", ASCENDING)], unique=True)
+    db["fights_all"].create_index(
+        [("report_code", ASCENDING), ("id", ASCENDING)], unique=True
+    )
     db["fights_all"].create_index([("night_id", ASCENDING)])
     db["fights_all"].create_index([("is_mythic", ASCENDING), ("night_id", ASCENDING)])
 
@@ -47,10 +49,16 @@ def ensure_indexes(db) -> None:
     db["blocks"].create_index([("night_id", ASCENDING)])
 
     # optional actor cache per report (kept small; useful for audits)
-    db["actors"].create_index([("report_code", ASCENDING), ("actor_id", ASCENDING)], unique=True)
+    db["actors"].create_index(
+        [("report_code", ASCENDING), ("actor_id", ASCENDING)], unique=True
+    )
 
     # results
     db["night_qa"].create_index([("night_id", ASCENDING)], unique=True)
-    db["bench_night_totals"].create_index([("night_id", ASCENDING), ("main", ASCENDING)], unique=True)
-    db["bench_week_totals"].create_index([("game_week", ASCENDING), ("main", ASCENDING)], unique=True)
+    db["bench_night_totals"].create_index(
+        [("night_id", ASCENDING), ("main", ASCENDING)], unique=True
+    )
+    db["bench_week_totals"].create_index(
+        [("game_week", ASCENDING), ("main", ASCENDING)], unique=True
+    )
     db["service_log"].create_index([("ts", ASCENDING)])

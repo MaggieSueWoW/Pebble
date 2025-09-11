@@ -2,7 +2,9 @@ from __future__ import annotations
 from typing import List, Dict
 
 
-def build_blocks(participation_rows: List[dict], *, break_range: tuple[int, int] | None) -> List[dict]:
+def build_blocks(
+    participation_rows: List[dict], *, break_range: tuple[int, int] | None
+) -> List[dict]:
     """Collapse per‑fight rows into contiguous blocks per (main, night_id, half).
     This includes trash bridging: any adjacent fights with <= 10 min gap fuse.
     """
@@ -11,6 +13,7 @@ def build_blocks(participation_rows: List[dict], *, break_range: tuple[int, int]
 
     # group by main+night
     from collections import defaultdict
+
     groups: Dict[tuple, list] = defaultdict(list)
     for r in participation_rows:
         groups[(r["main"], r["night_id"])].append(r)
@@ -28,7 +31,11 @@ def build_blocks(participation_rows: List[dict], *, break_range: tuple[int, int]
             else:
                 half = "pre"
 
-            if current and current["half"] == half and r["start_ms"] - current["end_ms"] <= 10 * 60 * 1000:
+            if (
+                current
+                and current["half"] == half
+                and r["start_ms"] - current["end_ms"] <= 10 * 60 * 1000
+            ):
                 current["end_ms"] = max(current["end_ms"], r["end_ms"])
             else:
                 if current:

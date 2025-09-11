@@ -37,7 +37,7 @@ class TimeConfig(BaseModel):
     tz: str = Field(default="America/Los_Angeles")
     # Break detect knobs (defaults are conservative; Sheet may override per‑night)
     break_window_start_min: int = 30
-    break_window_end_min:   int = 120
+    break_window_end_min: int = 120
     break_min_minutes: int = 10
     break_max_minutes: int = 30
 
@@ -66,17 +66,26 @@ def load_settings(config_path: str = "config.yaml") -> Settings:
     # Allow env overrides for secrets
     env_overrides = {
         "sheets": {
-            "spreadsheet_id": os.getenv("SHEETS_SPREADSHEET_ID", data.get("sheets", {}).get("spreadsheet_id")),
+            "spreadsheet_id": os.getenv(
+                "SHEETS_SPREADSHEET_ID", data.get("sheets", {}).get("spreadsheet_id")
+            ),
         },
         "mongo": {
             "uri": os.getenv("MONGODB_URI", data.get("mongo", {}).get("uri")),
             "db": data.get("mongo", {}).get("db", "pebble"),
         },
         "wcl": {
-            "client_id": os.getenv("WCL_CLIENT_ID", data.get("wcl", {}).get("client_id")),
-            "client_secret": os.getenv("WCL_CLIENT_SECRET", data.get("wcl", {}).get("client_secret")),
+            "client_id": os.getenv(
+                "WCL_CLIENT_ID", data.get("wcl", {}).get("client_id")
+            ),
+            "client_secret": os.getenv(
+                "WCL_CLIENT_SECRET", data.get("wcl", {}).get("client_secret")
+            ),
         },
-        "service_account_json": os.getenv("GOOGLE_APPLICATION_CREDENTIALS", data.get("service_account_json", "service-account.json")),
+        "service_account_json": os.getenv(
+            "GOOGLE_APPLICATION_CREDENTIALS",
+            data.get("service_account_json", "service-account.json"),
+        ),
     }
 
     # Merge shallowly

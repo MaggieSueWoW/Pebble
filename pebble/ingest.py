@@ -35,13 +35,23 @@ def _extract_code_from_url(url: str | None) -> Optional[str]:
 
 
 def _sheet_values(s: Settings, tab: str) -> List[List[Any]]:
-    creds = Credentials.from_service_account_file(s.service_account_json, scopes=["https://www.googleapis.com/auth/spreadsheets"])
+    creds = Credentials.from_service_account_file(
+        s.service_account_json, scopes=["https://www.googleapis.com/auth/spreadsheets"]
+    )
     svc = build("sheets", "v4", credentials=creds)
     rng = f"{tab}!A:Z"
-    return svc.spreadsheets().values().get(spreadsheetId=s.sheets.spreadsheet_id, range=rng).execute().get("values", [])
+    return (
+        svc.spreadsheets()
+        .values()
+        .get(spreadsheetId=s.sheets.spreadsheet_id, range=rng)
+        .execute()
+        .get("values", [])
+    )
 
 
-def _normalize_fight_times(report_start_ms: int, fight_start: int, fight_end: int) -> tuple[int, int, int, int]:
+def _normalize_fight_times(
+    report_start_ms: int, fight_start: int, fight_end: int
+) -> tuple[int, int, int, int]:
     """Return (rel_start, rel_end, abs_start, abs_end) in ms.
     WCL GraphQL fights are *usually* relative to report start; use a robust heuristic.
     """
@@ -71,26 +81,37 @@ def ingest_reports(s: Settings | None = None) -> dict:
     # Collect targets
     targets: List[dict] = []
     for row in rows[1:]:
+
         def val(col: str) -> str:
             idx = colmap.get(col)
             return row[idx] if idx is not None and idx < len(row) else ""
+
         status = val("Status").strip().lower()
         if status not in ("", "in-progress", "in‑progress", "in progress"):
             continue
-        code = val("Report Code").strip() or _extract_code_from_url(val("Report URL").strip())
+        code = val("Report Code").strip() or _extract_code_from_url(
+            val("Report URL").strip()
+        )
         if not code:
             continue
-        targets.append({
-            "code": code,
-            "notes": val("Notes"),
-            "break_override_start": val("Break Override Start (PT)"),
-            "break_override_end": val("Break Override End (PT)"),
-        })
+        targets.append(
+            {
+                "code": code,
+                "notes": val("Notes"),
+                "break_override_start": val("Break Override Start (PT)"),
+                "break_override_end": val("Break Override End (PT)"),
+            }
+        )
 
     if not targets:
         return {"reports": 0, "fights": 0}
 
-    wcl = WCLClient(s.wcl.client_id, s.wcl.client_secret, base_url=s.wcl.base_url, token_url=s.wcl.token_url)
+    wcl = WCLClient(
+        s.wcl.client_id,
+        s.wcl.client_secret,
+        base_url=s.wcl.base_url,
+        token_url=s.wcl.token_url,
+    )
 
     total_fights = 0
     for rep in targets:
@@ -114,13 +135,16 @@ def ingest_reports(s: Settings | None = None) -> dict:
 
         # actors (players) per report — small, useful for audits; dedup by (report_code, actor_id)
         actors = (bundle.get("masterData") or {}).get("actors") or []
-        actor_map = {int(a.get("id")): {
-            "actor_id": int(a.get("id")),
-            "name": a.get("name"),
-            "type": a.get("type"),
-            "subType": a.get("subType"),
-            "server": a.get("server"),
-        } for a in actors}
+        actor_map = {
+            int(a.get("id")): {
+                "actor_id": int(a.get("id")),
+                "name": a.get("name"),
+                "type": a.get("type"),
+                "subType": a.get("subType"),
+                "server": a.get("server"),
+            }
+            for a in actors
+        }
         if actor_map:
             ops = []
             for aid, a in actor_map.items():
@@ -133,20 +157,24 @@ def ingest_reports(s: Settings | None = None) -> dict:
         fights = bundle.get("fights", []) or []
         fops = []
         for f in fights:
-            rel_s, rel_e, abs_s, abs_e = _normalize_fight_times(report_start_ms, f.get("startTime"), f.get("endTime"))
+            rel_s, rel_e, abs_s, abs_e = _normalize_fight_times(
+                report_start_ms, f.get("startTime"), f.get("endTime")
+            )
             participants = []
-            for pid in (f.get("friendlyPlayers") or []):
+            for pid in f.get("friendlyPlayers") or []:
                 a = actor_map.get(int(pid))
                 if not a:
                     continue
                 if str(a.get("type", "")).lower() != "player":
                     continue
-                participants.append({
-                    "actor_id": a["actor_id"],
-                    "name": a.get("name"),
-                    "class": a.get("subType"),  # WoW class
-                    "server": a.get("server"),
-                })
+                participants.append(
+                    {
+                        "actor_id": a["actor_id"],
+                        "name": a.get("name"),
+                        "class": a.get("subType"),  # WoW class
+                        "server": a.get("server"),
+                    }
+                )
 
             doc_key = {"report_code": code, "id": int(f.get("id"))}
             base = {

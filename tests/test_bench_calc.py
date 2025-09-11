@@ -75,5 +75,7 @@ def test_last_non_mythic_boss_mains_excludes_trash():
         },
     ]
     roster_map = {"Alt": "Main"}
-    mains = last_non_mythic_boss_mains(fights_all, mythic_start_ms=2000, roster_map=roster_map)
+    mains = last_non_mythic_boss_mains(
+        fights_all, mythic_start_ms=2000, roster_map=roster_map
+    )
     assert mains == {"Main"}

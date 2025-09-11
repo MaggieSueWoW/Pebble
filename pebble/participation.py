@@ -21,12 +21,14 @@ def build_mythic_participation(fights_mythic: List[dict]) -> List[dict]:
             name = p.get("name")
             if not name:
                 continue
-            rows.append({
-                "main": name,
-                "report_code": f.get("report_code"),
-                "fight_id": f.get("id"),
-                "start_ms": f.get("fight_abs_start_ms"),
-                "end_ms": f.get("fight_abs_end_ms"),
-                "night_id": f.get("night_id"),
-            })
+            rows.append(
+                {
+                    "main": name,
+                    "report_code": f.get("report_code"),
+                    "fight_id": f.get("id"),
+                    "start_ms": f.get("fight_abs_start_ms"),
+                    "end_ms": f.get("fight_abs_end_ms"),
+                    "night_id": f.get("night_id"),
+                }
+            )
     return rows

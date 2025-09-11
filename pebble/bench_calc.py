@@ -86,7 +86,9 @@ def bench_minutes_for_night(
 
 
 def last_non_mythic_boss_mains(
-    fights_all: List[dict], mythic_start_ms: int, roster_map: Optional[Dict[str, str]] = None
+    fights_all: List[dict],
+    mythic_start_ms: int,
+    roster_map: Optional[Dict[str, str]] = None,
 ) -> Set[str]:
     """Return mains who appeared in the last non-Mythic boss fight before Mythic."""
 
@@ -108,4 +110,3 @@ def last_non_mythic_boss_mains(
         for p in last_nm.get("participants", [])
         if p.get("name")
     }
-
