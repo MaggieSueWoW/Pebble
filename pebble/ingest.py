@@ -153,7 +153,7 @@ def ingest_reports(s: Settings | None = None) -> dict:
                 **doc_key,
                 "night_id": night_id,
                 "name": f.get("name"),
-                "encounter_id": f.get("encounterID") or f.get("encounterId"),
+                "encounter_id": f.get("encounterID"),
                 "difficulty": int(f.get("difficulty") or 0),
                 "is_mythic": int(f.get("difficulty") or 0) == 5,
                 "kill": bool(f.get("kill")),
