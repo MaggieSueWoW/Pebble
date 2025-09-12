@@ -17,6 +17,7 @@ dependencies = [
   "pymongo>=4.7",
   "requests>=2.32",
   "tenacity>=8.5",
+  "redis>=5.0",
   "pandas>=2.2",
   "numpy>=1.26",
   "google-api-python-client>=2.141",

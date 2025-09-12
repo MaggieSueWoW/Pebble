@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import logging
 import time
 from typing import Optional
@@ -14,9 +15,15 @@ from tenacity import (
     wait_exponential,
 )
 
+import redis
+
 logger = logging.getLogger(__name__)
 
 _RETRY_STATUS_CODES = {429, 500, 502, 503, 504}
+
+CACHE_TTL_SHORT = 5 * 60  # 5 minutes
+CACHE_TTL_LONG = 60 * 60 * 24 * 30 * 6  # ~6 months
+_FRESH_MS = 24 * 60 * 60 * 1000
 
 
 def _is_retryable(exc: Exception) -> bool:
@@ -35,6 +42,9 @@ class WCLClient:
         *,
         base_url: str = "https://www.warcraftlogs.com/api/v2/client",
         token_url: str = "https://www.warcraftlogs.com/oauth/token",
+        redis_url: str | None = None,
+        redis_client: Optional[redis.Redis] = None,
+        cache_prefix: str = "pebble:wcl:",
     ):
         self._session = requests.Session()
         self._client_id = client_id
@@ -43,6 +53,13 @@ class WCLClient:
         self._token_url = token_url
         self._token: Optional[str] = None
         self._token_exp: float = 0.0
+        if redis_client is not None:
+            self._redis = redis_client
+        elif redis_url:
+            self._redis = redis.from_url(redis_url)
+        else:
+            self._redis = None
+        self._cache_prefix = cache_prefix
 
     @retry(
         reraise=True,
@@ -92,6 +109,12 @@ class WCLClient:
         """Report meta + fights + masterData actors in one call.
         NOTE: fight start/end are relative ms to report.startTime; we normalize in ingest.
         """
+        cache_key = f"{self._cache_prefix}{code}"
+        if self._redis:
+            cached = self._redis.get(cache_key)
+            if cached:
+                return json.loads(cached)
+
         q = """
         query ReportFightsAndActors($code: String!, $translate: Boolean = true) {
           reportData {
@@ -109,6 +132,21 @@ class WCLClient:
           }
         }
         """
-        return self._post(q, {"code": code, "translate": translate})["data"][
+        report = self._post(q, {"code": code, "translate": translate})["data"][
             "reportData"
         ]["report"]
+        if self._redis:
+            start_ms = int(report.get("startTime") or 0)
+            now_ms = int(time.time() * 1000)
+            ttl = CACHE_TTL_SHORT if start_ms and (now_ms - start_ms) < _FRESH_MS else CACHE_TTL_LONG
+            self._redis.setex(cache_key, ttl, json.dumps(report))
+        return report
+
+
+def flush_cache(redis_url: str, prefix: str) -> int:
+    """Delete cached WCL reports with the given prefix."""
+    r = redis.from_url(redis_url)
+    keys = list(r.scan_iter(f"{prefix}*"))
+    if keys:
+        r.delete(*keys)
+    return len(keys)

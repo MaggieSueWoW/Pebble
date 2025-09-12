@@ -52,6 +52,17 @@ def ingest(config):
     log.info("ingest complete", extra={"stage": "ingest", **res})
 
 
+@cli.command("flush-cache", help="Flush cached WCL reports from Redis.")
+@click.option("--config", default="config.yaml", show_default=True)
+def flush_cache_cmd(config):
+    log = setup_logging()
+    s = load_settings(config)
+    from .wcl_client import flush_cache as _flush
+
+    deleted = _flush(s.redis.url, s.redis.key_prefix)
+    log.info("cache flushed", extra={"stage": "flush-cache", "keys": deleted})
+
+
 @cli.command()
 @click.option("--config", default="config.yaml", show_default=True)
 def compute(config):

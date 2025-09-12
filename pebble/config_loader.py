@@ -34,6 +34,11 @@ class WCLConfig(BaseModel):
     token_url: str = Field(default="https://www.warcraftlogs.com/oauth/token")
 
 
+class RedisConfig(BaseModel):
+    url: str = Field(default="redis://localhost:6379/0")
+    key_prefix: str = Field(default="pebble:wcl:")
+
+
 class BreakWindowConfig(BaseModel):
     start_pt: str = Field(default="20:50")
     end_pt: str = Field(default="21:30")
@@ -50,6 +55,7 @@ class Settings(BaseModel):
     sheets: SheetsConfig
     mongo: MongoConfig
     wcl: WCLConfig
+    redis: RedisConfig = Field(default_factory=RedisConfig)
     time: TimeConfig = Field(default_factory=TimeConfig)
     service_account_json: str = Field(default="service-account.json")
 
@@ -86,6 +92,14 @@ def load_settings(config_path: str = "config.yaml") -> Settings:
                 "WCL_CLIENT_SECRET", data.get("wcl", {}).get("client_secret")
             ),
         },
+        "redis": {
+            "url": os.getenv(
+                "REDIS_URL", data.get("redis", {}).get("url", "redis://localhost:6379/0")
+            ),
+            "key_prefix": os.getenv(
+                "REDIS_KEY_PREFIX", data.get("redis", {}).get("key_prefix", "pebble:wcl:")
+            ),
+        },
         "service_account_json": os.getenv(
             "GOOGLE_APPLICATION_CREDENTIALS",
             data.get("service_account_json", "service-account.json"),
@@ -98,6 +112,7 @@ def load_settings(config_path: str = "config.yaml") -> Settings:
         "sheets": {**data.get("sheets", {}), **env_overrides["sheets"]},
         "mongo": {**data.get("mongo", {}), **env_overrides["mongo"]},
         "wcl": {**data.get("wcl", {}), **env_overrides["wcl"]},
+        "redis": {**data.get("redis", {}), **env_overrides["redis"]},
         "service_account_json": env_overrides["service_account_json"],
     }
 

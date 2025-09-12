@@ -25,6 +25,10 @@ wcl:
   base_url: "https://www.warcraftlogs.com/api/v2/client"
   token_url: "https://www.warcraftlogs.com/oauth/token"
 
+redis:
+  url: "redis://localhost:6379/0"
+  key_prefix: "pebble:wcl:"
+
 google:
   service_account_json: "./service-account.json"
 

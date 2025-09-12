@@ -140,6 +140,8 @@ def ingest_reports(s: Settings | None = None) -> dict:
         s.wcl.client_secret,
         base_url=s.wcl.base_url,
         token_url=s.wcl.token_url,
+        redis_url=s.redis.url,
+        cache_prefix=s.redis.key_prefix,
     )
 
     total_fights = 0
