@@ -16,6 +16,7 @@ def bench_minutes_for_night(
     overrides: Optional[Dict[str, Dict[str, Optional[bool]]]] = None,
     last_fight_mains: Iterable[str] | None = None,
     roster_map: Optional[Dict[str, str]] = None,
+    roster_mains: Iterable[str] | None = None,
 ) -> List[dict]:
     """Aggregate bench/played minutes for a night.
 
@@ -25,12 +26,15 @@ def bench_minutes_for_night(
     representing officer availability overrides per half. ``last_fight_mains``
     lists mains who appeared in the final non‑Mythic fight and are therefore
     treated as available for the entire night. ``roster_map`` maps alt names to
-    main names.
+    main names. ``roster_mains`` enumerates mains on the team roster for the
+    given night and are assumed available for both halves even if absent from
+    the report.
     """
 
     roster_map = roster_map or {}
     overrides = overrides or {}
     last_fight_mains = set(last_fight_mains or [])
+    roster_mains = set(roster_mains or [])
 
     from collections import defaultdict
 
@@ -41,8 +45,10 @@ def bench_minutes_for_night(
         duration = b["end_ms"] - b["start_ms"]
         agg[main][b["half"]] += duration
 
-    # include mains referenced only in overrides or last fight
-    all_mains = set(agg.keys()) | set(overrides.keys()) | last_fight_mains
+    # include mains referenced only in overrides, last fight, or roster
+    all_mains = (
+        set(agg.keys()) | set(overrides.keys()) | last_fight_mains | roster_mains
+    )
 
     out: List[dict] = []
     pre_full = pre_ms
@@ -53,8 +59,12 @@ def bench_minutes_for_night(
         post_played_ms = halves.get("post", 0)
 
         # infer availability
-        pre_avail = pre_played_ms > 0 or post_played_ms > 0
-        post_avail = pre_played_ms > 0 or post_played_ms > 0
+        pre_avail = (
+            pre_played_ms > 0 or post_played_ms > 0 or main in roster_mains
+        )
+        post_avail = (
+            pre_played_ms > 0 or post_played_ms > 0 or main in roster_mains
+        )
 
         if main in last_fight_mains:
             pre_avail = True
@@ -78,7 +88,7 @@ def bench_minutes_for_night(
         played_total_min = played_pre_min + played_post_min
         bench_total_min = bench_pre_min + bench_post_min
 
-        # Determine status source: override > last_fight > blocks > none
+        # Determine status source: override > last_fight > blocks > roster > none
         status_source = "none"
         if ov and (ov.get("pre") is not None or ov.get("post") is not None):
             status_source = "override"
@@ -86,6 +96,8 @@ def bench_minutes_for_night(
             status_source = "last_fight"
         elif pre_played_ms > 0 or post_played_ms > 0:
             status_source = "blocks"
+        elif main in roster_mains:
+            status_source = "roster"
 
         out.append(
             {
