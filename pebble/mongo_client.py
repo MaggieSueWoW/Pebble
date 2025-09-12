@@ -1,6 +1,5 @@
 from __future__ import annotations
 from pymongo import MongoClient, ASCENDING
-from pymongo.collection import Collection
 from .config_loader import Settings
 
 
@@ -18,9 +17,18 @@ def ensure_indexes(db) -> None:
     db["reports"].create_index([("night_id", ASCENDING)])
 
     # fights (all difficulties), one doc per fight, participants embedded
+    # Canonical key dedupes fights across overlapping reports
     db["fights_all"].create_index(
-        [("report_code", ASCENDING), ("id", ASCENDING)], unique=True
+        [
+            ("encounter_id", ASCENDING),
+            ("difficulty", ASCENDING),
+            ("start_rounded_ms", ASCENDING),
+            ("end_rounded_ms", ASCENDING),
+        ],
+        unique=True,
     )
+    # still index by report and fight id for lookups (non‑unique)
+    db["fights_all"].create_index([("report_code", ASCENDING), ("id", ASCENDING)])
     db["fights_all"].create_index([("night_id", ASCENDING)])
     db["fights_all"].create_index([("is_mythic", ASCENDING), ("night_id", ASCENDING)])
 

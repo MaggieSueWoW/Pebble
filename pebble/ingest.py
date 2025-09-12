@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Dict, Any, List, Optional
+from typing import Any, List, Optional
 from datetime import datetime
 from pymongo import UpdateOne
 from .sheets_client import SheetsClient
@@ -61,6 +61,29 @@ def _normalize_fight_times(
         abs_start, abs_end = fs, fe
         rel_start, rel_end = max(0, fs - report_start_ms), max(0, fe - report_start_ms)
     return rel_start, rel_end, abs_start, abs_end
+
+
+def canonical_fight_key(
+    fight: dict, abs_start_ms: int, abs_end_ms: int
+) -> dict:
+    """Return canonical key for a fight.
+
+    The key is independent of the report code so that the same pull logged in
+    multiple reports maps to a single document in ``fights_all``.  Start and end
+    times are rounded to the nearest 100 ms to absorb minor timestamp drift
+    while avoiding collisions for distinct fights that occur close together.
+    """
+
+    def _round_ms(ms: int) -> int:
+        """Round ``ms`` to the nearest 100 ms."""
+        return int(round(ms / 100.0) * 100)
+
+    return {
+        "encounter_id": int(fight.get("encounterID") or 0),
+        "difficulty": int(fight.get("difficulty") or 0),
+        "start_rounded_ms": _round_ms(abs_start_ms),
+        "end_rounded_ms": _round_ms(abs_end_ms),
+    }
 
 
 def ingest_reports(s: Settings | None = None) -> dict:
@@ -206,13 +229,13 @@ def ingest_reports(s: Settings | None = None) -> dict:
                     }
                 )
 
-            doc_key = {"report_code": code, "id": int(f.get("id"))}
+            key = canonical_fight_key(f, abs_s, abs_e)
             base = {
-                **doc_key,
+                **key,
+                "report_code": code,
+                "id": int(f.get("id")),
                 "night_id": night_id,
                 "name": f.get("name"),
-                "encounter_id": f.get("encounterID"),
-                "difficulty": int(f.get("difficulty") or 0),
                 "is_mythic": int(f.get("difficulty") or 0) == 5,
                 "kill": bool(f.get("kill")),
                 # times
@@ -224,10 +247,20 @@ def ingest_reports(s: Settings | None = None) -> dict:
                 "fight_abs_start_pt": ms_to_pt_iso(abs_s),
                 "fight_abs_end_ms": abs_e,
                 "fight_abs_end_pt": ms_to_pt_iso(abs_e),
-                # participants (resolved names)
-                "participants": participants,
             }
-            fops.append(UpdateOne(doc_key, {"$set": base}, upsert=True))
+            # Use $setOnInsert so the first observed report for a given fight
+            # establishes the document; subsequent overlapping reports only add
+            # participants but do not clobber the original report metadata.
+            fops.append(
+                UpdateOne(
+                    key,
+                    {
+                        "$setOnInsert": base,
+                        "$addToSet": {"participants": {"$each": participants}},
+                    },
+                    upsert=True,
+                )
+            )
         if fops:
             db["fights_all"].bulk_write(fops, ordered=False)
         total_fights += len(fights)
