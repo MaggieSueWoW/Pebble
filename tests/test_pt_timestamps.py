@@ -23,7 +23,8 @@ def test_pt_fields_added():
     assert blocks[0]["end_pt"] == ms_to_pt_iso(ms_end)
 
 
-def test_pt_time_to_ms_hhmm():
+def test_pt_time_to_ms_formats():
     ref_ms = 1719975600000  # 2024-07-02T20:00:00-07:00
-    ms = pt_time_to_ms("21:15", ref_ms)
-    assert ms == ref_ms + 75 * 60000
+    assert pt_time_to_ms("21:15", ref_ms) == ref_ms + 75 * 60000
+    assert pt_time_to_ms("9:15:00 PM", ref_ms) == ref_ms + 75 * 60000
+    assert pt_time_to_ms("9:15", ref_ms) == ref_ms + 75 * 60000

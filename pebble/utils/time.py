@@ -1,5 +1,5 @@
 from __future__ import annotations
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import zoneinfo
 
 PT = zoneinfo.ZoneInfo("America/Los_Angeles")
@@ -43,19 +43,39 @@ def pt_iso_to_ms(txt: str) -> int | None:
         return None
 
 
-def pt_time_to_ms(hhmm: str, ref_ms: int) -> int | None:
-    """Convert an ``HH:MM`` PT time to epoch ms using ``ref_ms``'s date.
+def pt_time_to_ms(txt: str, ref_ms: int) -> int | None:
+    """Convert a local PT time string to epoch ms using ``ref_ms``'s date.
 
-    ``hhmm`` is interpreted as a 24-hour clock in Pacific Time. The calendar
-    date is taken from ``ref_ms`` (also presumed to be in PT). ``None`` is
-    returned if parsing fails.
+    Accepts flexible formats such as ``21:15``, ``9:15 PM`` or ``9:15:00 PM``.
+    The returned timestamp is the first occurrence of the parsed time on or
+    after ``ref_ms`` (rolling forward in 12 hour increments if needed). ``None``
+    is returned if parsing fails or the adjusted time falls more than 24 hours
+    after ``ref_ms``.
     """
-    if not hhmm:
+    if not txt:
         return None
-    try:
-        hour, minute = (int(part) for part in hhmm.split(":", 1))
-        dt_ref = ms_to_pt(ref_ms)
-        dt = dt_ref.replace(hour=hour, minute=minute, second=0, microsecond=0)
-        return int(dt.timestamp() * 1000)
-    except Exception:
+
+    txt = txt.strip().upper()
+    dt_ref = ms_to_pt(ref_ms)
+
+    formats = ["%H:%M", "%H:%M:%S", "%I:%M %p", "%I:%M:%S %p"]
+    t = None
+    for fmt in formats:
+        try:
+            t = datetime.strptime(txt, fmt).time()
+            break
+        except ValueError:
+            continue
+    if t is None:
         return None
+
+    dt = dt_ref.replace(hour=t.hour, minute=t.minute, second=t.second, microsecond=0)
+    while dt.timestamp() * 1000 < ref_ms:
+        dt += timedelta(hours=12)
+        if dt.timestamp() * 1000 - ref_ms > 24 * 3600 * 1000:
+            return None
+
+    if dt.timestamp() * 1000 - ref_ms > 24 * 3600 * 1000:
+        return None
+
+    return int(dt.timestamp() * 1000)
