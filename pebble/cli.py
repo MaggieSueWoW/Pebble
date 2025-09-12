@@ -330,7 +330,7 @@ def compute(config):
         part_rows = list(db["participation_m"].find({"night_id": night}, {"_id": 0}))
 
         # Blocks stage
-        blocks = build_blocks(part_rows, break_range=br_range)
+        blocks = build_blocks(part_rows, break_range=br_range, fights_all=fights_all)
         from collections import defaultdict
 
         seq = defaultdict(int)

@@ -18,7 +18,7 @@ def test_pt_fields_added():
     ]
     rows = build_mythic_participation(fights)
     assert rows[0]["start_pt"] == ms_to_pt_iso(ms_start)
-    blocks = build_blocks(rows, break_range=None)
+    blocks = build_blocks(rows, break_range=None, fights_all=[])
     assert blocks[0]["start_pt"] == ms_to_pt_iso(ms_start)
     assert blocks[0]["end_pt"] == ms_to_pt_iso(ms_end)
 
