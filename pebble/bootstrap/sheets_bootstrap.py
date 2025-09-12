@@ -1,7 +1,7 @@
 from __future__ import annotations
 from typing import List, Dict, Any
-from google.oauth2.service_account import Credentials
-from googleapiclient.discovery import build
+
+from ..sheets_client import SheetsClient
 from ..config_loader import Settings
 
 HEADERS = {
@@ -86,55 +86,54 @@ HEADERS = {
 }
 
 
-def _svc(settings: Settings):
-    creds = Credentials.from_service_account_file(
-        settings.google.service_account_json_path,
-        scopes=["https://www.googleapis.com/auth/spreadsheets"],
-    )
-    return build("sheets", "v4", credentials=creds)
-
-
-def _get_sheet_names(svc, sheet_id: str) -> List[str]:
-    meta = svc.spreadsheets().get(spreadsheetId=sheet_id).execute()
+def _get_sheet_names(client: SheetsClient, sheet_id: str) -> List[str]:
+    meta = client.execute(client.svc.spreadsheets().get(spreadsheetId=sheet_id))
     return [s["properties"]["title"] for s in meta.get("sheets", [])]
 
 
-def _ensure_tab(svc, sheet_id: str, name: str):
-    existing = _get_sheet_names(svc, sheet_id)
+def _ensure_tab(client: SheetsClient, sheet_id: str, name: str):
+    existing = _get_sheet_names(client, sheet_id)
     if name in existing:
         return False
-    svc.spreadsheets().batchUpdate(
-        spreadsheetId=sheet_id,
-        body={"requests": [{"addSheet": {"properties": {"title": name}}}]},
-    ).execute()
+    client.execute(
+        client.svc.spreadsheets().batchUpdate(
+            spreadsheetId=sheet_id,
+            body={"requests": [{"addSheet": {"properties": {"title": name}}}]},
+        )
+    )
     return True
 
 
-def _ensure_headers(svc, sheet_id: str, name: str, headers: list[str]):
+def _ensure_headers(
+    client: SheetsClient, sheet_id: str, name: str, headers: list[str]
+):
     rng = f"'{name}'!1:1"
-    svc.spreadsheets().values().update(
-        spreadsheetId=sheet_id,
-        range=rng,
-        valueInputOption="RAW",
-        body={"values": [headers]},
-    ).execute()
+    client.execute(
+        client.svc.spreadsheets().values().update(
+            spreadsheetId=sheet_id,
+            range=rng,
+            valueInputOption="RAW",
+            body={"values": [headers]},
+        )
+    )
 
 
 def bootstrap_sheets(settings: Settings) -> Dict[str, Any]:
-    svc = _svc(settings)
+    client = SheetsClient(settings.service_account_json)
+    sheet_id = settings.sheets.spreadsheet_id
     desired = {
-        settings.app.sheets.reports: "Reports",
-        settings.app.sheets.roster_map: "Roster Map",
-        settings.app.sheets.team_roster: "Team Roster",
-        settings.app.sheets.availability_overrides: "Availability Overrides",
-        settings.app.sheets.night_qa: "Night QA",
-        settings.app.sheets.bench_night_totals: "Bench Night Totals",
-        settings.app.sheets.bench_week_totals: "Bench Week Totals",
-        settings.app.sheets.service_log: "Service Log (Summary)",
+        settings.sheets.tabs.reports: "Reports",
+        settings.sheets.tabs.roster_map: "Roster Map",
+        settings.sheets.tabs.team_roster: "Team Roster",
+        settings.sheets.tabs.availability_overrides: "Availability Overrides",
+        settings.sheets.tabs.night_qa: "Night QA",
+        settings.sheets.tabs.bench_night_totals: "Bench Night Totals",
+        settings.sheets.tabs.bench_week_totals: "Bench Week Totals",
+        settings.sheets.tabs.service_log: "Service Log (Summary)",
     }
     tabs = []
     for name, canonical in desired.items():
-        _ensure_tab(svc, settings.app.sheet_id, name)
-        _ensure_headers(svc, settings.app.sheet_id, name, HEADERS[canonical])
+        _ensure_tab(client, sheet_id, name)
+        _ensure_headers(client, sheet_id, name, HEADERS[canonical])
         tabs.append(name)
     return {"ok": True, "tabs": tabs}

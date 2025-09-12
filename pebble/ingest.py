@@ -2,8 +2,7 @@ from __future__ import annotations
 from typing import Dict, Any, List, Optional
 from datetime import datetime
 from pymongo import UpdateOne
-from google.oauth2.service_account import Credentials
-from googleapiclient.discovery import build
+from .sheets_client import SheetsClient
 from .config_loader import Settings, load_settings
 from .mongo_client import get_db, ensure_indexes
 from .wcl_client import WCLClient
@@ -35,17 +34,15 @@ def _extract_code_from_url(url: str | None) -> Optional[str]:
 
 
 def _sheet_values(s: Settings, tab: str) -> List[List[Any]]:
-    creds = Credentials.from_service_account_file(
-        s.service_account_json, scopes=["https://www.googleapis.com/auth/spreadsheets"]
-    )
-    svc = build("sheets", "v4", credentials=creds)
+    client = SheetsClient(s.service_account_json)
+    svc = client.svc
     rng = f"{tab}!A:Z"
     return (
-        svc.spreadsheets()
-        .values()
-        .get(spreadsheetId=s.sheets.spreadsheet_id, range=rng)
-        .execute()
-        .get("values", [])
+        client.execute(
+            svc.spreadsheets()
+            .values()
+            .get(spreadsheetId=s.sheets.spreadsheet_id, range=rng)
+        ).get("values", [])
     )
 
 
@@ -71,17 +68,15 @@ def ingest_reports(s: Settings | None = None) -> dict:
     db = get_db(s)
     ensure_indexes(db)
 
-    creds = Credentials.from_service_account_file(
-        s.service_account_json, scopes=["https://www.googleapis.com/auth/spreadsheets"]
-    )
-    svc = build("sheets", "v4", credentials=creds)
+    client = SheetsClient(s.service_account_json)
+    svc = client.svc
     rng = f"{s.sheets.tabs.reports}!A:Z"
     rows = (
-        svc.spreadsheets()
-        .values()
-        .get(spreadsheetId=s.sheets.spreadsheet_id, range=rng)
-        .execute()
-        .get("values", [])
+        client.execute(
+            svc.spreadsheets()
+            .values()
+            .get(spreadsheetId=s.sheets.spreadsheet_id, range=rng)
+        ).get("values", [])
     )
     if not rows:
         return {"reports": 0, "fights": 0}
@@ -234,9 +229,11 @@ def ingest_reports(s: Settings | None = None) -> dict:
         total_fights += len(fights)
 
     if updates:
-        svc.spreadsheets().values().batchUpdate(
-            spreadsheetId=s.sheets.spreadsheet_id,
-            body={"valueInputOption": "RAW", "data": updates},
-        ).execute()
+        client.execute(
+            svc.spreadsheets().values().batchUpdate(
+                spreadsheetId=s.sheets.spreadsheet_id,
+                body={"valueInputOption": "RAW", "data": updates},
+            )
+        )
 
     return {"reports": len(targets), "fights": total_fights}
