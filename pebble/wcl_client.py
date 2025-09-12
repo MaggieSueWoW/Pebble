@@ -1,7 +1,30 @@
 from __future__ import annotations
-import requests, time
-from typing import Optional, List
+
+import logging
+import time
+from typing import Optional
+
+import requests
 from requests.auth import HTTPBasicAuth
+from tenacity import (
+    before_sleep_log,
+    retry,
+    retry_if_exception,
+    stop_after_attempt,
+    wait_exponential,
+)
+
+logger = logging.getLogger(__name__)
+
+_RETRY_STATUS_CODES = {429, 500, 502, 503, 504}
+
+
+def _is_retryable(exc: Exception) -> bool:
+    if isinstance(exc, requests.HTTPError):
+        return (
+            exc.response is not None and exc.response.status_code in _RETRY_STATUS_CODES
+        )
+    return isinstance(exc, (requests.ConnectionError, requests.Timeout))
 
 
 class WCLClient:
@@ -21,6 +44,13 @@ class WCLClient:
         self._token: Optional[str] = None
         self._token_exp: float = 0.0
 
+    @retry(
+        reraise=True,
+        retry=retry_if_exception(_is_retryable),
+        wait=wait_exponential(multiplier=1, min=1, max=10),
+        stop=stop_after_attempt(5),
+        before_sleep=before_sleep_log(logger, logging.WARNING),
+    )
     def _ensure_token(self) -> None:
         now = time.time()
         if self._token and now < (self._token_exp - 60):
@@ -41,6 +71,13 @@ class WCLClient:
         self._token_exp = now + max(60, expires_in)
         self._session.headers.update({"Authorization": f"Bearer {self._token}"})
 
+    @retry(
+        reraise=True,
+        retry=retry_if_exception(_is_retryable),
+        wait=wait_exponential(multiplier=1, min=1, max=10),
+        stop=stop_after_attempt(5),
+        before_sleep=before_sleep_log(logger, logging.WARNING),
+    )
     def _post(self, query: str, variables: Optional[dict] = None) -> dict:
         self._ensure_token()
         payload = {"query": query, "variables": variables or {}}
