@@ -279,7 +279,7 @@ Runtime: Python 3.12
   - Validate required vars at startup; fail fast with clear errors.
 - **Persistent error handling**: network failures use capped exponential backoff; if WCL API is down >1h, errors surface in Service Log and summary sheet until cleared.
 - **Schedule**: poll ~5 min; faster near break.
-- **Bootstrap scripts**: use `pebble bootstrap sheets` and `pebble bootstrap mongo` to initialize external resources idempotently.
+- **Sheets bootstrap script**: `pebble bootstrap sheets` initializes Google Sheets resources idempotently.
 - **Logging**: INFO network, WARN missing Mythic, ERR to service_log.
 - **Backfill**: add past reports as `done`.
 - **Config**: spreadsheet id, timezone, sheet names, DB URI, knobs.
@@ -302,10 +302,9 @@ Runtime: Python 3.12
   - `bench_calc.py` — bench minutes per night; availability inference; overrides.
   - `week_agg.py` — week aggregation and ranking materialization.
   - `export_sheets.py` — DB→Sheets export with scoped reconciliation (upsert + delete), canonical sort & formatting.
-  - `mongo_client.py` — connection factory; index bootstrap helpers.
+  - `mongo_client.py` — connection factory.
   - `bootstrap/`
     - `sheets_bootstrap.py` — create spreadsheet/worksheets, named ranges, header rows, formatting.
-    - `sample_data.py` — optional seeds/fixtures loader.
   - `schemas/`
     - `types.py` — pydantic models for rows/documents (validation, serialization).
   - `utils/`
