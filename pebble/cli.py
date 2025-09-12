@@ -80,23 +80,17 @@ def compute(config):
 
     # Load roster map from Sheets (alt -> main)
     roster_map: Dict[str, str] = {}
-    role_map: Dict[str, str] = {}
     rows = _sheet_values(s, s.sheets.tabs.roster_map)
     if rows:
         header = rows[0]
         try:
             alt_idx = header.index("Character (Name-Realm)")
             main_idx = header.index("Main (Name-Realm)")
-            role_idx = header.index("Role")
             for r in rows[1:]:
                 alt = r[alt_idx].strip() if alt_idx < len(r) else ""
                 main = r[main_idx].strip() if main_idx < len(r) else ""
-                role = r[role_idx].strip() if role_idx < len(r) else ""
                 if alt and main:
                     roster_map[alt] = main
-                if main and role:
-                    # prefer first seen role for a main
-                    role_map.setdefault(main, role)
         except ValueError:
             pass
 
@@ -158,7 +152,6 @@ def compute(config):
         [
             "Night ID",
             "Main",
-            "Role",
             "Played Pre (min)",
             "Played Post (min)",
             "Played Total (min)",
@@ -333,12 +326,10 @@ def compute(config):
         # Persist bench_night_totals for this night
         ops = []
         for row in bench:
-            role = role_map.get(row["main"], "")
             bench_rows.append(
                 [
                     night,
                     row["main"],
-                    role,
                     row["played_pre_min"],
                     row["played_post_min"],
                     row["played_total_min"],
@@ -353,7 +344,6 @@ def compute(config):
             doc = {
                 "night_id": night,
                 "main": row["main"],
-                "role": role,
                 "played_pre_min": row["played_pre_min"],
                 "played_post_min": row["played_post_min"],
                 "played_total_min": row["played_total_min"],
@@ -409,7 +399,6 @@ def week(config):
         [
             "Game Week (YYYY-MM-DD)",
             "Main",
-            "Role",
             "Played Week (min)",
             "Bench Week (min)",
             "Bench Pre (min)",
@@ -425,7 +414,6 @@ def week(config):
             [
                 rec["game_week"],
                 rec["main"],
-                rec.get("role"),
                 rec.get("played_min", 0),
                 rec.get("bench_min", 0),
                 rec.get("bench_pre_min", 0),
@@ -440,9 +428,9 @@ def week(config):
     )
 
     # export rankings
-    rank_rows = [["Rank", "Main", "Role", "Bench Season-to-date (min)"]]
+    rank_rows = [["Rank", "Main", "Bench Season-to-date (min)"]]
     for rec in db["bench_rankings"].find({}, {"_id": 0}).sort([("rank", 1)]):
-        rank_rows.append([rec["rank"], rec["main"], rec.get("role"), rec["bench_min"]])
+        rank_rows.append([rec["rank"], rec["main"], rec["bench_min"]])
     replace_values(
         s.sheets.spreadsheet_id,
         s.sheets.tabs.bench_rankings,

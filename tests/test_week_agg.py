@@ -19,7 +19,6 @@ def test_materialize_week_totals_fills_roster():
             {
                 "night_id": "2024-07-02",
                 "main": "Alice-Illidan",
-                "role": "DPS",
                 "played_pre_min": 5,
                 "played_post_min": 5,
                 "bench_pre_min": 5,
@@ -28,7 +27,6 @@ def test_materialize_week_totals_fills_roster():
             {
                 "night_id": "2024-07-04",
                 "main": "Bob-Illidan",
-                "role": "Tank",
                 "played_pre_min": 10,
                 "played_post_min": 10,
                 "bench_pre_min": 0,
@@ -38,19 +36,17 @@ def test_materialize_week_totals_fills_roster():
     )
     db["team_roster"].insert_many(
         [
-            {"main": "Alice-Illidan", "join_night": "2024-06-25", "role": "DPS"},
-            {"main": "Bob-Illidan", "join_night": "2024-06-25", "role": "Tank"},
-            {"main": "Charlie-Illidan", "join_night": "2024-06-25", "role": "Healer"},
+            {"main": "Alice-Illidan", "join_night": "2024-06-25"},
+            {"main": "Bob-Illidan", "join_night": "2024-06-25"},
+            {"main": "Charlie-Illidan", "join_night": "2024-06-25"},
             {
                 "main": "Eve-Illidan",
                 "join_night": "2024-07-09",
-                "role": "DPS",
             },  # joins later
             {
                 "main": "Frank-Illidan",
                 "join_night": "2024-06-18",
                 "leave_night": "2024-06-25",
-                "role": "Tank",
             },  # left before
         ]
     )
@@ -63,7 +59,6 @@ def test_materialize_week_totals_fills_roster():
                 "_id": 0,
                 "game_week": 1,
                 "main": 1,
-                "role": 1,
                 "played_min": 1,
                 "bench_min": 1,
                 "bench_pre_min": 1,
@@ -76,7 +71,6 @@ def test_materialize_week_totals_fills_roster():
         {
             "game_week": "2024-07-02",
             "main": "Alice-Illidan",
-            "role": "DPS",
             "played_min": 10,
             "bench_min": 10,
             "bench_pre_min": 5,
@@ -85,7 +79,6 @@ def test_materialize_week_totals_fills_roster():
         {
             "game_week": "2024-07-02",
             "main": "Bob-Illidan",
-            "role": "Tank",
             "played_min": 20,
             "bench_min": 0,
             "bench_pre_min": 0,
@@ -94,7 +87,6 @@ def test_materialize_week_totals_fills_roster():
         {
             "game_week": "2024-07-02",
             "main": "Charlie-Illidan",
-            "role": "Healer",
             "played_min": 0,
             "bench_min": 0,
             "bench_pre_min": 0,
@@ -106,12 +98,12 @@ def test_materialize_week_totals_fills_roster():
     rc = materialize_rankings(db)
     ranks = list(
         db["bench_rankings"].find(
-            {}, {"_id": 0, "rank": 1, "main": 1, "role": 1, "bench_min": 1}
+            {}, {"_id": 0, "rank": 1, "main": 1, "bench_min": 1}
         ).sort([("rank", 1)])
     )
     assert rc == 3
     assert ranks == [
-        {"rank": 1, "main": "Alice-Illidan", "role": "DPS", "bench_min": 10},
-        {"rank": 2, "main": "Bob-Illidan", "role": "Tank", "bench_min": 0},
-        {"rank": 3, "main": "Charlie-Illidan", "role": "Healer", "bench_min": 0},
+        {"rank": 1, "main": "Alice-Illidan", "bench_min": 10},
+        {"rank": 2, "main": "Bob-Illidan", "bench_min": 0},
+        {"rank": 3, "main": "Charlie-Illidan", "bench_min": 0},
     ]

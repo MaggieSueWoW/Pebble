@@ -13,7 +13,7 @@ HEADERS = {
         "Break Override Start (PT)",
         "Break Override End (PT)",
     ],
-    "Roster Map": ["Character (Name-Realm)", "Main (Name-Realm)", "Role"],
+    "Roster Map": ["Character (Name-Realm)", "Main (Name-Realm)"],
     "Team Roster": [
         "Main",
         "Join Night (YYYY-MM-DD)",
@@ -55,7 +55,6 @@ HEADERS = {
     "Bench Night Totals": [
         "Night ID",
         "Main",
-        "Role",
         "Played Pre (min)",
         "Played Post (min)",
         "Played Total (min)",
@@ -69,7 +68,6 @@ HEADERS = {
     "Bench Week Totals": [
         "Game Week (YYYY-MM-DD)",
         "Main",
-        "Role",
         "Played Week (min)",
         "Bench Week (min)",
         "Bench Pre (min)",
@@ -78,7 +76,6 @@ HEADERS = {
     "Bench Rankings": [
         "Rank",
         "Main",
-        "Role",
         "Bench Season-to-date (min)",
     ],
     "Service Log (Summary)": [
