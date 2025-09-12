@@ -24,7 +24,6 @@ HEADERS = {
     "Availability Overrides": [
         "Night ID",
         "Main",
-        "Status",
         "Avail Pre?",
         "Avail Post?",
         "Reason",

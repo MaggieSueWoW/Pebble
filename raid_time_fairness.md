@@ -106,7 +106,7 @@ Cross‑cutting: Times stored PT ISO + UTC ms; deterministic sort; only Export t
 - **Team Roster**
   - `Main`, `Join Night (YYYY-MM-DD)`, `Leave Night (YYYY-MM-DD)`, `Active?`, `Notes`.
 - **Availability Overrides**
-  - `Night ID`, `Main`, `Status` (Available | Out | Break), `Avail Pre?`, `Avail Post?`, `Reason`.
+  - `Night ID`, `Main`, `Avail Pre?`, `Avail Post?`, `Reason`.
 
 ### Outputs (DB→Sheets; read‑only)
 
@@ -374,7 +374,7 @@ The WCL client is pluggable; if WarcraftLogs releases v3 API, adapter can be swa
 **Reports**: `Report URL`, `Status`, `Last Checked PT`, `Notes`, `Break Override Start (PT)`, `Break Override End (PT)`.
 **Roster Map**: `Character (Name-Realm)`, `Main (Name-Realm)`.
 **Team Roster**: `Main`, `Join Night (YYYY-MM-DD)`, `Leave Night (YYYY-MM-DD)`, `Active?`, `Notes`.  
-**Availability Overrides**: `Night ID`, `Main`, `Status`, `Avail Pre?`, `Avail Post?`, `Reason`.  
+**Availability Overrides**: `Night ID`, `Main`, `Avail Pre?`, `Avail Post?`, `Reason`.
 
 **Night QA**: `Night ID`, `Reports Involved`, `Night Start/End (PT)`, `Break Start/End (PT)`, `Break Duration (min)`, `Mythic Start/End (PT)`, `Mythic Pre/Post Duration (min)`, `Gap Window`, `Min/Max Break`, `Dedupe Tol`, `Largest Gap (min)`, `Candidate Gaps (JSON)`, `Override Used?`.  
 **Bench Night Totals**: `Night ID`, `Main`, `Bench Minutes Pre/Post/Total`, `Played Pre/Post/Total`, `Avail Pre?/Post?`, `Status Source`.
