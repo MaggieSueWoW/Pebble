@@ -105,8 +105,8 @@ def compute(config):
             main_idx = header.index("Main (Name-Realm)")
             for r in rows[1:]:
                 if alt_idx < len(r) and main_idx < len(r):
-                    alt = r[alt_idx].split("-")[0].strip()
-                    main = r[main_idx].split("-")[0].strip()
+                    alt = r[alt_idx].strip()
+                    main = r[main_idx].strip()
                     if alt and main:
                         roster_map[alt] = main
         except ValueError:
@@ -124,7 +124,7 @@ def compute(config):
             post_idx = header.index("Avail Post?")
             for r in rows[1:]:
                 night = r[n_idx].strip() if n_idx < len(r) else ""
-                name = r[m_idx].split("-")[0].strip() if m_idx < len(r) else ""
+                name = r[m_idx].strip() if m_idx < len(r) else ""
                 if not night or not name:
                     continue
                 ov = {

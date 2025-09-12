@@ -145,9 +145,9 @@ def ingest_reports(s: Settings | None = None) -> dict:
             "notes": rep.get("notes", ""),
             "break_override_start_ms": bos_ms,
             "break_override_end_ms": boe_ms,
-            "break_override_start_pt": ms_to_pt_iso(bos_ms)
-            if bos_ms is not None
-            else "",
+            "break_override_start_pt": (
+                ms_to_pt_iso(bos_ms) if bos_ms is not None else ""
+            ),
             "break_override_end_pt": ms_to_pt_iso(boe_ms) if boe_ms is not None else "",
             "ingested_at": now_dt,
             "last_checked_pt": now_iso,
@@ -164,7 +164,11 @@ def ingest_reports(s: Settings | None = None) -> dict:
         actor_map = {
             int(a.get("id")): {
                 "actor_id": int(a.get("id")),
-                "name": a.get("name"),
+                "name": (
+                    f"{a.get('name')}-{a.get('server')}"
+                    if a.get("server")
+                    else a.get("name")
+                ),
                 "type": a.get("type"),
                 "subType": a.get("subType"),
                 "server": a.get("server"),

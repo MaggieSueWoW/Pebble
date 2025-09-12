@@ -14,7 +14,7 @@ def test_materialize_week_totals_fills_roster():
         [
             {
                 "night_id": "2024-07-02",
-                "main": "Alice",
+                "main": "Alice-Illidan",
                 "played_pre_min": 5,
                 "played_post_min": 5,
                 "bench_pre_min": 5,
@@ -22,7 +22,7 @@ def test_materialize_week_totals_fills_roster():
             },
             {
                 "night_id": "2024-07-04",
-                "main": "Bob",
+                "main": "Bob-Illidan",
                 "played_pre_min": 10,
                 "played_post_min": 10,
                 "bench_pre_min": 0,
@@ -32,12 +32,12 @@ def test_materialize_week_totals_fills_roster():
     )
     db["team_roster"].insert_many(
         [
-            {"main": "Alice", "join_night": "2024-06-25"},
-            {"main": "Bob", "join_night": "2024-06-25"},
-            {"main": "Charlie", "join_night": "2024-06-25"},
-            {"main": "Eve", "join_night": "2024-07-09"},  # joins later
+            {"main": "Alice-Illidan", "join_night": "2024-06-25"},
+            {"main": "Bob-Illidan", "join_night": "2024-06-25"},
+            {"main": "Charlie-Illidan", "join_night": "2024-06-25"},
+            {"main": "Eve-Illidan", "join_night": "2024-07-09"},  # joins later
             {
-                "main": "Frank",
+                "main": "Frank-Illidan",
                 "join_night": "2024-06-18",
                 "leave_night": "2024-06-25",
             },  # left before
@@ -54,19 +54,19 @@ def test_materialize_week_totals_fills_roster():
     assert sorted(rows, key=lambda r: r["main"]) == [
         {
             "game_week": "2024-07-02",
-            "main": "Alice",
+            "main": "Alice-Illidan",
             "played_min": 10,
             "bench_min": 10,
         },
         {
             "game_week": "2024-07-02",
-            "main": "Bob",
+            "main": "Bob-Illidan",
             "played_min": 20,
             "bench_min": 0,
         },
         {
             "game_week": "2024-07-02",
-            "main": "Charlie",
+            "main": "Charlie-Illidan",
             "played_min": 0,
             "bench_min": 0,
         },

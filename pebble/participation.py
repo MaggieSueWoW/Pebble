@@ -12,8 +12,8 @@ def build_mythic_participation(fights_mythic: List[dict]) -> List[dict]:
 
     Each fight is expected to include absolute start/end times and a
     ``participants`` list containing player dictionaries with at least a
-    ``name`` field.  The returned rows use natural keys so callers can
-    upsert them idempotently.
+    ``name`` field formatted as ``Name-Realm``.  The returned rows use
+    natural keys so callers can upsert them idempotently.
     """
 
     rows: List[dict] = []
