@@ -1,4 +1,5 @@
 import click
+import json
 from .config_loader import load_settings
 from .logging_setup import setup_logging
 from .mongo_client import get_db, ensure_indexes
@@ -9,6 +10,7 @@ from .blocks import build_blocks
 from .bench_calc import bench_minutes_for_night, last_non_mythic_boss_mains
 from .participation import build_mythic_participation
 from .export_sheets import replace_values
+from .utils.time import ms_to_pt_iso
 
 
 @click.group()
@@ -142,12 +144,26 @@ def compute(config):
     night_qa_rows = [
         [
             "Night ID",
-            "Mythic Start (ms)",
-            "Mythic End (ms)",
-            "Break Start (ms)",
-            "Break End (ms)",
+            "Reports Involved",
+            "Report Start (PT)",
+            "Report End (PT)",
+            "Night Start (PT)",
+            "Night End (PT)",
+            "Mythic Fights",
+            "Break Start (PT)",
+            "Break End (PT)",
+            "Break Override Start (PT)",
+            "Break Override End (PT)",
+            "Break Duration (min)",
+            "Mythic Start (PT)",
+            "Mythic End (PT)",
             "Mythic Pre (min)",
             "Mythic Post (min)",
+            "Gap Window",
+            "Min/Max Break",
+            "Largest Gap (min)",
+            "Candidate Gaps (JSON)",
+            "Override Used?",
         ]
     ]
     bench_rows = [
@@ -163,40 +179,111 @@ def compute(config):
 
     for night in nights:
         fights_all = list(db["fights_all"].find({"night_id": night}, {"_id": 0}))
+        if not fights_all:
+            continue
         fights_m = [f for f in fights_all if f.get("is_mythic")]
 
         env = mythic_envelope(fights_m)
         if not env:
             continue
 
-        br = detect_break(
+        reports = list(db["reports"].find({"night_id": night}, {"_id": 0}))
+        report_codes = sorted(r.get("code") for r in reports)
+        report_start_ms = min(r.get("start_ms") for r in reports)
+        report_end_ms = max(r.get("end_ms") for r in reports)
+        night_start_ms = min(f["fight_abs_start_ms"] for f in fights_all)
+        night_end_ms = max(f["fight_abs_end_ms"] for f in fights_all)
+        override_pair = next(
+            (
+                (r.get("break_override_start_ms"), r.get("break_override_end_ms"))
+                for r in reports
+                if r.get("break_override_start_ms") and r.get("break_override_end_ms")
+            ),
+            (None, None),
+        )
+        override_start_ms, override_end_ms = override_pair
+
+        br_auto, gap_meta = detect_break(
             fights_all,
             window_start_min=s.time.break_window_start_min,
             window_end_min=s.time.break_window_end_min,
             min_break_min=s.time.break_min_minutes,
             max_break_min=s.time.break_max_minutes,
         )
-        split = split_pre_post(env, br)
+        br_range = br_auto
+        override_used = False
+        if override_start_ms and override_end_ms:
+            br_range = (override_start_ms, override_end_ms)
+            override_used = True
+
+        split = split_pre_post(env, br_range)
+        break_duration = (
+            round((br_range[1] - br_range[0]) / 60000.0, 2) if br_range else ""
+        )
+        candidate_gaps = [
+            {
+                "start": ms_to_pt_iso(c["start_ms"]),
+                "end": ms_to_pt_iso(c["end_ms"]),
+                "gap_min": round(c["gap_min"], 2),
+            }
+            for c in gap_meta.get("candidates", [])
+        ]
+        largest_gap = round(gap_meta.get("largest_gap_min", 0.0), 2)
+
         night_qa_rows.append(
             [
                 night,
-                env[0],
-                env[1],
-                br[0] if br else "",
-                br[1] if br else "",
-                (split["pre_ms"] // 60000),
-                (split["post_ms"] // 60000),
+                ",".join(report_codes),
+                ms_to_pt_iso(report_start_ms),
+                ms_to_pt_iso(report_end_ms),
+                ms_to_pt_iso(night_start_ms),
+                ms_to_pt_iso(night_end_ms),
+                len(fights_m),
+                ms_to_pt_iso(br_range[0]) if br_range else "",
+                ms_to_pt_iso(br_range[1]) if br_range else "",
+                ms_to_pt_iso(override_start_ms) if override_start_ms else "",
+                ms_to_pt_iso(override_end_ms) if override_end_ms else "",
+                f"{break_duration:.2f}" if break_duration != "" else "",
+                ms_to_pt_iso(env[0]),
+                ms_to_pt_iso(env[1]),
+                f"{split['pre_ms'] / 60000.0:.2f}",
+                f"{split['post_ms'] / 60000.0:.2f}",
+                f"{s.time.break_window_start_min}-{s.time.break_window_end_min}",
+                f"{s.time.break_min_minutes}-{s.time.break_max_minutes}",
+                f"{largest_gap:.2f}",
+                json.dumps(candidate_gaps),
+                "Y" if override_used else "N",
             ]
         )
         # Persist Night QA to Mongo (idempotent)
         qa_doc = {
             "night_id": night,
+            "reports": report_codes,
+            "report_start_ms": report_start_ms,
+            "report_end_ms": report_end_ms,
+            "night_start_ms": night_start_ms,
+            "night_end_ms": night_end_ms,
+            "mythic_fights": len(fights_m),
             "mythic_start_ms": env[0],
             "mythic_end_ms": env[1],
-            "break_start_ms": br[0] if br else None,
-            "break_end_ms": br[1] if br else None,
-            "mythic_pre_min": (split["pre_ms"] // 60000),
-            "mythic_post_min": (split["post_ms"] // 60000),
+            "break_start_ms": br_range[0] if br_range else None,
+            "break_end_ms": br_range[1] if br_range else None,
+            "break_override_start_ms": override_start_ms,
+            "break_override_end_ms": override_end_ms,
+            "break_duration_min": break_duration if break_duration != "" else None,
+            "mythic_pre_min": round(split["pre_ms"] / 60000.0, 2),
+            "mythic_post_min": round(split["post_ms"] / 60000.0, 2),
+            "gap_window": (
+                s.time.break_window_start_min,
+                s.time.break_window_end_min,
+            ),
+            "min_max_break": (
+                s.time.break_min_minutes,
+                s.time.break_max_minutes,
+            ),
+            "largest_gap_min": largest_gap,
+            "gap_candidates": candidate_gaps,
+            "override_used": override_used,
         }
         db["night_qa"].update_one({"night_id": night}, {"$set": qa_doc}, upsert=True)
 
@@ -217,7 +304,7 @@ def compute(config):
         part_rows = list(db["participation_m"].find({"night_id": night}, {"_id": 0}))
 
         # Blocks stage
-        blocks = build_blocks(part_rows, break_range=br)
+        blocks = build_blocks(part_rows, break_range=br_range)
         from collections import defaultdict
 
         seq = defaultdict(int)

@@ -25,3 +25,19 @@ def ms_to_pt_iso(ms: int) -> str:
 def night_id_from_ms(ms: int) -> str:
     # Night ID = local PT calendar date (YYYY-MM-DD) of the night start
     return ms_to_pt(ms).strftime("%Y-%m-%d")
+
+
+def pt_iso_to_ms(txt: str) -> int | None:
+    """Parse an ISO-8601 string presumed to be in PT into epoch ms.
+
+    Returns ``None`` if parsing fails or the input is falsy.
+    """
+    if not txt:
+        return None
+    try:
+        dt = datetime.fromisoformat(txt)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=PT)
+        return int(dt.timestamp() * 1000)
+    except Exception:
+        return None

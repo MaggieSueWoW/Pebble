@@ -7,7 +7,7 @@ from googleapiclient.discovery import build
 from .config_loader import Settings, load_settings
 from .mongo_client import get_db, ensure_indexes
 from .wcl_client import WCLClient
-from .utils.time import night_id_from_ms, ms_to_pt_iso, PT
+from .utils.time import night_id_from_ms, ms_to_pt_iso, PT, pt_iso_to_ms
 
 
 CONTROL_HEADERS = {
@@ -122,6 +122,8 @@ def ingest_reports(s: Settings | None = None) -> dict:
         report_start_ms = int(bundle.get("startTime"))
         report_end_ms = int(bundle.get("endTime"))
         night_id = night_id_from_ms(report_start_ms)
+        bos_ms = pt_iso_to_ms(rep.get("break_override_start"))
+        boe_ms = pt_iso_to_ms(rep.get("break_override_end"))
         rep_doc = {
             "code": code,
             "title": bundle.get("title"),
@@ -131,6 +133,10 @@ def ingest_reports(s: Settings | None = None) -> dict:
             "end_pt": ms_to_pt_iso(report_end_ms),
             "night_id": night_id,
             "notes": rep.get("notes", ""),
+            "break_override_start_ms": bos_ms,
+            "break_override_end_ms": boe_ms,
+            "break_override_start_pt": ms_to_pt_iso(bos_ms) if bos_ms is not None else "",
+            "break_override_end_pt": ms_to_pt_iso(boe_ms) if boe_ms is not None else "",
             "ingested_at": datetime.now(PT),
         }
         db["reports"].update_one({"code": code}, {"$set": rep_doc}, upsert=True)
