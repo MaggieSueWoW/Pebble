@@ -22,6 +22,15 @@ def ms_to_pt_iso(ms: int) -> str:
     return ms_to_pt(ms).isoformat()
 
 
+def ms_to_pt_sheets(ms: int) -> str:
+    """Return a PT datetime string Google Sheets parses natively.
+
+    The format produced is ``YYYY-MM-DD HH:MM:SS`` so Sheets interprets the
+    value as a real datetime rather than plain text.
+    """
+    return ms_to_pt(ms).strftime("%Y-%m-%d %H:%M:%S")
+
+
 def night_id_from_ms(ms: int) -> str:
     # Night ID = local PT calendar date (YYYY-MM-DD) of the night start
     return ms_to_pt(ms).strftime("%Y-%m-%d")

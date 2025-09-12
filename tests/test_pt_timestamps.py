@@ -1,6 +1,6 @@
 from pebble.participation import build_mythic_participation
 from pebble.blocks import build_blocks
-from pebble.utils.time import ms_to_pt_iso, pt_time_to_ms
+from pebble.utils.time import ms_to_pt_iso, ms_to_pt_sheets, pt_time_to_ms
 
 
 def test_pt_fields_added():
@@ -28,3 +28,8 @@ def test_pt_time_to_ms_formats():
     assert pt_time_to_ms("21:15", ref_ms) == ref_ms + 75 * 60000
     assert pt_time_to_ms("9:15:00 PM", ref_ms) == ref_ms + 75 * 60000
     assert pt_time_to_ms("9:15", ref_ms) == ref_ms + 75 * 60000
+
+
+def test_ms_to_pt_sheets_format():
+    ms = 1719975600000  # 2024-07-02T20:00:00-07:00
+    assert ms_to_pt_sheets(ms) == "2024-07-02 20:00:00"

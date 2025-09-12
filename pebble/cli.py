@@ -10,7 +10,7 @@ from .blocks import build_blocks
 from .bench_calc import bench_minutes_for_night, last_non_mythic_boss_mains
 from .participation import build_mythic_participation
 from .export_sheets import replace_values
-from .utils.time import ms_to_pt_iso, pt_time_to_ms
+from .utils.time import ms_to_pt_iso, ms_to_pt_sheets, pt_time_to_ms
 
 
 @click.group()
@@ -263,10 +263,18 @@ def compute(config):
         break_duration = (
             round((br_range[1] - br_range[0]) / 60000.0, 2) if br_range else ""
         )
-        candidate_gaps = [
+        candidate_gaps_db = [
             {
                 "start": ms_to_pt_iso(c["start_ms"]),
                 "end": ms_to_pt_iso(c["end_ms"]),
+                "gap_min": round(c["gap_min"], 2),
+            }
+            for c in gap_meta.get("candidates", [])
+        ]
+        candidate_gaps_sheet = [
+            {
+                "start": ms_to_pt_sheets(c["start_ms"]),
+                "end": ms_to_pt_sheets(c["end_ms"]),
                 "gap_min": round(c["gap_min"], 2),
             }
             for c in gap_meta.get("candidates", [])
@@ -277,24 +285,24 @@ def compute(config):
             [
                 night,
                 ",".join(report_codes),
-                ms_to_pt_iso(report_start_ms),
-                ms_to_pt_iso(report_end_ms),
-                ms_to_pt_iso(night_start_ms),
-                ms_to_pt_iso(night_end_ms),
+                ms_to_pt_sheets(report_start_ms),
+                ms_to_pt_sheets(report_end_ms),
+                ms_to_pt_sheets(night_start_ms),
+                ms_to_pt_sheets(night_end_ms),
                 len(fights_m),
-                ms_to_pt_iso(br_range[0]) if br_range else "",
-                ms_to_pt_iso(br_range[1]) if br_range else "",
-                ms_to_pt_iso(override_start_ms) if override_start_ms else "",
-                ms_to_pt_iso(override_end_ms) if override_end_ms else "",
+                ms_to_pt_sheets(br_range[0]) if br_range else "",
+                ms_to_pt_sheets(br_range[1]) if br_range else "",
+                ms_to_pt_sheets(override_start_ms) if override_start_ms else "",
+                ms_to_pt_sheets(override_end_ms) if override_end_ms else "",
                 f"{break_duration:.2f}" if break_duration != "" else "",
-                ms_to_pt_iso(env[0]),
-                ms_to_pt_iso(env[1]),
+                ms_to_pt_sheets(env[0]),
+                ms_to_pt_sheets(env[1]),
                 f"{split['pre_ms'] / 60000.0:.2f}",
                 f"{split['post_ms'] / 60000.0:.2f}",
                 f"{bw.start_pt}-{bw.end_pt}",
                 f"{bw.min_gap_minutes}-{bw.max_gap_minutes}",
                 f"{largest_gap:.2f}",
-                json.dumps(candidate_gaps),
+                json.dumps(candidate_gaps_sheet),
                 "Y" if override_used else "N",
             ]
         )
@@ -319,7 +327,7 @@ def compute(config):
             "gap_window": (bw.start_pt, bw.end_pt),
             "min_max_break": (bw.min_gap_minutes, bw.max_gap_minutes),
             "largest_gap_min": largest_gap,
-            "gap_candidates": candidate_gaps,
+            "gap_candidates": candidate_gaps_db,
             "override_used": override_used,
         }
         db["night_qa"].update_one({"night_id": night}, {"$set": qa_doc}, upsert=True)
