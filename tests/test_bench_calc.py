@@ -17,14 +17,24 @@ def test_bench_minutes_uses_split_durations():
     a = res_by_main["A-Illidan"]
     assert a["played_pre_min"] == 5
     assert a["played_post_min"] == 10
+    assert a["played_total_min"] == 15
     assert a["bench_pre_min"] == 5  # 10 - 5
     assert a["bench_post_min"] == 10  # 20 - 10
+    assert a["bench_total_min"] == 15
+    assert a["avail_pre"] is True
+    assert a["avail_post"] is True
+    assert a["status_source"] == "blocks"
 
     b = res_by_main["B-Illidan"]
     assert b["played_pre_min"] == 0
     assert b["played_post_min"] == 10
+    assert b["played_total_min"] == 10
     assert b["bench_pre_min"] == 10  # pre half inferred available via post
     assert b["bench_post_min"] == 10
+    assert b["bench_total_min"] == 20
+    assert b["avail_pre"] is True
+    assert b["avail_post"] is True
+    assert b["status_source"] == "blocks"
 
 
 def test_last_fight_overrides_and_roster_map():
@@ -47,16 +57,24 @@ def test_last_fight_overrides_and_roster_map():
     m1 = res_by_main["Main1-Illidan"]
     assert m1["played_pre_min"] == 5
     assert m1["played_post_min"] == 0
+    assert m1["played_total_min"] == 5
     assert m1["bench_pre_min"] == 5  # available via last fight
     assert m1["bench_post_min"] == 0  # override removes post availability
+    assert m1["bench_total_min"] == 5
     assert m1["avail_pre"] is True
     assert m1["avail_post"] is False
+    assert m1["status_source"] == "override"
 
     m2 = res_by_main["Main2-Illidan"]  # no blocks but in last fight
     assert m2["played_pre_min"] == 0
     assert m2["played_post_min"] == 0
+    assert m2["played_total_min"] == 0
     assert m2["bench_pre_min"] == 10
     assert m2["bench_post_min"] == 10
+    assert m2["bench_total_min"] == 20
+    assert m2["avail_pre"] is True
+    assert m2["avail_post"] is True
+    assert m2["status_source"] == "last_fight"
 
 
 def test_last_non_mythic_boss_mains_excludes_trash():

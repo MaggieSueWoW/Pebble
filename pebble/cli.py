@@ -97,18 +97,23 @@ def compute(config):
 
     # Load roster map from Sheets (alt -> main)
     roster_map: Dict[str, str] = {}
+    role_map: Dict[str, str] = {}
     rows = _sheet_values(s, s.sheets.tabs.roster_map)
     if rows:
         header = rows[0]
         try:
             alt_idx = header.index("Character (Name-Realm)")
             main_idx = header.index("Main (Name-Realm)")
+            role_idx = header.index("Role")
             for r in rows[1:]:
-                if alt_idx < len(r) and main_idx < len(r):
-                    alt = r[alt_idx].strip()
-                    main = r[main_idx].strip()
-                    if alt and main:
-                        roster_map[alt] = main
+                alt = r[alt_idx].strip() if alt_idx < len(r) else ""
+                main = r[main_idx].strip() if main_idx < len(r) else ""
+                role = r[role_idx].strip() if role_idx < len(r) else ""
+                if alt and main:
+                    roster_map[alt] = main
+                if main and role:
+                    # prefer first seen role for a main
+                    role_map.setdefault(main, role)
         except ValueError:
             pass
 
@@ -170,10 +175,16 @@ def compute(config):
         [
             "Night ID",
             "Main",
+            "Role",
             "Played Pre (min)",
             "Played Post (min)",
+            "Played Total (min)",
             "Bench Pre (min)",
             "Bench Post (min)",
+            "Bench Total (min)",
+            "Avail Pre?",
+            "Avail Post?",
+            "Status Source",
         ]
     ]
 
@@ -339,23 +350,36 @@ def compute(config):
         # Persist bench_night_totals for this night
         ops = []
         for row in bench:
+            role = role_map.get(row["main"], "")
             bench_rows.append(
                 [
                     night,
                     row["main"],
+                    role,
                     row["played_pre_min"],
                     row["played_post_min"],
+                    row["played_total_min"],
                     row["bench_pre_min"],
                     row["bench_post_min"],
+                    row["bench_total_min"],
+                    row["avail_pre"],
+                    row["avail_post"],
+                    row["status_source"],
                 ]
             )
             doc = {
                 "night_id": night,
                 "main": row["main"],
+                "role": role,
                 "played_pre_min": row["played_pre_min"],
                 "played_post_min": row["played_post_min"],
+                "played_total_min": row["played_total_min"],
                 "bench_pre_min": row["bench_pre_min"],
                 "bench_post_min": row["bench_post_min"],
+                "bench_total_min": row["bench_total_min"],
+                "avail_pre": row["avail_pre"],
+                "avail_post": row["avail_post"],
+                "status_source": row["status_source"],
             }
             ops.append(
                 UpdateOne(

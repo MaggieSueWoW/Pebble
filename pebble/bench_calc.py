@@ -70,15 +70,35 @@ def bench_minutes_for_night(
         pre_bench_ms = max(0, pre_full - pre_played_ms) if pre_avail else 0
         post_bench_ms = max(0, post_full - post_played_ms) if post_avail else 0
 
+        played_pre_min = pre_played_ms // 60000
+        played_post_min = post_played_ms // 60000
+        bench_pre_min = pre_bench_ms // 60000
+        bench_post_min = post_bench_ms // 60000
+
+        played_total_min = played_pre_min + played_post_min
+        bench_total_min = bench_pre_min + bench_post_min
+
+        # Determine status source: override > last_fight > blocks > none
+        status_source = "none"
+        if ov and (ov.get("pre") is not None or ov.get("post") is not None):
+            status_source = "override"
+        elif main in last_fight_mains:
+            status_source = "last_fight"
+        elif pre_played_ms > 0 or post_played_ms > 0:
+            status_source = "blocks"
+
         out.append(
             {
                 "main": main,
-                "bench_pre_min": pre_bench_ms // 60000,
-                "bench_post_min": post_bench_ms // 60000,
-                "played_pre_min": pre_played_ms // 60000,
-                "played_post_min": post_played_ms // 60000,
+                "bench_pre_min": bench_pre_min,
+                "bench_post_min": bench_post_min,
+                "bench_total_min": bench_total_min,
+                "played_pre_min": played_pre_min,
+                "played_post_min": played_post_min,
+                "played_total_min": played_total_min,
                 "avail_pre": pre_avail,
                 "avail_post": post_avail,
+                "status_source": status_source,
             }
         )
 
