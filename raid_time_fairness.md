@@ -305,7 +305,6 @@ Runtime: Python 3.12
   - `mongo_client.py` — connection factory; index bootstrap helpers.
   - `bootstrap/`
     - `sheets_bootstrap.py` — create spreadsheet/worksheets, named ranges, header rows, formatting.
-    - `mongo_bootstrap.py` — create DB, collections, and indexes (idempotent).
     - `sample_data.py` — optional seeds/fixtures loader.
   - `schemas/`
     - `types.py` — pydantic models for rows/documents (validation, serialization).
@@ -316,7 +315,6 @@ Runtime: Python 3.12
 **CLI entry points (Click)**
 - `cli.py` — root CLI.
   - `pebble bootstrap sheets` — create sheets/ranges.
-  - `pebble bootstrap mongo` — create collections/indexes.
   - `pebble ingest` — pull WCL fights for new/changed reports.
   - `pebble compute` — run blocks → QA → bench night/week.
   - `pebble export` — export Night QA / Bench outputs to Sheets.

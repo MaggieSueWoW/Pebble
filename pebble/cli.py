@@ -43,23 +43,6 @@ def sheets(config):
         )
 
 
-@bootstrap.command()
-@click.option("--config", default="config.yaml", show_default=True)
-def mongo(config):
-    log = setup_logging()
-    s = load_settings(config)
-    try:
-        from .bootstrap.mongo_bootstrap import bootstrap_mongo
-
-        res = bootstrap_mongo(s)
-        log.info("mongo bootstrap complete", extra={"stage": "bootstrap.mongo", **res})
-    except Exception as exc:
-        log.info(
-            "TODO: bootstrap mongo",
-            extra={"stage": "bootstrap.mongo", "error": str(exc)},
-        )
-
-
 @cli.command()
 @click.option("--config", default="config.yaml", show_default=True)
 def ingest(config):
