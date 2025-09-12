@@ -12,17 +12,20 @@ def detect_break(
 ) -> Tuple[Optional[Tuple[int, int]], Dict[str, Any]]:
     """Identify the raid break window.
 
-    Returns ``(break_range, meta)`` where ``break_range`` is a tuple of
-    ``(start_ms, end_ms)`` or ``None`` if no candidate satisfied the
+    Only boss fights (``encounter_id`` > 0) are considered when determining
+    the break. Returns ``(break_range, meta)`` where ``break_range`` is a
+    tuple of ``(start_ms, end_ms)`` or ``None`` if no candidate satisfied the
     criteria. ``meta`` contains the largest candidate gap (in minutes) and a
     list of all candidate gaps whose midpoints fell within the configured
     window.
     """
     if not all_fights:
         return None, {"largest_gap_min": 0, "candidates": []}
-    fights = sorted(
-        all_fights, key=lambda f: f["fight_abs_start_ms"]
-    )  # expects absolute times
+    # Filter to boss pulls only. A valid boss fight has a positive encounter id.
+    fights = [f for f in all_fights if f.get("encounter_id", 0) > 0]
+    if not fights:
+        return None, {"largest_gap_min": 0, "candidates": []}
+    fights = sorted(fights, key=lambda f: f["fight_abs_start_ms"])  # expects absolute times
     night0 = fights[0]["fight_abs_start_ms"]
 
     best = None
