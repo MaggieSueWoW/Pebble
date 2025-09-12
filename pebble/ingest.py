@@ -7,7 +7,7 @@ from googleapiclient.discovery import build
 from .config_loader import Settings, load_settings
 from .mongo_client import get_db, ensure_indexes
 from .wcl_client import WCLClient
-from .utils.time import night_id_from_ms, ms_to_pt_iso, PT, pt_iso_to_ms
+from .utils.time import night_id_from_ms, ms_to_pt_iso, PT, pt_time_to_ms
 
 
 REPORT_HEADERS = {
@@ -134,8 +134,8 @@ def ingest_reports(s: Settings | None = None) -> dict:
         report_start_ms = int(bundle.get("startTime"))
         report_end_ms = int(bundle.get("endTime"))
         night_id = night_id_from_ms(report_start_ms)
-        bos_ms = pt_iso_to_ms(rep.get("break_override_start"))
-        boe_ms = pt_iso_to_ms(rep.get("break_override_end"))
+        bos_ms = pt_time_to_ms(rep.get("break_override_start"), report_start_ms)
+        boe_ms = pt_time_to_ms(rep.get("break_override_end"), report_start_ms)
         now_dt = datetime.now(PT)
         now_ms = int(now_dt.timestamp() * 1000)
         now_iso = ms_to_pt_iso(now_ms)

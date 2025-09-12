@@ -1,6 +1,6 @@
 from pebble.participation import build_mythic_participation
 from pebble.blocks import build_blocks
-from pebble.utils.time import ms_to_pt_iso
+from pebble.utils.time import ms_to_pt_iso, pt_time_to_ms
 
 
 def test_pt_fields_added():
@@ -21,3 +21,9 @@ def test_pt_fields_added():
     blocks = build_blocks(rows, break_range=None)
     assert blocks[0]["start_pt"] == ms_to_pt_iso(ms_start)
     assert blocks[0]["end_pt"] == ms_to_pt_iso(ms_end)
+
+
+def test_pt_time_to_ms_hhmm():
+    ref_ms = 1719975600000  # 2024-07-02T20:00:00-07:00
+    ms = pt_time_to_ms("21:15", ref_ms)
+    assert ms == ref_ms + 75 * 60000

@@ -10,7 +10,7 @@ from .blocks import build_blocks
 from .bench_calc import bench_minutes_for_night, last_non_mythic_boss_mains
 from .participation import build_mythic_participation
 from .export_sheets import replace_values
-from .utils.time import ms_to_pt_iso
+from .utils.time import ms_to_pt_iso, pt_time_to_ms
 
 
 @click.group()
@@ -203,12 +203,17 @@ def compute(config):
         )
         override_start_ms, override_end_ms = override_pair
 
+        bw = s.time.break_window
+        window_start_ms = pt_time_to_ms(bw.start_pt, night_start_ms)
+        window_end_ms = pt_time_to_ms(bw.end_pt, night_start_ms)
+        window_start_min = int((window_start_ms - night_start_ms) / 60000)
+        window_end_min = int((window_end_ms - night_start_ms) / 60000)
         br_auto, gap_meta = detect_break(
             fights_all,
-            window_start_min=s.time.break_window_start_min,
-            window_end_min=s.time.break_window_end_min,
-            min_break_min=s.time.break_min_minutes,
-            max_break_min=s.time.break_max_minutes,
+            window_start_min=window_start_min,
+            window_end_min=window_end_min,
+            min_break_min=bw.min_gap_minutes,
+            max_break_min=bw.max_gap_minutes,
         )
         br_range = br_auto
         override_used = False
@@ -248,8 +253,8 @@ def compute(config):
                 ms_to_pt_iso(env[1]),
                 f"{split['pre_ms'] / 60000.0:.2f}",
                 f"{split['post_ms'] / 60000.0:.2f}",
-                f"{s.time.break_window_start_min}-{s.time.break_window_end_min}",
-                f"{s.time.break_min_minutes}-{s.time.break_max_minutes}",
+                f"{bw.start_pt}-{bw.end_pt}",
+                f"{bw.min_gap_minutes}-{bw.max_gap_minutes}",
                 f"{largest_gap:.2f}",
                 json.dumps(candidate_gaps),
                 "Y" if override_used else "N",
@@ -273,14 +278,8 @@ def compute(config):
             "break_duration_min": break_duration if break_duration != "" else None,
             "mythic_pre_min": round(split["pre_ms"] / 60000.0, 2),
             "mythic_post_min": round(split["post_ms"] / 60000.0, 2),
-            "gap_window": (
-                s.time.break_window_start_min,
-                s.time.break_window_end_min,
-            ),
-            "min_max_break": (
-                s.time.break_min_minutes,
-                s.time.break_max_minutes,
-            ),
+            "gap_window": (bw.start_pt, bw.end_pt),
+            "min_max_break": (bw.min_gap_minutes, bw.max_gap_minutes),
             "largest_gap_min": largest_gap,
             "gap_candidates": candidate_gaps,
             "override_used": override_used,

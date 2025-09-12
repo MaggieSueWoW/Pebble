@@ -41,3 +41,21 @@ def pt_iso_to_ms(txt: str) -> int | None:
         return int(dt.timestamp() * 1000)
     except Exception:
         return None
+
+
+def pt_time_to_ms(hhmm: str, ref_ms: int) -> int | None:
+    """Convert an ``HH:MM`` PT time to epoch ms using ``ref_ms``'s date.
+
+    ``hhmm`` is interpreted as a 24-hour clock in Pacific Time. The calendar
+    date is taken from ``ref_ms`` (also presumed to be in PT). ``None`` is
+    returned if parsing fails.
+    """
+    if not hhmm:
+        return None
+    try:
+        hour, minute = (int(part) for part in hhmm.split(":", 1))
+        dt_ref = ms_to_pt(ref_ms)
+        dt = dt_ref.replace(hour=hour, minute=minute, second=0, microsecond=0)
+        return int(dt.timestamp() * 1000)
+    except Exception:
+        return None

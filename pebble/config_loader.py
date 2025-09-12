@@ -33,13 +33,16 @@ class WCLConfig(BaseModel):
     token_url: str = Field(default="https://www.warcraftlogs.com/oauth/token")
 
 
+class BreakWindowConfig(BaseModel):
+    start_pt: str = Field(default="20:50")
+    end_pt: str = Field(default="21:30")
+    min_gap_minutes: int = 10
+    max_gap_minutes: int = 30
+
+
 class TimeConfig(BaseModel):
     tz: str = Field(default="America/Los_Angeles")
-    # Break detect knobs (defaults are conservative; Sheet may override per‑night)
-    break_window_start_min: int = 30
-    break_window_end_min: int = 120
-    break_min_minutes: int = 10
-    break_max_minutes: int = 30
+    break_window: BreakWindowConfig = Field(default_factory=BreakWindowConfig)
 
 
 class Settings(BaseModel):
