@@ -5,19 +5,13 @@ from googleapiclient.discovery import build
 from ..config_loader import Settings
 
 HEADERS = {
-    "Control & Ingest": [
+    "Reports": [
         "Report URL",
-        "Report Code",
         "Status",
         "Last Checked PT",
         "Notes",
         "Break Override Start (PT)",
         "Break Override End (PT)",
-        "Poll Seconds",
-        "Min Break (min)",
-        "Max Break (min)",
-        "Break Window Start (PT)",
-        "Break Window End (PT)",
     ],
     "Roster Map": ["Character (Name-Realm)", "Main (Name-Realm)", "Role"],
     "Team Roster": [
@@ -129,7 +123,7 @@ def _ensure_headers(svc, sheet_id: str, name: str, headers: list[str]):
 def bootstrap_sheets(settings: Settings) -> Dict[str, Any]:
     svc = _svc(settings)
     desired = {
-        settings.app.sheets.control: "Control & Ingest",
+        settings.app.sheets.reports: "Reports",
         settings.app.sheets.roster_map: "Roster Map",
         settings.app.sheets.team_roster: "Team Roster",
         settings.app.sheets.availability_overrides: "Availability Overrides",

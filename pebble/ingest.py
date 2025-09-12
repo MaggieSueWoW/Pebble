@@ -10,10 +10,10 @@ from .wcl_client import WCLClient
 from .utils.time import night_id_from_ms, ms_to_pt_iso, PT, pt_iso_to_ms
 
 
-CONTROL_HEADERS = {
+REPORT_HEADERS = {
     "Report URL": "report_url",
-    "Report Code": "report_code",
     "Status": "status",
+    "Last Checked PT": "last_checked_pt",
     "Notes": "notes",
     "Break Override Start (PT)": "break_override_start",
     "Break Override End (PT)": "break_override_end",
@@ -71,16 +71,28 @@ def ingest_reports(s: Settings | None = None) -> dict:
     db = get_db(s)
     ensure_indexes(db)
 
-    rows = _sheet_values(s, s.sheets.tabs.control)
+    creds = Credentials.from_service_account_file(
+        s.service_account_json, scopes=["https://www.googleapis.com/auth/spreadsheets"]
+    )
+    svc = build("sheets", "v4", credentials=creds)
+    rng = f"{s.sheets.tabs.reports}!A:Z"
+    rows = (
+        svc.spreadsheets()
+        .values()
+        .get(spreadsheetId=s.sheets.spreadsheet_id, range=rng)
+        .execute()
+        .get("values", [])
+    )
     if not rows:
         return {"reports": 0, "fights": 0}
 
     header = rows[0]
-    colmap = {name: header.index(name) for name in CONTROL_HEADERS if name in header}
+    colmap = {name: header.index(name) for name in REPORT_HEADERS if name in header}
+    last_checked_idx = colmap.get("Last Checked PT")
 
     # Collect targets
     targets: List[dict] = []
-    for row in rows[1:]:
+    for r_index, row in enumerate(rows[1:], start=2):
 
         def val(col: str) -> str:
             idx = colmap.get(col)
@@ -89,13 +101,12 @@ def ingest_reports(s: Settings | None = None) -> dict:
         status = val("Status").strip().lower()
         if status not in ("", "in-progress", "in‑progress", "in progress"):
             continue
-        code = val("Report Code").strip() or _extract_code_from_url(
-            val("Report URL").strip()
-        )
+        code = _extract_code_from_url(val("Report URL").strip())
         if not code:
             continue
         targets.append(
             {
+                "row": r_index,
                 "code": code,
                 "notes": val("Notes"),
                 "break_override_start": val("Break Override Start (PT)"),
@@ -114,6 +125,7 @@ def ingest_reports(s: Settings | None = None) -> dict:
     )
 
     total_fights = 0
+    updates = []
     for rep in targets:
         code = rep["code"]
         bundle = wcl.fetch_report_bundle(code)
@@ -124,6 +136,9 @@ def ingest_reports(s: Settings | None = None) -> dict:
         night_id = night_id_from_ms(report_start_ms)
         bos_ms = pt_iso_to_ms(rep.get("break_override_start"))
         boe_ms = pt_iso_to_ms(rep.get("break_override_end"))
+        now_dt = datetime.now(PT)
+        now_ms = int(now_dt.timestamp() * 1000)
+        now_iso = ms_to_pt_iso(now_ms)
         rep_doc = {
             "code": code,
             "title": bundle.get("title"),
@@ -135,11 +150,19 @@ def ingest_reports(s: Settings | None = None) -> dict:
             "notes": rep.get("notes", ""),
             "break_override_start_ms": bos_ms,
             "break_override_end_ms": boe_ms,
-            "break_override_start_pt": ms_to_pt_iso(bos_ms) if bos_ms is not None else "",
+            "break_override_start_pt": ms_to_pt_iso(bos_ms)
+            if bos_ms is not None
+            else "",
             "break_override_end_pt": ms_to_pt_iso(boe_ms) if boe_ms is not None else "",
-            "ingested_at": datetime.now(PT),
+            "ingested_at": now_dt,
+            "last_checked_pt": now_iso,
         }
         db["reports"].update_one({"code": code}, {"$set": rep_doc}, upsert=True)
+
+        if last_checked_idx is not None:
+            col_letter = chr(ord("A") + last_checked_idx)
+            rng = f"{s.sheets.tabs.reports}!{col_letter}{rep['row']}"
+            updates.append({"range": rng, "values": [[now_iso]]})
 
         # actors (players) per report — small, useful for audits; dedup by (report_code, actor_id)
         actors = (bundle.get("masterData") or {}).get("actors") or []
@@ -209,5 +232,11 @@ def ingest_reports(s: Settings | None = None) -> dict:
         if fops:
             db["fights_all"].bulk_write(fops, ordered=False)
         total_fights += len(fights)
+
+    if updates:
+        svc.spreadsheets().values().batchUpdate(
+            spreadsheetId=s.sheets.spreadsheet_id,
+            body={"valueInputOption": "RAW", "data": updates},
+        ).execute()
 
     return {"reports": len(targets), "fights": total_fights}

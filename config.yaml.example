@@ -3,7 +3,7 @@ app:
   timezone: "America/Los_Angeles"
   sheet_id: "YOUR_SHEET_ID"
   sheets:
-    control: "Control & Ingest"
+    reports: "Reports"
     roster_map: "Roster Map"
     team_roster: "Team Roster"
     availability_overrides: "Availability Overrides"

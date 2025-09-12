@@ -6,7 +6,7 @@ import os, yaml
 
 
 class SheetsTabs(BaseModel):
-    control: str = Field(default="Control & Ingest")
+    reports: str = Field(default="Reports")
     roster_map: str = Field(default="Roster Map")
     team_roster: str = Field(default="Team Roster")
     availability_overrides: str = Field(default="Availability Overrides")

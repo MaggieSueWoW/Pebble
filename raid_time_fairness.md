@@ -49,9 +49,9 @@
 
 ## 3) Data Flow (V1)
 
-1. **Input & Control** (officers)
+1. **Input (Reports sheet)** (officers)
    - Paste report links, set status: *blank*=new, `in‑progress`, `done`.
-   - Control knobs (poll interval, break window, min/max break, dedupe tolerance, feature flags).
+   - Optional: specify break override start/end times in PT.
 2. **Ingest**
    - Fetch fights for each report; dedupe with canonical key `(encounter_id, difficulty, rounded start/end)`.
    - Convert to PT. Persist raw fights in `fights_all` (Mongo).
@@ -62,7 +62,7 @@
 5. **Night QA**
    - From **All‑Fights timeline**: Night Start/End, Break detection + candidates, compact fight timeline.
    - From **Mythic fights only**: Mythic Start/End, **Mythic Pre/Post minutes** via envelope split around break.
-   - **Manual override precedence**: If `Break Override Start (PT)` / `Break Override End (PT)` are present on Control & Ingest, they fully replace auto‑detection for that report/night and are recorded in `night_qa` with `override_used = true`.
+   - **Manual override precedence**: If `Break Override Start (PT)` / `Break Override End (PT)` are present on Reports, they fully replace auto‑detection for that report/night and are recorded in `night_qa` with `override_used = true`.
 6. **Bench Night Totals**
    - For each night, include: everyone who **played Mythic** **or** was on the **last non‑Mythic boss before Mythic**.
    - Apply availability overrides; compute Bench Pre/Post/Total.
@@ -79,7 +79,7 @@
 
 Each stage is crash‑safe and idempotent. Every write uses a stable natural key with **upsert** semantics; outputs are reproducible from their source of truth. Stages map 1‑to‑1 with **Data Flow (V1)** steps.
 
-- **Stage 1: Input & Control** — Data Flow #1. Inputs: officer-managed entries in Sheets; Keys: report_code (from URL), status. Idempotent by definition; manual changes are authoritative; service never overwrites.
+- **Stage 1: Reports** — Data Flow #1. Inputs: officer-managed entries in Sheets; Keys: report_code (from URL), status. Idempotent by definition; manual changes are authoritative; service never overwrites.
 - **Stage 2: Ingest (All‑Fights)** — Data Flow #2. Inputs: WCL API; Keys: `{report_code, encounter_id, difficulty, start_rounded_ms, end_rounded_ms}`; Output: `fights_all`, `reports`.
 - **Stage 3: Participation (Mythic‑only)** — Data Flow #3. Inputs: `fights_mythic`; Keys: `{night_id, report_code, encounter_id, main, start_ms}`; Output: `participation_m`.
 - **Stage 4: Blocks** — Data Flow #4. Inputs: `participation_m`, `night_qa.break_start/end`; Keys: `{night_id, main, half, block_seq}`; Output: `blocks`.
@@ -95,13 +95,12 @@ Cross‑cutting: Times stored PT ISO + UTC ms; deterministic sort; only Export t
 
 ## 4) Google Sheets (UI‑only)
 
-> **Principle: one source of truth per datum.** Officer‑managed inputs live in Sheets; all intermediate/working data lives in MongoDB; derived tables are materialized to Sheets **read‑only** and can be regenerated at any time. No output range should be hand‑edited. **All inputs and outputs live in a single Google Sheets document, split across multiple worksheets (Control, Roster Map, Team Roster, Availability Overrides, Night QA, Bench Night Totals, Bench Week Totals, Service Log).**
+> **Principle: one source of truth per datum.** Officer‑managed inputs live in Sheets; all intermediate/working data lives in MongoDB; derived tables are materialized to Sheets **read‑only** and can be regenerated at any time. No output range should be hand‑edited. **All inputs and outputs live in a single Google Sheets document, split across multiple worksheets (Reports, Roster Map, Team Roster, Availability Overrides, Night QA, Bench Night Totals, Bench Week Totals, Service Log).**
 
 ### Inputs (authoritative in Sheets)
 
-- **Control & Ingest**
-  - `Report URL`, `Report Code`, `Status` (*blank* | `in-progress` | `done`), `Last Checked PT`, `Notes`, `Break Override Start (PT)`, `Break Override End (PT)`.
-  - Control knobs: poll interval (sec), break window start/end (PT), min/max break (min), dedupe tol (sec), feature flags.
+- **Reports**
+  - `Report URL`, `Status` (*blank* | `in-progress` | `done`), `Last Checked PT`, `Notes`, `Break Override Start (PT)`, `Break Override End (PT)`.
 - **Roster Map**
   - `Character (Name-Realm)`, `Main (Name-Realm)`, `Role` (Tank/Healer/Melee/Ranged/Other).
 - **Team Roster**
@@ -139,7 +138,7 @@ Cross‑cutting: Times stored PT ISO + UTC ms; deterministic sort; only Export t
 
 ---
 
-## 5) Config & Controls
+## 5) Config
 
 - `timezone`: `America/Los_Angeles`.
 - **Break detection**: `break_window_start`, `break_window_end`, `min_break_min`, `max_break_min`.
@@ -160,7 +159,7 @@ app:
   sheet_id: "..."
 
   sheets:
-    control: "Control & Ingest"
+    reports: "Reports"
     roster_map: "Roster Map"
     player_facts: "Player Facts"
     participation: "Participation"
@@ -229,7 +228,7 @@ mongo:
 ## 7) Local Dev/Test
 
 - **Run locally**: clone repo, create `.env` with required secrets, run `docker-compose up` or `python main.py`.
-- **Test inputs**: paste a WCL report into the Control sheet; verify Night QA and Bench outputs.
+- **Test inputs**: paste a WCL report into the Reports sheet; verify Night QA and Bench outputs.
 - **Fixtures**: sample reports and expected outputs stored under `tests/fixtures`.
 
 ## 8) Edge Cases & Policies
@@ -350,7 +349,7 @@ The WCL client is pluggable; if WarcraftLogs releases v3 API, adapter can be swa
 
 ## 17) Additional Considerations
 
-- **Sheet schema contracts**: Provide a table with exact column order, names, and expected types/format for each worksheet (Control, Roster Map, Team Roster, Availability Overrides, Night QA, Bench Night Totals, Bench Week Totals, Service Log). This avoids drift and simplifies exporters.
+- **Sheet schema contracts**: Provide a table with exact column order, names, and expected types/format for each worksheet (Reports, Roster Map, Team Roster, Availability Overrides, Night QA, Bench Night Totals, Bench Week Totals, Service Log). This avoids drift and simplifies exporters.
 - **Row key conventions**: Document natural keys per collection/table in one place for quick reference.
 - **Validation invariants**: Define rules verified by `pebble verify`, e.g. Mythic Pre + Post = Envelope, no negative minutes, every Bench Week Totals main appears in Team Roster.
 - **Rate-limit budget**: Specify target API call budgets for WCL and Sheets to ensure compliance with rate limits.
@@ -362,7 +361,7 @@ The WCL client is pluggable; if WarcraftLogs releases v3 API, adapter can be swa
 
 | Config key              | Worksheet name        | Schema (Appendix A)         |
 |-------------------------|-----------------------|-----------------------------|
-| `app.sheets.control`    | Control & Ingest      | Control & Ingest            |
+| `app.sheets.reports`    | Reports               | Reports                     |
 | `app.sheets.roster_map` | Roster Map            | Roster Map                  |
 | `app.sheets.team_roster`| Team Roster           | Team Roster                 |
 | `app.sheets.overrides`  | Availability Overrides| Availability Overrides      |
@@ -375,8 +374,8 @@ The WCL client is pluggable; if WarcraftLogs releases v3 API, adapter can be swa
 
 ### Appendix A — Key Columns
 
-**Control & Ingest**: `Report URL`, `Report Code`, `Status`, `Last Checked PT`, `Notes`, `Break Override Start (PT)`, `Break Override End (PT)`, control knobs.  
-**Roster Map**: `Character (Name-Realm)`, `Main (Name-Realm)`, `Role`.  
+**Reports**: `Report URL`, `Status`, `Last Checked PT`, `Notes`, `Break Override Start (PT)`, `Break Override End (PT)`.
+**Roster Map**: `Character (Name-Realm)`, `Main (Name-Realm)`, `Role`.
 **Team Roster**: `Main`, `Join Night (YYYY-MM-DD)`, `Leave Night (YYYY-MM-DD)`, `Active?`, `Notes`.  
 **Availability Overrides**: `Night ID`, `Main`, `Status`, `Avail Pre?`, `Avail Post?`, `Reason`.  
 
