@@ -69,4 +69,5 @@ def ensure_indexes(db) -> None:
     db["bench_week_totals"].create_index(
         [("game_week", ASCENDING), ("main", ASCENDING)], unique=True
     )
+    db["bench_rankings"].create_index([("main", ASCENDING)], unique=True)
     db["service_log"].create_index([("ts", ASCENDING)])

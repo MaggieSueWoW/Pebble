@@ -395,22 +395,43 @@ def week(config):
     from .config_loader import load_settings
     from .logging_setup import setup_logging
     from .mongo_client import get_db
-    from .week_agg import materialize_week_totals
+    from .week_agg import materialize_rankings, materialize_week_totals
     from .export_sheets import replace_values
 
     log = setup_logging()
     s = load_settings(config)
     db = get_db(s)
     n = materialize_week_totals(db)
+    r = materialize_rankings(db)
 
-    # export
-    rows = [["Game Week", "Main", "Played (min)", "Bench (min)"]]
-    for r in (
+    # export week totals
+    rows = [
+        [
+            "Game Week (YYYY-MM-DD)",
+            "Main",
+            "Role",
+            "Played Week (min)",
+            "Bench Week (min)",
+            "Bench Pre (min)",
+            "Bench Post (min)",
+        ]
+    ]
+    for rec in (
         db["bench_week_totals"]
         .find({}, {"_id": 0})
         .sort([("game_week", 1), ("main", 1)])
     ):
-        rows.append([r["game_week"], r["main"], r["played_min"], r["bench_min"]])
+        rows.append(
+            [
+                rec["game_week"],
+                rec["main"],
+                rec.get("role"),
+                rec.get("played_min", 0),
+                rec.get("bench_min", 0),
+                rec.get("bench_pre_min", 0),
+                rec.get("bench_post_min", 0),
+            ]
+        )
     replace_values(
         s.sheets.spreadsheet_id,
         s.sheets.tabs.bench_week_totals,
@@ -418,7 +439,21 @@ def week(config):
         s.service_account_json,
     )
 
-    log.info("week export complete", extra={"stage": "week", "rows": n})
+    # export rankings
+    rank_rows = [["Rank", "Main", "Role", "Bench Season-to-date (min)"]]
+    for rec in db["bench_rankings"].find({}, {"_id": 0}).sort([("rank", 1)]):
+        rank_rows.append([rec["rank"], rec["main"], rec.get("role"), rec["bench_min"]])
+    replace_values(
+        s.sheets.spreadsheet_id,
+        s.sheets.tabs.bench_rankings,
+        rank_rows,
+        s.service_account_json,
+    )
+
+    log.info(
+        "week export complete",
+        extra={"stage": "week", "rows": n, "rankings": r},
+    )
 
 
 @cli.command()

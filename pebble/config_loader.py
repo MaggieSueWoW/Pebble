@@ -13,6 +13,7 @@ class SheetsTabs(BaseModel):
     night_qa: str = Field(default="Night QA")
     bench_night_totals: str = Field(default="Bench Night Totals")
     bench_week_totals: str = Field(default="Bench Week Totals")
+    bench_rankings: str = Field(default="Bench Rankings")
     service_log: str = Field(default="Service Log")
 
 

@@ -24,7 +24,15 @@ def materialize_week_totals(db) -> int:
     # group by (game_week, main)
     from collections import defaultdict
 
-    agg = defaultdict(lambda: {"played": 0, "bench": 0})
+    agg = defaultdict(
+        lambda: {
+            "played": 0,
+            "bench": 0,
+            "bench_pre": 0,
+            "bench_post": 0,
+            "role": None,
+        }
+    )
     weeks = set()
 
     for r in nights:
@@ -34,9 +42,11 @@ def materialize_week_totals(db) -> int:
         agg[key]["played"] += int(r.get("played_pre_min", 0)) + int(
             r.get("played_post_min", 0)
         )
-        agg[key]["bench"] += int(r.get("bench_pre_min", 0)) + int(
-            r.get("bench_post_min", 0)
-        )
+        agg[key]["bench_pre"] += int(r.get("bench_pre_min", 0))
+        agg[key]["bench_post"] += int(r.get("bench_post_min", 0))
+        agg[key]["bench"] = agg[key]["bench_pre"] + agg[key]["bench_post"]
+        if not agg[key]["role"] and r.get("role"):
+            agg[key]["role"] = r.get("role")
 
     # Include roster mains active during observed weeks even if they didn't play
     roster = list(db["team_roster"].find({}, {"_id": 0}))
@@ -52,20 +62,64 @@ def materialize_week_totals(db) -> int:
             if join_wk <= wk <= leave_wk:
                 key = (wk, main)
                 if key not in agg:
-                    agg[key] = {"played": 0, "bench": 0}
+                    agg[key] = {
+                        "played": 0,
+                        "bench": 0,
+                        "bench_pre": 0,
+                        "bench_post": 0,
+                        "role": row.get("role"),
+                    }
+                elif not agg[key].get("role") and row.get("role"):
+                    agg[key]["role"] = row.get("role")
 
     count = 0
     for (wk, main), v in agg.items():
+        bench_pre = v.get("bench_pre", 0)
+        bench_post = v.get("bench_post", 0)
+        bench_total = bench_pre + bench_post
         doc = {
             "game_week": wk,
             "main": main,
+            "role": v.get("role"),
             "played_min": v["played"],
-            "bench_min": v["bench"],
+            "bench_min": bench_total,
+            "bench_pre_min": bench_pre,
+            "bench_post_min": bench_post,
             "updated_at": datetime.utcnow(),
         }
         db["bench_week_totals"].update_one(
             {"game_week": wk, "main": main}, {"$set": doc}, upsert=True
         )
+        count += 1
+
+    return count
+
+
+def materialize_rankings(db) -> int:
+    """Materialize season-to-date bench rankings ordered by bench minutes."""
+
+    pipeline = [
+        {
+            "$group": {
+                "_id": "$main",
+                "bench_min": {"$sum": "$bench_min"},
+                "role": {"$first": "$role"},
+            }
+        },
+        {"$sort": {"bench_min": -1, "_id": 1}},
+    ]
+    rows: List[dict] = list(db["bench_week_totals"].aggregate(pipeline))
+
+    count = 0
+    for idx, r in enumerate(rows, start=1):
+        doc = {
+            "rank": idx,
+            "main": r["_id"],
+            "role": r.get("role"),
+            "bench_min": r["bench_min"],
+            "updated_at": datetime.utcnow(),
+        }
+        db["bench_rankings"].update_one({"main": r["_id"]}, {"$set": doc}, upsert=True)
         count += 1
 
     return count

@@ -8,6 +8,7 @@ sheets:
     night_qa: "Night QA"
     bench_night_totals: "Bench Night Totals"
     bench_week_totals: "Bench Week Totals"
+    bench_rankings: "Bench Rankings"
     service_log: "Service Log (Summary)"
 
 time:
