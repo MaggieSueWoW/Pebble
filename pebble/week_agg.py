@@ -33,6 +33,7 @@ def materialize_week_totals(db) -> int:
         }
     )
     weeks = set()
+    written = defaultdict(set)
 
     for r in nights:
         wk = week_id_from_night_id(r["night_id"])
@@ -83,7 +84,20 @@ def materialize_week_totals(db) -> int:
         db["bench_week_totals"].update_one(
             {"game_week": wk, "main": main}, {"$set": doc}, upsert=True
         )
+        written[wk].add(main)
         count += 1
+
+    existing_weeks = set(db["bench_week_totals"].distinct("game_week"))
+    for wk in existing_weeks - weeks:
+        db["bench_week_totals"].delete_many({"game_week": wk})
+    for wk in weeks:
+        mains = list(written.get(wk, set()))
+        if mains:
+            db["bench_week_totals"].delete_many(
+                {"game_week": wk, "main": {"$nin": mains}}
+            )
+        else:
+            db["bench_week_totals"].delete_many({"game_week": wk})
 
     return count
 
@@ -98,6 +112,7 @@ def materialize_rankings(db) -> int:
     rows: List[dict] = list(db["bench_week_totals"].aggregate(pipeline))
 
     count = 0
+    mains = []
     for idx, r in enumerate(rows, start=1):
         doc = {
             "rank": idx,
@@ -106,6 +121,12 @@ def materialize_rankings(db) -> int:
             "updated_at": datetime.utcnow(),
         }
         db["bench_rankings"].update_one({"main": r["_id"]}, {"$set": doc}, upsert=True)
+        mains.append(r["_id"])
         count += 1
+
+    if mains:
+        db["bench_rankings"].delete_many({"main": {"$nin": mains}})
+    else:
+        db["bench_rankings"].delete_many({})
 
     return count

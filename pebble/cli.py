@@ -361,6 +361,13 @@ def compute(config):
             )
         if ops:
             db["bench_night_totals"].bulk_write(ops, ordered=False)
+        mains = {row["main"] for row in bench}
+        if mains:
+            db["bench_night_totals"].delete_many(
+                {"night_id": night, "main": {"$nin": list(mains)}}
+            )
+        else:
+            db["bench_night_totals"].delete_many({"night_id": night})
 
     # Write to Sheets
     replace_values(
