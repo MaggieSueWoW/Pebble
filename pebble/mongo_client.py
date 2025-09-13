@@ -10,26 +10,21 @@ class MongoCommandLogger(monitoring.CommandListener):
     def __init__(self, logger: logging.Logger | None = None) -> None:
         self.logger = logger or logging.getLogger("pebble.mongo")
 
-    def _collection(self, event: monitoring.CommandEvent) -> str | None:
-        command = getattr(event, "command", None)
-        if isinstance(command, dict):
-            return command.get(event.command_name)
-        return None
-
     def started(self, event: monitoring.CommandStartedEvent) -> None:
-        self.logger.debug(
+        level = logging.INFO if event.command_name in {"insert", "update", "delete"} else logging.DEBUG
+        self.logger.log(level,
             "Mongo command started",
             extra={
+                "request_id": event.request_id,
                 "command": event.command_name,
-                "collection": self._collection(event),
+                "collection": event.command.get(event.command_name),
             },
         )
 
     def succeeded(self, event: monitoring.CommandSucceededEvent) -> None:
-        coll = self._collection(event)
         extra = {
+            "request_id": event.request_id,
             "command": event.command_name,
-            "collection": coll,
             "duration_ms": int(event.duration_micros / 1000),
         }
         command = getattr(event, "command", {})
@@ -40,6 +35,8 @@ class MongoCommandLogger(monitoring.CommandListener):
             extra["modified"] = event.reply.get("nModified")
         elif event.command_name == "delete":
             extra["deleted"] = event.reply.get("n")
+        else:
+            extra["reply"] = event.reply
         level = logging.INFO if event.command_name in {"insert", "update", "delete"} else logging.DEBUG
         self.logger.log(level, "Mongo command succeeded", extra=extra)
 
@@ -47,11 +44,11 @@ class MongoCommandLogger(monitoring.CommandListener):
         self.logger.warning(
             "Mongo command failed",
             extra={
+                "request_id": event.request_id,
                 "command": event.command_name,
-                "collection": self._collection(event),
+                "failure": event.failure,
                 "duration_ms": int(event.duration_micros / 1000),
             },
-            exc_info=event.failure,
         )
 
 
