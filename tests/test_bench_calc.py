@@ -77,9 +77,18 @@ def test_last_fight_overrides_and_roster_map():
     assert m2["status_source"] == "last_fight"
 
 
-def test_roster_members_assumed_available():
+def test_no_show_roster_player_excluded():
+    res = bench_minutes_for_night([], pre_ms=10 * 60000, post_ms=10 * 60000)
+    assert res == []
+
+
+def test_override_adds_no_show_player():
+    overrides = {"Main-Illidan": {"pre": True, "post": True}}
     res = bench_minutes_for_night(
-        [], pre_ms=10 * 60000, post_ms=10 * 60000, roster_mains={"Main-Illidan"}
+        [],
+        pre_ms=10 * 60000,
+        post_ms=10 * 60000,
+        overrides=overrides,
     )
     assert len(res) == 1
     m = res[0]
@@ -91,7 +100,7 @@ def test_roster_members_assumed_available():
     assert m["bench_total_min"] == 20
     assert m["avail_pre"] is True
     assert m["avail_post"] is True
-    assert m["status_source"] == "roster"
+    assert m["status_source"] == "override"
 
 
 def test_last_non_mythic_boss_mains_excludes_trash():

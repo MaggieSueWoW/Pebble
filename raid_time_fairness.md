@@ -32,9 +32,10 @@
 - **All‑Fights timeline**: All fights (boss and trash) at difficulties **3/4/5** (Normal/Heroic/Mythic).
 - **Mythic envelope**: From **first Mythic pull start** to **last Mythic pull end**. **Includes downtime** between Mythic pulls (trash time counts as played for players present in adjacent pulls).
 - **Played block (per main)**: From first Mythic pull they participate in to last **contiguous** Mythic pull they participate in within a half (pre or post). If they step out and come back, that becomes **another block**. Blocks bridge downtime/trash between Mythic pulls. Mid‑trash swaps are inferred at the next/previous boss boundary.
-- **Availability inference**:  
-  - If a main appears on the **last non‑Mythic boss** (e.g., last Heroic) that ends **on/before** the first Mythic start, they are treated as **available for the entire Mythic envelope** (thus accrue bench if they do not play Mythic).  
-  - If a main appears in **either half** of the Mythic envelope (Pre or Post), they are treated as **available for both halves** of that envelope. Their played minutes are credited only in the half they actually participated, but their **bench minutes** accrue in the half they did not.  
+- **Availability inference**:
+  - If a main appears on the **last non‑Mythic boss** (e.g., last Heroic) that ends **on/before** the first Mythic start, they are treated as **available for the entire Mythic envelope** (thus accrue bench if they do not play Mythic).
+  - If a main appears in **either half** of the Mythic envelope (Pre or Post), they are treated as **available for both halves** of that envelope. Their played minutes are credited only in the half they actually participated, but their **bench minutes** accrue in the half they did not.
+  - Rostered mains who **never appear** in the log are presumed on **vacation** and receive **no bench credit**. They are omitted from Bench Night Totals unless an Availability Override explicitly marks them available.
   - Officer overrides can always force availability (or non‑availability) per half.
 - **Bench Minutes** (per main, per night):
   - `Bench Pre = max(0, MythicPreMinutes − PlayedPreMinutes)` **if available pre** else `0`.
@@ -64,7 +65,7 @@
    - From **Mythic fights only**: Mythic Start/End, **Mythic Pre/Post minutes** via envelope split around break.
    - **Manual override precedence**: If `Break Override Start (PT)` / `Break Override End (PT)` are present on Reports, they fully replace auto‑detection for that report/night and are recorded in `night_qa` with `override_used = true`.
 6. **Bench Night Totals**
-   - For each night, include: everyone who **played Mythic** **or** was on the **last non‑Mythic boss before Mythic**.
+   - For each night, include: everyone who **played Mythic**, was on the **last non‑Mythic boss before Mythic**, or has an explicit **Availability Override**.
    - Apply availability overrides; compute Bench Pre/Post/Total.
 7. **Bench Week Totals**
    - For each observed week (nights present in QA), include **every roster main** within membership window—even if they didn’t play that week. Sum Bench and Played per week.

@@ -131,46 +131,6 @@ def compute(config):
         except ValueError:
             pass
 
-    # Load team roster from Sheets
-    team_roster = []
-    rows = _sheet_values(s, s.sheets.tabs.team_roster, s.sheets.starts.team_roster)
-    if rows:
-        header = rows[0]
-        try:
-            m_idx = header.index("Main")
-            j_idx = header.index("Join Night (YYYY-MM-DD)")
-            l_idx = header.index("Leave Night (YYYY-MM-DD)")
-            a_idx = header.index("Active?")
-            for r in rows[1:]:
-                main = r[m_idx].strip() if m_idx < len(r) else ""
-                if not main:
-                    continue
-                join = r[j_idx].strip() if j_idx < len(r) else ""
-                leave = r[l_idx].strip() if l_idx < len(r) else ""
-                aval = r[a_idx].strip().lower() if a_idx < len(r) else ""
-                active = aval not in ("n", "no", "false", "0", "f")
-                team_roster.append(
-                    {
-                        "main": main,
-                        "join_night": join,
-                        "leave_night": leave,
-                        "active": active,
-                    }
-                )
-        except ValueError:
-            pass
-
-    def _roster_mains_for_night(night: str) -> set[str]:
-        mains: set[str] = set()
-        for r in team_roster:
-            if not r.get("active"):
-                continue
-            join = r.get("join_night") or "1970-01-01"
-            leave = r.get("leave_night") or "9999-12-31"
-            if join <= night <= leave:
-                mains.add(r["main"])
-        return mains
-
     # Night loop: derive QA + bench
     nights = sorted(
         set([r["night_id"] for r in db["reports"].find({}, {"night_id": 1, "_id": 0})])
@@ -382,7 +342,6 @@ def compute(config):
             overrides=overrides_by_night.get(night, {}),
             last_fight_mains=last_nm_mains,
             roster_map=roster_map,
-            roster_mains=_roster_mains_for_night(night),
         )
 
         # Persist bench_night_totals for this night
