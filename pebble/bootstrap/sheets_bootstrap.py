@@ -18,11 +18,11 @@ HEADERS = {
         "Report End (PT)",
         "Created By",
     ],
-    "Roster Map": ["Character (Name-Realm)", "Main (Name-Realm)"],
+    "Roster Map": ["Alt", "Main"],
     "Team Roster": [
         "Main",
-        "Join Night (YYYY-MM-DD)",
-        "Leave Night (YYYY-MM-DD)",
+        "Join Date",
+        "Leave Date",
         "Active?",
         "Notes",
     ],
@@ -70,7 +70,7 @@ HEADERS = {
         "Status Source",
     ],
     "Bench Week Totals": [
-        "Game Week (YYYY-MM-DD)",
+        "Game Week",
         "Main",
         "Played Week (min)",
         "Bench Week (min)",

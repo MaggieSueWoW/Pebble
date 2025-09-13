@@ -144,8 +144,8 @@ def compute(config):
     if rows:
         header = rows[0]
         try:
-            alt_idx = header.index("Character (Name-Realm)")
-            main_idx = header.index("Main (Name-Realm)")
+            alt_idx = header.index("Alt")
+            main_idx = header.index("Main")
             for r in rows[1:]:
                 alt = r[alt_idx].strip() if alt_idx < len(r) else ""
                 main = r[main_idx].strip() if main_idx < len(r) else ""
@@ -478,7 +478,7 @@ def week(config):
     # export week totals
     rows = [
         [
-            "Game Week (YYYY-MM-DD)",
+            "Game Week",
             "Main",
             "Played Week (min)",
             "Bench Week (min)",

@@ -41,7 +41,7 @@
   - `Bench Pre = max(0, MythicPreMinutes − PlayedPreMinutes)` **if available pre** else `0`.
   - `Bench Post = max(0, MythicPostMinutes − PlayedPostMinutes)` **if available post** else `0`.
   - `Bench Total = Bench Pre + Bench Post`.
-- **Roster membership windows** (Team Roster): A main’s `Join Night` and `Leave Night` bound which weeks/nights they are considered. `Active?` allows retaining history but excluding after leave.
+- **Roster membership windows** (Team Roster): A main’s `Join Date` and `Leave Date` bound which weeks/nights they are considered. `Active?` allows retaining history but excluding after leave.
 - **Main↔Alt**: Officers maintain a mapping; all alt participation credits the mapped **Main**.
 
 **Difficulty codes**: Normal=3, Heroic=4, Mythic=5.
@@ -103,9 +103,9 @@ Cross‑cutting: Times stored PT ISO + UTC ms; deterministic sort; only Export t
 - **Reports**
   - `Report URL`, `Status` (*blank* | `in-progress` | `done`), `Last Checked (PT)`, `Notes`, `Break Override Start (PT)`, `Break Override End (PT)`.
 - **Roster Map**
-  - `Character (Name-Realm)`, `Main (Name-Realm)`.
+  - `Alt`, `Main`.
 - **Team Roster**
-  - `Main`, `Join Night (YYYY-MM-DD)`, `Leave Night (YYYY-MM-DD)`, `Active?`, `Notes`.
+  - `Main`, `Join Date`, `Leave Date`, `Active?`, `Notes`.
 - **Availability Overrides**
   - `Night`, `Main`, `Avail Pre?`, `Avail Post?`, `Reason`.
 
@@ -236,7 +236,7 @@ mongo:
 - **Missing reports** → Mythic durations=0 + warning.
 - **Heroic after break** → Mythic Pre=0; Post=envelope length.
 - **Mid‑night join/leave**: availability inferred or overridden.
-- **Mid‑season joins** gated by `Join Night`.
+- **Mid‑season joins** gated by `Join Date`.
 
 ---
 
@@ -370,10 +370,10 @@ The WCL client is pluggable; if WarcraftLogs releases v3 API, adapter can be swa
 ### Appendix A — Key Columns
 
 **Reports**: `Report URL`, `Status`, `Last Checked (PT)`, `Notes`, `Break Override Start (PT)`, `Break Override End (PT)`, `Report Name`, `Report Start (PT)`, `Report End (PT)`, `Created By`.
-**Roster Map**: `Character (Name-Realm)`, `Main (Name-Realm)`.
-**Team Roster**: `Main`, `Join Night (YYYY-MM-DD)`, `Leave Night (YYYY-MM-DD)`, `Active?`, `Notes`.  
+**Roster Map**: `Alt`, `Main)`.
+**Team Roster**: `Main`, `Join Date`, `Leave Date`, `Active?`, `Notes`.  
 **Availability Overrides**: `Night`, `Main`, `Avail Pre?`, `Avail Post?`, `Reason`.
 
 **Night QA**: `Night ID`, `Reports Involved`, `Mains Seen` (unique mains in any boss fight), `Night Start/End (PT)`, `Break Start/End (PT)`, `Break Duration (min)`, `Mythic Start/End (PT)`, `Mythic Pre/Post Duration (min)`, `Gap Window`, `Min/Max Break`, `Dedupe Tol`, `Largest Gap (min)`, `Candidate Gaps (JSON)`, `Override Used?`.
 **Bench Night Totals**: `Night ID`, `Main`, `Bench Minutes Pre/Post/Total`, `Played Pre/Post/Total`, `Avail Pre?/Post?`, `Status Source`.
-**Bench Week Totals**: `Game Week (YYYY-MM-DD)`, `Main`, `Bench Minutes (Week)`, `Played Minutes (Week)`, `Bench Pre/Post`.
+**Bench Week Totals**: `Game Week`, `Main`, `Bench Minutes (Week)`, `Played Minutes (Week)`, `Bench Pre/Post`.

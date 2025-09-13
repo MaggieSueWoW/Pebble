@@ -111,8 +111,8 @@ def ingest_roster(s: Settings | None = None) -> int:
     header = rows[0]
     try:
         m_idx = header.index("Main")
-        j_idx = header.index("Join Night (YYYY-MM-DD)")
-        l_idx = header.index("Leave Night (YYYY-MM-DD)")
+        j_idx = header.index("Join Date")
+        l_idx = header.index("Leave Date")
         a_idx = header.index("Active?")
     except ValueError:
         db["team_roster"].delete_many({})

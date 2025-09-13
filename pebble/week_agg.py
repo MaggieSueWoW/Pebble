@@ -13,7 +13,7 @@ def week_id_from_night_id(night_id: str) -> str:
 
     The game week resets each Tuesday at 00:00 PT. Nights occurring on any day
     of that game week share the same week id represented by that Tuesday's ISO
-    date (YYYY-MM-DD).
+    date.
     """
 
     dt = datetime.strptime(night_id, "%Y-%m-%d").replace(tzinfo=PT)
