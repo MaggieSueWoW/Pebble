@@ -49,6 +49,6 @@ redis:
 mongo:
   db: "pebble"
   write_batch_size: 500
-  # uri: "mongodb://localhost:27017"
+  uri: "mongodb://localhost:27017"
 
-# service_account_json: "./service-account.json"
+service_account_json: "./service-account.json"

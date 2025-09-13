@@ -304,8 +304,6 @@ Runtime: Python 3.12
   - `mongo_client.py` — connection factory.
   - `bootstrap/`
     - `sheets_bootstrap.py` — create spreadsheet/worksheets, named ranges, header rows, formatting.
-  - `schemas/`
-    - `types.py` — pydantic models for rows/documents (validation, serialization).
   - `utils/`
     - `time.py` — PT/UTC helpers (zoneinfo); week bucketing; ISO formatting.
     - `diff.py` — row diffing; key generation; reconciliation utilities.
