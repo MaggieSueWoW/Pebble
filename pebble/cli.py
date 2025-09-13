@@ -3,7 +3,7 @@ import json
 from .config_loader import load_settings
 from .logging_setup import setup_logging
 from .mongo_client import get_db, ensure_indexes
-from .ingest import ingest_reports, _sheet_values
+from .ingest import ingest_reports, ingest_roster, _sheet_values
 from .envelope import mythic_envelope, split_pre_post
 from .breaks import detect_break
 from .blocks import build_blocks
@@ -48,8 +48,12 @@ def sheets(config):
 def ingest(config):
     log = setup_logging()
     s = load_settings(config)
-    res = ingest_reports(s)
-    log.info("ingest complete", extra={"stage": "ingest", **res})
+    report_res = ingest_reports(s)
+    roster_count = ingest_roster(s)
+    log.info(
+        "ingest complete",
+        extra={"stage": "ingest", **report_res, "team_roster": roster_count},
+    )
 
 
 @cli.command("flush-cache", help="Flush cached WCL reports from Redis.")

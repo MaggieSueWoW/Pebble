@@ -64,6 +64,53 @@ def _normalize_fight_times(
     return rel_start, rel_end, abs_start, abs_end
 
 
+def ingest_roster(s: Settings | None = None) -> int:
+    """Ingest the Team Roster sheet into the ``team_roster`` collection."""
+
+    s = s or load_settings()
+    db = get_db(s)
+    ensure_indexes(db)
+
+    rows = _sheet_values(s, s.sheets.tabs.team_roster)
+    if not rows:
+        db["team_roster"].delete_many({})
+        return 0
+
+    header = rows[0]
+    try:
+        m_idx = header.index("Main")
+        j_idx = header.index("Join Night (YYYY-MM-DD)")
+        l_idx = header.index("Leave Night (YYYY-MM-DD)")
+        a_idx = header.index("Active?")
+    except ValueError:
+        db["team_roster"].delete_many({})
+        return 0
+
+    docs = []
+    for r in rows[1:]:
+        main = r[m_idx].strip() if m_idx < len(r) else ""
+        if not main:
+            continue
+        join = r[j_idx].strip() if j_idx < len(r) else ""
+        leave = r[l_idx].strip() if l_idx < len(r) else ""
+        aval = r[a_idx].strip().lower() if a_idx < len(r) else ""
+        active = aval not in ("n", "no", "false", "0", "f")
+        docs.append(
+            {
+                "main": main,
+                "join_night": join,
+                "leave_night": leave,
+                "active": active,
+            }
+        )
+
+    db["team_roster"].delete_many({})
+    if docs:
+        db["team_roster"].insert_many(docs)
+
+    return len(docs)
+
+
 def canonical_fight_key(
     fight: dict, abs_start_ms: int, abs_end_ms: int
 ) -> dict:

@@ -161,12 +161,39 @@ def test_materialize_rankings_removes_stale_players():
             {"game_week": "2024-07-02", "main": "Bob-Illidan", "bench_min": 0},
         ]
     )
+    db["team_roster"].insert_many(
+        [
+            {"main": "Alice-Illidan", "join_night": "2024-06-25"},
+            {"main": "Bob-Illidan", "join_night": "2024-06-25"},
+        ]
+    )
     materialize_rankings(db)
     db["bench_week_totals"].delete_many({"main": "Bob-Illidan"})
     materialize_rankings(db)
     ranks = list(
         db["bench_rankings"].find({}, {"_id": 0, "rank": 1, "main": 1, "bench_min": 1})
     )
+    assert ranks == [
+        {"rank": 1, "main": "Alice-Illidan", "bench_min": 10}
+    ]
+
+
+def test_materialize_rankings_skips_non_roster_players():
+    db = mongomock.MongoClient().db
+    db["bench_week_totals"].insert_many(
+        [
+            {"game_week": "2024-07-02", "main": "Alice-Illidan", "bench_min": 10},
+            {"game_week": "2024-07-02", "main": "Merc-Illidan", "bench_min": 5},
+        ]
+    )
+    db["team_roster"].insert_one(
+        {"main": "Alice-Illidan", "join_night": "2024-06-25", "active": True}
+    )
+    rc = materialize_rankings(db)
+    ranks = list(
+        db["bench_rankings"].find({}, {"_id": 0, "rank": 1, "main": 1, "bench_min": 1})
+    )
+    assert rc == 1
     assert ranks == [
         {"rank": 1, "main": "Alice-Illidan", "bench_min": 10}
     ]

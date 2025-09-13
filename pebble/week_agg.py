@@ -104,8 +104,18 @@ def materialize_week_totals(db) -> int:
 
 def materialize_rankings(db) -> int:
     """Materialize season-to-date bench rankings ordered by bench minutes."""
+    roster_mains = {
+        r["main"]
+        for r in db["team_roster"].find({}, {"_id": 0, "main": 1, "active": 1})
+        if r.get("main") and r.get("active", True) is not False
+    }
+
+    if not roster_mains:
+        db["bench_rankings"].delete_many({})
+        return 0
 
     pipeline = [
+        {"$match": {"main": {"$in": list(roster_mains)}}},
         {"$group": {"_id": "$main", "bench_min": {"$sum": "$bench_min"}}},
         {"$sort": {"bench_min": -1, "_id": 1}},
     ]
