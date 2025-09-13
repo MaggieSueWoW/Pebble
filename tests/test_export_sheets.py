@@ -35,6 +35,14 @@ def test_replace_values_user_entered(monkeypatch):
 
     monkeypatch.setattr(es, "SheetsClient", FakeClient)
 
-    es.replace_values("sid", "Sheet1", [["2024-07-02 20:00:00"]], "creds.json")
+    es.replace_values(
+        "sid",
+        "Sheet1",
+        [["2024-07-02 20:00:00"]],
+        "creds.json",
+        start_cell="B2",
+    )
 
     assert updates["update"]["valueInputOption"] == "USER_ENTERED"
+    assert updates["update"]["range"] == "Sheet1!B2"
+    assert updates["clear"]["range"] == "Sheet1!B2:Z"

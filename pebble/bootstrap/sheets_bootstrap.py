@@ -107,9 +107,9 @@ def _ensure_tab(client: SheetsClient, sheet_id: str, name: str):
 
 
 def _ensure_headers(
-    client: SheetsClient, sheet_id: str, name: str, headers: list[str]
+    client: SheetsClient, sheet_id: str, name: str, headers: list[str], start: str
 ):
-    rng = f"'{name}'!1:1"
+    rng = f"'{name}'!{start}"
     client.execute(
         client.svc.spreadsheets().values().update(
             spreadsheetId=sheet_id,
@@ -124,19 +124,43 @@ def bootstrap_sheets(settings: Settings) -> Dict[str, Any]:
     client = SheetsClient(settings.service_account_json)
     sheet_id = settings.sheets.spreadsheet_id
     desired = {
-        settings.sheets.tabs.reports: "Reports",
-        settings.sheets.tabs.roster_map: "Roster Map",
-        settings.sheets.tabs.team_roster: "Team Roster",
-        settings.sheets.tabs.availability_overrides: "Availability Overrides",
-        settings.sheets.tabs.night_qa: "Night QA",
-        settings.sheets.tabs.bench_night_totals: "Bench Night Totals",
-        settings.sheets.tabs.bench_week_totals: "Bench Week Totals",
-        settings.sheets.tabs.bench_rankings: "Bench Rankings",
-        settings.sheets.tabs.service_log: "Service Log (Summary)",
+        settings.sheets.tabs.reports: ("Reports", settings.sheets.starts.reports),
+        settings.sheets.tabs.roster_map: (
+            "Roster Map",
+            settings.sheets.starts.roster_map,
+        ),
+        settings.sheets.tabs.team_roster: (
+            "Team Roster",
+            settings.sheets.starts.team_roster,
+        ),
+        settings.sheets.tabs.availability_overrides: (
+            "Availability Overrides",
+            settings.sheets.starts.availability_overrides,
+        ),
+        settings.sheets.tabs.night_qa: (
+            "Night QA",
+            settings.sheets.starts.night_qa,
+        ),
+        settings.sheets.tabs.bench_night_totals: (
+            "Bench Night Totals",
+            settings.sheets.starts.bench_night_totals,
+        ),
+        settings.sheets.tabs.bench_week_totals: (
+            "Bench Week Totals",
+            settings.sheets.starts.bench_week_totals,
+        ),
+        settings.sheets.tabs.bench_rankings: (
+            "Bench Rankings",
+            settings.sheets.starts.bench_rankings,
+        ),
+        settings.sheets.tabs.service_log: (
+            "Service Log (Summary)",
+            settings.sheets.starts.service_log,
+        ),
     }
     tabs = []
-    for name, canonical in desired.items():
+    for name, (canonical, start) in desired.items():
         _ensure_tab(client, sheet_id, name)
-        _ensure_headers(client, sheet_id, name, HEADERS[canonical])
+        _ensure_headers(client, sheet_id, name, HEADERS[canonical], start)
         tabs.append(name)
     return {"ok": True, "tabs": tabs}

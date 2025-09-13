@@ -17,9 +17,22 @@ class SheetsTabs(BaseModel):
     service_log: str = Field(default="Service Log")
 
 
+class SheetsStarts(BaseModel):
+    reports: str = Field(default="A1")
+    roster_map: str = Field(default="A1")
+    team_roster: str = Field(default="A1")
+    availability_overrides: str = Field(default="A1")
+    night_qa: str = Field(default="A1")
+    bench_night_totals: str = Field(default="A1")
+    bench_week_totals: str = Field(default="A1")
+    bench_rankings: str = Field(default="A1")
+    service_log: str = Field(default="A1")
+
+
 class SheetsConfig(BaseModel):
     spreadsheet_id: str
     tabs: SheetsTabs = Field(default_factory=SheetsTabs)
+    starts: SheetsStarts = Field(default_factory=SheetsStarts)
 
 
 class MongoConfig(BaseModel):

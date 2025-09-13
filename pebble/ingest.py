@@ -2,6 +2,7 @@ from __future__ import annotations
 from typing import Any, List, Optional
 from datetime import datetime
 from pymongo import UpdateOne
+import re
 from .sheets_client import SheetsClient
 from .config_loader import Settings, load_settings
 from .mongo_client import get_db, ensure_indexes
@@ -33,10 +34,10 @@ def _extract_code_from_url(url: str | None) -> Optional[str]:
         return None
 
 
-def _sheet_values(s: Settings, tab: str) -> List[List[Any]]:
+def _sheet_values(s: Settings, tab: str, start: str = "A1") -> List[List[Any]]:
     client = SheetsClient(s.service_account_json)
     svc = client.svc
-    rng = f"{tab}!A:Z"
+    rng = f"{tab}!{start}:Z"
     return (
         client.execute(
             svc.spreadsheets()
@@ -93,7 +94,8 @@ def ingest_reports(s: Settings | None = None) -> dict:
 
     client = SheetsClient(s.service_account_json)
     svc = client.svc
-    rng = f"{s.sheets.tabs.reports}!A:Z"
+    start = s.sheets.starts.reports
+    rng = f"{s.sheets.tabs.reports}!{start}:Z"
     rows = (
         client.execute(
             svc.spreadsheets()
@@ -110,7 +112,8 @@ def ingest_reports(s: Settings | None = None) -> dict:
 
     # Collect targets
     targets: List[dict] = []
-    for r_index, row in enumerate(rows[1:], start=2):
+    start_row = int(re.search(r"\d+", start).group()) if re.search(r"\d+", start) else 1
+    for r_index, row in enumerate(rows[1:], start=start_row + 1):
 
         def val(col: str) -> str:
             idx = colmap.get(col)

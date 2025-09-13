@@ -5,7 +5,11 @@ from .sheets_client import SheetsClient
 
 
 def replace_values(
-    spreadsheet_id: str, tab: str, values: List[List], creds_path: str
+    spreadsheet_id: str,
+    tab: str,
+    values: List[List],
+    creds_path: str,
+    start_cell: str = "A1",
 ) -> None:
     """Replace all values in ``tab`` with ``values``.
 
@@ -14,11 +18,11 @@ def replace_values(
     """
     client = SheetsClient(creds_path)
     svc = client.svc
-    rng = f"{tab}!A1"
+    rng = f"{tab}!{start_cell}"
     body = {"values": values, "majorDimension": "ROWS"}
     client.execute(
         svc.spreadsheets().values().clear(
-            spreadsheetId=spreadsheet_id, range=f"{tab}!A:Z"
+            spreadsheetId=spreadsheet_id, range=f"{tab}!{start_cell}:Z"
         )
     )
     client.execute(
