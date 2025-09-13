@@ -1,8 +1,11 @@
 from __future__ import annotations
 from typing import List
 from datetime import datetime, timedelta
+import logging
 
 from .utils.time import PT
+
+logger = logging.getLogger(__name__)
 
 
 def week_id_from_night_id(night_id: str) -> str:

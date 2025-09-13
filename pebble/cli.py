@@ -37,11 +37,13 @@ def sheets(config):
         log.info(
             "sheets bootstrap complete", extra={"stage": "bootstrap.sheets", **res}
         )
-    except Exception as exc:
-        log.info(
-            "TODO: bootstrap sheets",
-            extra={"stage": "bootstrap.sheets", "error": str(exc)},
+    except Exception:
+        log.warning(
+            "bootstrap sheets failed",
+            extra={"stage": "bootstrap.sheets"},
+            exc_info=True,
         )
+        raise
 
 
 @cli.command()

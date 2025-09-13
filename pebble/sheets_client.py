@@ -45,4 +45,16 @@ class SheetsClient:
         before_sleep=before_sleep_log(logger, logging.WARNING),
     )
     def execute(self, req):
-        return req.execute()
+        desc = getattr(req, "uri", None) or getattr(req, "_rest_path", "unknown")
+        logger.info("Google Sheets request", extra={"request": desc})
+        try:
+            resp = req.execute()
+            logger.info("Google Sheets request succeeded", extra={"request": desc})
+            return resp
+        except Exception:
+            logger.warning(
+                "Google Sheets request failed",
+                extra={"request": desc},
+                exc_info=True,
+            )
+            raise

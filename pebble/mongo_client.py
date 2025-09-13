@@ -1,10 +1,62 @@
 from __future__ import annotations
-from pymongo import MongoClient, ASCENDING
+from pymongo import MongoClient, ASCENDING, monitoring
+import logging
 from .config_loader import Settings
 
 
+class MongoCommandLogger(monitoring.CommandListener):
+    """Emit logs for MongoDB commands via PyMongo's monitoring API."""
+
+    def __init__(self, logger: logging.Logger | None = None) -> None:
+        self.logger = logger or logging.getLogger("pebble.mongo")
+
+    def _collection(self, event: monitoring.CommandEvent) -> str | None:
+        command = getattr(event, "command", None)
+        if isinstance(command, dict):
+            return command.get(event.command_name)
+        return None
+
+    def started(self, event: monitoring.CommandStartedEvent) -> None:
+        self.logger.debug(
+            "Mongo command started",
+            extra={
+                "command": event.command_name,
+                "collection": self._collection(event),
+            },
+        )
+
+    def succeeded(self, event: monitoring.CommandSucceededEvent) -> None:
+        coll = self._collection(event)
+        extra = {
+            "command": event.command_name,
+            "collection": coll,
+            "duration_ms": int(event.duration_micros / 1000),
+        }
+        command = getattr(event, "command", {})
+        if event.command_name == "insert":
+            extra["count"] = len(command.get("documents", []))
+        elif event.command_name == "update":
+            extra["matched"] = event.reply.get("n")
+            extra["modified"] = event.reply.get("nModified")
+        elif event.command_name == "delete":
+            extra["deleted"] = event.reply.get("n")
+        level = logging.INFO if event.command_name in {"insert", "update", "delete"} else logging.DEBUG
+        self.logger.log(level, "Mongo command succeeded", extra=extra)
+
+    def failed(self, event: monitoring.CommandFailedEvent) -> None:
+        self.logger.warning(
+            "Mongo command failed",
+            extra={
+                "command": event.command_name,
+                "collection": self._collection(event),
+                "duration_ms": int(event.duration_micros / 1000),
+            },
+            exc_info=event.failure,
+        )
+
+
 def get_client(s: Settings) -> MongoClient:
-    return MongoClient(s.mongo.uri)
+    return MongoClient(s.mongo.uri, event_listeners=[MongoCommandLogger()])
 
 
 def get_db(s: Settings):

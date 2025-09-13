@@ -3,6 +3,7 @@ from typing import Any, List, Optional
 from datetime import datetime
 from pymongo import UpdateOne
 import re
+import logging
 from .sheets_client import SheetsClient
 from .config_loader import Settings, load_settings
 from .mongo_client import get_db, ensure_indexes
@@ -14,6 +15,8 @@ from .utils.time import (
     pt_time_to_ms,
     sheets_date_str,
 )
+
+logger = logging.getLogger(__name__)
 
 
 REPORT_HEADERS = {
@@ -111,10 +114,11 @@ def ingest_roster(s: Settings | None = None) -> int:
         )
 
     db["team_roster"].delete_many({})
+    inserted = 0
     if docs:
-        db["team_roster"].insert_many(docs)
-
-    return len(docs)
+        res = db["team_roster"].insert_many(docs)
+        inserted = len(res.inserted_ids)
+    return inserted
 
 
 def canonical_fight_key(
