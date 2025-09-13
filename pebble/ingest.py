@@ -41,7 +41,13 @@ def _extract_code_from_url(url: str | None) -> Optional[str]:
     if not url:
         return None
     try:
-        part = url.split("/reports/")[1]
+        from urllib.parse import urlparse
+
+        parsed = urlparse(url)
+        host = parsed.netloc.lower()
+        if not host.endswith("warcraftlogs.com"):
+            return None
+        part = parsed.path.split("/reports/")[1]
         code = part.split("/")[0].split("?")[0].split("#")[0]
         return code or None
     except Exception:
@@ -175,8 +181,10 @@ def ingest_reports(s: Settings | None = None) -> dict:
     report_start_idx = colmap.get("Report Start (PT)")
     report_end_idx = colmap.get("Report End (PT)")
     created_by_idx = colmap.get("Created By")
+    status_idx = colmap.get("Status")
 
     # Collect targets
+    updates: List[dict] = []
     targets: List[dict] = []
     start_row = int(re.search(r"\d+", start).group()) if re.search(r"\d+", start) else 1
     for r_index, row in enumerate(rows[1:], start=start_row + 1):
@@ -188,8 +196,15 @@ def ingest_reports(s: Settings | None = None) -> dict:
         status = val("Status").strip().lower()
         if status not in ("", "in-progress", "in‑progress", "in progress"):
             continue
-        code = _extract_code_from_url(val("Report URL").strip())
+        url = val("Report URL").strip()
+        code = _extract_code_from_url(url)
         if not code:
+            if url:
+                logger.warning("Bad report link at row %s: %s", r_index, url)
+                if status_idx is not None:
+                    col_letter = chr(ord("A") + status_idx)
+                    rng = f"{s.sheets.tabs.reports}!{col_letter}{r_index}"
+                    updates.append({"range": rng, "values": [["Bad report link"]]})
             continue
         targets.append(
             {
@@ -202,6 +217,13 @@ def ingest_reports(s: Settings | None = None) -> dict:
         )
 
     if not targets:
+        if updates:
+            client.execute(
+                svc.spreadsheets().values().batchUpdate(
+                    spreadsheetId=s.sheets.spreadsheet_id,
+                    body={"valueInputOption": "RAW", "data": updates},
+                )
+            )
         return {"reports": 0, "fights": 0}
 
     wcl = WCLClient(
@@ -214,7 +236,6 @@ def ingest_reports(s: Settings | None = None) -> dict:
     )
 
     total_fights = 0
-    updates = []
     for rep in targets:
         code = rep["code"]
         bundle = wcl.fetch_report_bundle(code)
