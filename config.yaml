@@ -14,10 +14,10 @@ sheets:
 time:
   tz: "America/Los_Angeles"
   break_window:
-    start_pt: "20:50"  # HH:MM in PT
-    end_pt: "21:30"    # HH:MM in PT
+    start_pt: "20:40"  # HH:MM in PT
+    end_pt: "21:40"    # HH:MM in PT
     min_gap_minutes: 8
-    max_gap_minutes: 30
+    max_gap_minutes: 45
 
 wcl:
   client_id: "${WCL_CLIENT_ID}"
