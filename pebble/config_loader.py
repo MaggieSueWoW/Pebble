@@ -17,20 +17,32 @@ class SheetsTabs(BaseModel):
 
 
 class SheetsStarts(BaseModel):
-    reports: str = Field(default="A1")
-    roster_map: str = Field(default="A1")
-    team_roster: str = Field(default="A1")
-    availability_overrides: str = Field(default="A1")
-    night_qa: str = Field(default="A1")
-    bench_night_totals: str = Field(default="A1")
-    bench_week_totals: str = Field(default="A1")
-    bench_rankings: str = Field(default="A1")
+    reports: str = Field(default="A5")
+    roster_map: str = Field(default="A5")
+    team_roster: str = Field(default="A5")
+    availability_overrides: str = Field(default="A5")
+    night_qa: str = Field(default="A5")
+    bench_night_totals: str = Field(default="A5")
+    bench_week_totals: str = Field(default="A5")
+    bench_rankings: str = Field(default="A5")
+
+
+class SheetsLastProcessed(BaseModel):
+    reports: str = Field(default="B3")
+    roster_map: str = Field(default="B3")
+    team_roster: str = Field(default="B3")
+    availability_overrides: str = Field(default="B3")
+    night_qa: str = Field(default="B3")
+    bench_night_totals: str = Field(default="B3")
+    bench_week_totals: str = Field(default="B3")
+    bench_rankings: str = Field(default="B3")
 
 
 class SheetsConfig(BaseModel):
     spreadsheet_id: str
     tabs: SheetsTabs = Field(default_factory=SheetsTabs)
     starts: SheetsStarts = Field(default_factory=SheetsStarts)
+    last_processed: SheetsLastProcessed = Field(default_factory=SheetsLastProcessed)
 
 
 class MongoConfig(BaseModel):

@@ -86,6 +86,7 @@ def test_ingest_reports_updates_sheet(monkeypatch):
     monkeypatch.setattr("pebble.ingest.WCLClient", DummyWCLClient)
     monkeypatch.setattr("pebble.ingest.get_db", lambda s: mongomock.MongoClient().db)
     monkeypatch.setattr("pebble.ingest.ensure_indexes", lambda db: None)
+    monkeypatch.setattr("pebble.ingest.update_last_processed", lambda *a, **k: None)
 
     fixed_now = datetime(2025, 4, 2, 18, 50, 49, tzinfo=PT)
 
@@ -105,11 +106,11 @@ def test_ingest_reports_updates_sheet(monkeypatch):
     res = ingest_reports(settings)
     assert res["reports"] == 1
     update_map = {u["range"].split("!")[1]: u["values"][0][0] for u in updates}
-    assert update_map["G2"] == "Report One"
-    assert update_map["H2"] == ms_to_pt_sheets(1000)
-    assert update_map["I2"] == ms_to_pt_sheets(2000)
-    assert update_map["C2"] == ms_to_pt_sheets(int(fixed_now.timestamp() * 1000))
-    assert update_map["J2"] == "Creator"
+    assert update_map["G6"] == "Report One"
+    assert update_map["H6"] == ms_to_pt_sheets(1000)
+    assert update_map["I6"] == ms_to_pt_sheets(2000)
+    assert update_map["C6"] == ms_to_pt_sheets(int(fixed_now.timestamp() * 1000))
+    assert update_map["J6"] == "Creator"
 
 
 def test_ingest_reports_rejects_non_wcl_links(monkeypatch, caplog):
@@ -174,6 +175,7 @@ def test_ingest_reports_rejects_non_wcl_links(monkeypatch, caplog):
     monkeypatch.setattr("pebble.ingest.SheetsClient", DummySheetsClient)
     monkeypatch.setattr("pebble.ingest.get_db", lambda s: mongomock.MongoClient().db)
     monkeypatch.setattr("pebble.ingest.ensure_indexes", lambda db: None)
+    monkeypatch.setattr("pebble.ingest.update_last_processed", lambda *a, **k: None)
 
     settings = Settings(
         sheets=SheetsConfig(spreadsheet_id="1"),
@@ -186,7 +188,7 @@ def test_ingest_reports_rejects_non_wcl_links(monkeypatch, caplog):
 
     assert res["reports"] == 0
     update_map = {u["range"].split("!")[1]: u["values"][0][0] for u in updates}
-    assert update_map["B2"] == "Bad report link"
+    assert update_map["B6"] == "Bad report link"
     assert "Bad report link at row" in caplog.text
 
 
@@ -252,6 +254,7 @@ def test_ingest_reports_marks_bad_links_on_fetch_error(monkeypatch, caplog):
     monkeypatch.setattr("pebble.ingest.SheetsClient", DummySheetsClient)
     monkeypatch.setattr("pebble.ingest.get_db", lambda s: mongomock.MongoClient().db)
     monkeypatch.setattr("pebble.ingest.ensure_indexes", lambda db: None)
+    monkeypatch.setattr("pebble.ingest.update_last_processed", lambda *a, **k: None)
 
     class DummyWCLClient:
         def __init__(self, *args, **kwargs):
@@ -273,5 +276,5 @@ def test_ingest_reports_marks_bad_links_on_fetch_error(monkeypatch, caplog):
 
     assert res["reports"] == 0
     update_map = {u["range"].split("!")[1]: u["values"][0][0] for u in updates}
-    assert update_map["B2"] == "Bad report link"
+    assert update_map["B6"] == "Bad report link"
     assert "Failed to fetch WCL report bundle" in caplog.text

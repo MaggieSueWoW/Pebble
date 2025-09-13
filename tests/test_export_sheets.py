@@ -2,21 +2,22 @@ import pebble.export_sheets as es
 
 
 def test_replace_values_user_entered(monkeypatch):
-    updates = {}
+    updates = []
 
     class FakeReq:
         def __init__(self, bucket):
             self.bucket = bucket
+
         def execute(self):
-            self.bucket["executed"] = True
             return None
 
     class FakeValues:
         def clear(self, **kwargs):
-            updates["clear"] = kwargs
+            updates.append(("clear", kwargs))
             return FakeReq(updates)
+
         def update(self, **kwargs):
-            updates.update({"update": kwargs})
+            updates.append(("update", kwargs))
             return FakeReq(updates)
 
     class FakeSpreadsheets:
@@ -43,6 +44,11 @@ def test_replace_values_user_entered(monkeypatch):
         start_cell="B2",
     )
 
-    assert updates["update"]["valueInputOption"] == "USER_ENTERED"
-    assert updates["update"]["range"] == "Sheet1!B2"
-    assert updates["clear"]["range"] == "Sheet1!B2:Z"
+    # First call clears, second updates data, third updates last processed
+    assert updates[0][0] == "clear"
+    assert updates[0][1]["range"] == "Sheet1!B2:Z"
+    assert updates[1][0] == "update"
+    assert updates[1][1]["valueInputOption"] == "USER_ENTERED"
+    assert updates[1][1]["range"] == "Sheet1!B2"
+    assert updates[2][0] == "update"
+    assert updates[2][1]["range"] == "Sheet1!B3"

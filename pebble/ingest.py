@@ -16,6 +16,7 @@ from .utils.time import (
     pt_time_to_ms,
     sheets_date_str,
 )
+from .utils.sheets import update_last_processed
 
 logger = logging.getLogger(__name__)
 
@@ -54,17 +55,23 @@ def _extract_code_from_url(url: str | None) -> Optional[str]:
         return None
 
 
-def _sheet_values(s: Settings, tab: str, start: str = "A1") -> List[List[Any]]:
+def _sheet_values(
+    s: Settings, tab: str, start: str = "A5", last_processed: str = "B3"
+) -> List[List[Any]]:
     client = SheetsClient(s.service_account_json)
     svc = client.svc
     rng = f"{tab}!{start}:Z"
-    return (
+    values = (
         client.execute(
             svc.spreadsheets()
             .values()
             .get(spreadsheetId=s.sheets.spreadsheet_id, range=rng)
         ).get("values", [])
     )
+    update_last_processed(
+        s.sheets.spreadsheet_id, tab, s.service_account_json, last_processed, client
+    )
+    return values
 
 
 def _normalize_fight_times(
@@ -91,7 +98,12 @@ def ingest_roster(s: Settings | None = None) -> int:
     db = get_db(s)
     ensure_indexes(db)
 
-    rows = _sheet_values(s, s.sheets.tabs.team_roster)
+    rows = _sheet_values(
+        s,
+        s.sheets.tabs.team_roster,
+        s.sheets.starts.team_roster,
+        s.sheets.last_processed.team_roster,
+    )
     if not rows:
         db["team_roster"].delete_many({})
         return 0
@@ -170,6 +182,13 @@ def ingest_reports(s: Settings | None = None) -> dict:
             .values()
             .get(spreadsheetId=s.sheets.spreadsheet_id, range=rng)
         ).get("values", [])
+    )
+    update_last_processed(
+        s.sheets.spreadsheet_id,
+        s.sheets.tabs.reports,
+        s.service_account_json,
+        s.sheets.last_processed.reports,
+        client,
     )
     if not rows:
         return {"reports": 0, "fights": 0}

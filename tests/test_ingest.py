@@ -11,13 +11,19 @@ def test_ingest_roster_parses_sheet(monkeypatch):
         ["Bob-Illidan", "June 25, 2024", "", "n"],
     ]
 
-    monkeypatch.setattr("pebble.ingest._sheet_values", lambda s, tab: rows)
+    monkeypatch.setattr(
+        "pebble.ingest._sheet_values", lambda s, tab, start="A5", last_processed="B3": rows
+    )
     monkeypatch.setattr("pebble.ingest.get_db", lambda s: db)
     monkeypatch.setattr("pebble.ingest.ensure_indexes", lambda db: None)
 
     s = SimpleNamespace(
         service_account_json="",
-        sheets=SimpleNamespace(tabs=SimpleNamespace(team_roster="Team Roster")),
+        sheets=SimpleNamespace(
+            tabs=SimpleNamespace(team_roster="Team Roster"),
+            starts=SimpleNamespace(team_roster="A5"),
+            last_processed=SimpleNamespace(team_roster="B3"),
+        ),
     )
 
     count = ingest_roster(s)

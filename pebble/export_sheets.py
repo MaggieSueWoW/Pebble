@@ -2,6 +2,7 @@ from __future__ import annotations
 from typing import List
 
 from .sheets_client import SheetsClient
+from .utils.sheets import update_last_processed
 
 
 def replace_values(
@@ -9,7 +10,8 @@ def replace_values(
     tab: str,
     values: List[List],
     creds_path: str,
-    start_cell: str = "A1",
+    start_cell: str = "A5",
+    last_processed_cell: str = "B3",
 ) -> None:
     """Replace all values in ``tab`` with ``values``.
 
@@ -32,5 +34,12 @@ def replace_values(
             valueInputOption="USER_ENTERED",
             body=body,
         )
+    )
+    update_last_processed(
+        spreadsheet_id,
+        tab,
+        creds_path,
+        last_processed_cell,
+        client,
     )
 

@@ -3,6 +3,7 @@ from typing import List, Dict, Any
 
 from ..sheets_client import SheetsClient
 from ..config_loader import Settings
+from ..utils.sheets import update_last_processed
 
 HEADERS = {
     "Reports": [
@@ -103,7 +104,13 @@ def _ensure_tab(client: SheetsClient, sheet_id: str, name: str):
 
 
 def _ensure_headers(
-    client: SheetsClient, sheet_id: str, name: str, headers: list[str], start: str
+    client: SheetsClient,
+    sheet_id: str,
+    name: str,
+    headers: list[str],
+    start: str,
+    creds_path: str,
+    last_processed: str,
 ):
     rng = f"'{name}'!{start}"
     client.execute(
@@ -114,45 +121,65 @@ def _ensure_headers(
             body={"values": [headers]},
         )
     )
+    update_last_processed(sheet_id, name, creds_path, last_processed, client)
 
 
 def bootstrap_sheets(settings: Settings) -> Dict[str, Any]:
     client = SheetsClient(settings.service_account_json)
     sheet_id = settings.sheets.spreadsheet_id
     desired = {
-        settings.sheets.tabs.reports: ("Reports", settings.sheets.starts.reports),
+        settings.sheets.tabs.reports: (
+            "Reports",
+            settings.sheets.starts.reports,
+            settings.sheets.last_processed.reports,
+        ),
         settings.sheets.tabs.roster_map: (
             "Roster Map",
             settings.sheets.starts.roster_map,
+            settings.sheets.last_processed.roster_map,
         ),
         settings.sheets.tabs.team_roster: (
             "Team Roster",
             settings.sheets.starts.team_roster,
+            settings.sheets.last_processed.team_roster,
         ),
         settings.sheets.tabs.availability_overrides: (
             "Availability Overrides",
             settings.sheets.starts.availability_overrides,
+            settings.sheets.last_processed.availability_overrides,
         ),
         settings.sheets.tabs.night_qa: (
             "Night QA",
             settings.sheets.starts.night_qa,
+            settings.sheets.last_processed.night_qa,
         ),
         settings.sheets.tabs.bench_night_totals: (
             "Bench Night Totals",
             settings.sheets.starts.bench_night_totals,
+            settings.sheets.last_processed.bench_night_totals,
         ),
         settings.sheets.tabs.bench_week_totals: (
             "Bench Week Totals",
             settings.sheets.starts.bench_week_totals,
+            settings.sheets.last_processed.bench_week_totals,
         ),
         settings.sheets.tabs.bench_rankings: (
             "Bench Rankings",
             settings.sheets.starts.bench_rankings,
+            settings.sheets.last_processed.bench_rankings,
         ),
     }
     tabs = []
-    for name, (canonical, start) in desired.items():
+    for name, (canonical, start, last_processed) in desired.items():
         _ensure_tab(client, sheet_id, name)
-        _ensure_headers(client, sheet_id, name, HEADERS[canonical], start)
+        _ensure_headers(
+            client,
+            sheet_id,
+            name,
+            HEADERS[canonical],
+            start,
+            settings.service_account_json,
+            last_processed,
+        )
         tabs.append(name)
     return {"ok": True, "tabs": tabs}

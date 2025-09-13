@@ -135,7 +135,12 @@ def compute(config):
 
     # Load roster map from Sheets (alt -> main)
     roster_map: Dict[str, str] = {}
-    rows = _sheet_values(s, s.sheets.tabs.roster_map, s.sheets.starts.roster_map)
+    rows = _sheet_values(
+        s,
+        s.sheets.tabs.roster_map,
+        s.sheets.starts.roster_map,
+        s.sheets.last_processed.roster_map,
+    )
     if rows:
         header = rows[0]
         try:
@@ -151,7 +156,10 @@ def compute(config):
 
     # Load availability overrides from Sheets
     rows = _sheet_values(
-        s, s.sheets.tabs.availability_overrides, s.sheets.starts.availability_overrides
+        s,
+        s.sheets.tabs.availability_overrides,
+        s.sheets.starts.availability_overrides,
+        s.sheets.last_processed.availability_overrides,
     )
     overrides_by_night = parse_availability_overrides(rows, roster_map)
 
@@ -438,6 +446,7 @@ def compute(config):
         night_qa_rows,
         s.service_account_json,
         start_cell=s.sheets.starts.night_qa,
+        last_processed_cell=s.sheets.last_processed.night_qa,
     )
     replace_values(
         s.sheets.spreadsheet_id,
@@ -445,6 +454,7 @@ def compute(config):
         bench_rows,
         s.service_account_json,
         start_cell=s.sheets.starts.bench_night_totals,
+        last_processed_cell=s.sheets.last_processed.bench_night_totals,
     )
 
     log.info("compute complete", extra={"stage": "compute", "nights": len(nights)})
@@ -497,6 +507,7 @@ def week(config):
         rows,
         s.service_account_json,
         start_cell=s.sheets.starts.bench_week_totals,
+        last_processed_cell=s.sheets.last_processed.bench_week_totals,
     )
 
     # export rankings
@@ -509,6 +520,7 @@ def week(config):
         rank_rows,
         s.service_account_json,
         start_cell=s.sheets.starts.bench_rankings,
+        last_processed_cell=s.sheets.last_processed.bench_rankings,
     )
 
     log.info(
