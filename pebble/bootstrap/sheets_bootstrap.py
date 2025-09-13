@@ -81,14 +81,6 @@ HEADERS = {
         "Main",
         "Bench Season-to-date (min)",
     ],
-    "Service Log (Summary)": [
-        "Timestamp PT",
-        "Stage",
-        "Night ID",
-        "Message",
-        "Counts JSON",
-        "Level",
-    ],
 }
 
 
@@ -156,10 +148,6 @@ def bootstrap_sheets(settings: Settings) -> Dict[str, Any]:
         settings.sheets.tabs.bench_rankings: (
             "Bench Rankings",
             settings.sheets.starts.bench_rankings,
-        ),
-        settings.sheets.tabs.service_log: (
-            "Service Log (Summary)",
-            settings.sheets.starts.service_log,
         ),
     }
     tabs = []

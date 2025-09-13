@@ -96,7 +96,7 @@ Cross‑cutting: Times stored PT ISO + UTC ms; deterministic sort; only Export t
 
 ## 4) Google Sheets (UI‑only)
 
-> **Principle: one source of truth per datum.** Officer‑managed inputs live in Sheets; all intermediate/working data lives in MongoDB; derived tables are materialized to Sheets **read‑only** and can be regenerated at any time. No output range should be hand‑edited. **All inputs and outputs live in a single Google Sheets document, split across multiple worksheets (Reports, Roster Map, Team Roster, Availability Overrides, Night QA, Bench Night Totals, Bench Week Totals, Service Log).**
+> **Principle: one source of truth per datum.** Officer‑managed inputs live in Sheets; all intermediate/working data lives in MongoDB; derived tables are materialized to Sheets **read‑only** and can be regenerated at any time. No output range should be hand‑edited. **All inputs and outputs live in a single Google Sheets document, split across multiple worksheets (Reports, Roster Map, Team Roster, Availability Overrides, Night QA, Bench Night Totals, Bench Week Totals).**
 
 ### Inputs (authoritative in Sheets)
 
@@ -114,7 +114,6 @@ Cross‑cutting: Times stored PT ISO + UTC ms; deterministic sort; only Export t
 - **Night QA (Compact)** (manual override values fully replace auto-detected break times when both start and end are present; if only one is filled, service logs a warning and ignores override; logged in QA row)
 - **Bench Night Totals**
 - **Bench Week Totals**
-- **Service Log (Summary)** (last N entries, e.g. 200, retained for review; full log in Mongo)
 
 ### Removed from Sheets (DB‑only)
 
@@ -164,7 +163,6 @@ app:
     roster_map: "Roster Map"
     player_facts: "Player Facts"
     participation: "Participation"
-    service_log: "Service Log (Summary)"
     night_qa: "Night QA"
     team_roster: "Team Roster"
     availability_overrides: "Availability Overrides"
@@ -278,7 +276,7 @@ Runtime: Python 3.12
 - **Secrets & config loading**:
   - Load `.env` (if present) then process env; merge over `config.yaml` defaults.
   - Validate required vars at startup; fail fast with clear errors.
-- **Persistent error handling**: network failures use capped exponential backoff; if WCL API is down >1h, errors surface in Service Log and summary sheet until cleared.
+- **Persistent error handling**: network failures use capped exponential backoff; if WCL API is down >1h, errors are logged until cleared.
 - **Schedule**: poll ~5 min; faster near break.
 - **Sheets bootstrap script**: `pebble bootstrap sheets` initializes Google Sheets resources idempotently.
 - **Logging**: INFO network, WARN missing Mythic, ERR to service_log.
@@ -347,7 +345,7 @@ The WCL client is pluggable; if WarcraftLogs releases v3 API, adapter can be swa
 
 ## 17) Additional Considerations
 
-- **Sheet schema contracts**: Provide a table with exact column order, names, and expected types/format for each worksheet (Reports, Roster Map, Team Roster, Availability Overrides, Night QA, Bench Night Totals, Bench Week Totals, Service Log). This avoids drift and simplifies exporters.
+- **Sheet schema contracts**: Provide a table with exact column order, names, and expected types/format for each worksheet (Reports, Roster Map, Team Roster, Availability Overrides, Night QA, Bench Night Totals, Bench Week Totals). This avoids drift and simplifies exporters.
 - **Row key conventions**: Document natural keys per collection/table in one place for quick reference.
 - **Validation invariants**: Define rules verified by `pebble verify`, e.g. Mythic Pre + Post = Envelope, no negative minutes, every Bench Week Totals main appears in Team Roster.
 - **Rate-limit budget**: Specify target API call budgets for WCL and Sheets to ensure compliance with rate limits.
@@ -366,7 +364,6 @@ The WCL client is pluggable; if WarcraftLogs releases v3 API, adapter can be swa
 | `app.sheets.night_qa`   | Night QA              | Night QA                    |
 | `app.sheets.bench_night`| Bench Night Totals    | Bench Night Totals          |
 | `app.sheets.bench_week` | Bench Week Totals     | Bench Week Totals           |
-| `app.sheets.service_log`| Service Log (Summary) | Service Log (Summary)       |
 
 ---
 
@@ -380,4 +377,3 @@ The WCL client is pluggable; if WarcraftLogs releases v3 API, adapter can be swa
 **Night QA**: `Night ID`, `Reports Involved`, `Mains Seen` (unique mains in any boss fight), `Night Start/End (PT)`, `Break Start/End (PT)`, `Break Duration (min)`, `Mythic Start/End (PT)`, `Mythic Pre/Post Duration (min)`, `Gap Window`, `Min/Max Break`, `Dedupe Tol`, `Largest Gap (min)`, `Candidate Gaps (JSON)`, `Override Used?`.
 **Bench Night Totals**: `Night ID`, `Main`, `Bench Minutes Pre/Post/Total`, `Played Pre/Post/Total`, `Avail Pre?/Post?`, `Status Source`.
 **Bench Week Totals**: `Game Week (YYYY-MM-DD)`, `Main`, `Bench Minutes (Week)`, `Played Minutes (Week)`, `Bench Pre/Post`.
-**Service Log (Summary)**: timestamped stage summaries (counts, warnings, errors), last N entries only (full log in Mongo).

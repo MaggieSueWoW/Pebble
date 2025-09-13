@@ -14,7 +14,6 @@ class SheetsTabs(BaseModel):
     bench_night_totals: str = Field(default="Bench Night Totals")
     bench_week_totals: str = Field(default="Bench Week Totals")
     bench_rankings: str = Field(default="Bench Rankings")
-    service_log: str = Field(default="Service Log")
 
 
 class SheetsStarts(BaseModel):
@@ -26,7 +25,6 @@ class SheetsStarts(BaseModel):
     bench_night_totals: str = Field(default="A1")
     bench_week_totals: str = Field(default="A1")
     bench_rankings: str = Field(default="A1")
-    service_log: str = Field(default="A1")
 
 
 class SheetsConfig(BaseModel):

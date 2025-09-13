@@ -9,7 +9,6 @@ sheets:
     bench_night_totals: "Bench Night Totals"
     bench_week_totals: "Bench Week Totals"
     bench_rankings: "Bench Rankings"
-    service_log: "Service Log (Summary)"
   starts:
     reports: "A1"
     roster_map: "A1"
@@ -19,7 +18,6 @@ sheets:
     bench_night_totals: "A1"
     bench_week_totals: "A1"
     bench_rankings: "A1"
-    service_log: "A1"
 
 time:
   tz: "America/Los_Angeles"
