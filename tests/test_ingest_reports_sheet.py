@@ -188,3 +188,90 @@ def test_ingest_reports_rejects_non_wcl_links(monkeypatch, caplog):
     update_map = {u["range"].split("!")[1]: u["values"][0][0] for u in updates}
     assert update_map["B2"] == "Bad report link"
     assert "Bad report link at row" in caplog.text
+
+
+def test_ingest_reports_marks_bad_links_on_fetch_error(monkeypatch, caplog):
+    rows = [
+        [
+            "Report URL",
+            "Status",
+            "Last Checked PT",
+            "Notes",
+            "Break Override Start (PT)",
+            "Break Override End (PT)",
+            "Report Name",
+            "Report Start (PT)",
+            "Report End (PT)",
+            "Created By",
+        ],
+        [
+            "https://www.warcraftlogs.com/reports/ABC123",  # missing last char
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+        ],
+    ]
+    updates = []
+
+    class DummyRequest:
+        def __init__(self, data):
+            self.data = data
+
+        def execute(self):
+            return self.data
+
+    class DummyValues:
+        def get(self, spreadsheetId, range):
+            return DummyRequest({"values": rows})
+
+        def batchUpdate(self, spreadsheetId, body):
+            updates.extend(body["data"])
+            return DummyRequest({})
+
+    class DummySpreadsheets:
+        def values(self):
+            return DummyValues()
+
+    class DummySvc:
+        def spreadsheets(self):
+            return DummySpreadsheets()
+
+    class DummySheetsClient:
+        def __init__(self, *args, **kwargs):
+            self.svc = DummySvc()
+
+        def execute(self, req):
+            return req.execute()
+
+    monkeypatch.setattr("pebble.ingest.SheetsClient", DummySheetsClient)
+    monkeypatch.setattr("pebble.ingest.get_db", lambda s: mongomock.MongoClient().db)
+    monkeypatch.setattr("pebble.ingest.ensure_indexes", lambda db: None)
+
+    class DummyWCLClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def fetch_report_bundle(self, code):
+            raise RuntimeError([{"message": "Unknown report"}])
+
+    monkeypatch.setattr("pebble.ingest.WCLClient", DummyWCLClient)
+
+    settings = Settings(
+        sheets=SheetsConfig(spreadsheet_id="1"),
+        mongo=MongoConfig(uri="mongodb://example"),
+        wcl=WCLConfig(client_id="id", client_secret="secret"),
+    )
+
+    with caplog.at_level(logging.WARNING):
+        res = ingest_reports(settings)
+
+    assert res["reports"] == 0
+    update_map = {u["range"].split("!")[1]: u["values"][0][0] for u in updates}
+    assert update_map["B2"] == "Bad report link"
+    assert "Failed to fetch WCL report bundle" in caplog.text

@@ -236,9 +236,21 @@ def ingest_reports(s: Settings | None = None) -> dict:
     )
 
     total_fights = 0
+    processed_reports = 0
     for rep in targets:
         code = rep["code"]
-        bundle = wcl.fetch_report_bundle(code)
+        try:
+            bundle = wcl.fetch_report_bundle(code)
+        except Exception:
+            logger.warning(
+                "Failed to fetch WCL report bundle", extra={"code": code}, exc_info=True
+            )
+            if status_idx is not None:
+                col_letter = chr(ord("A") + status_idx)
+                rng = f"{s.sheets.tabs.reports}!{col_letter}{rep['row']}"
+                updates.append({"range": rng, "values": [["Bad report link"]]})
+            continue
+        processed_reports += 1
 
         # reports upsert
         report_start_ms = int(bundle.get("startTime"))
@@ -377,4 +389,4 @@ def ingest_reports(s: Settings | None = None) -> dict:
             )
         )
 
-    return {"reports": len(targets), "fights": total_fights}
+    return {"reports": processed_reports, "fights": total_fights}
