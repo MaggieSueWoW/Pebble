@@ -12,6 +12,10 @@ HEADERS = {
         "Notes",
         "Break Override Start (PT)",
         "Break Override End (PT)",
+        "Report Name",
+        "Report Start (PT)",
+        "Report End (PT)",
+        "Created By",
     ],
     "Roster Map": ["Character (Name-Realm)", "Main (Name-Realm)"],
     "Team Roster": [

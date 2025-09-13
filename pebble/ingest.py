@@ -11,6 +11,7 @@ from .wcl_client import WCLClient
 from .utils.time import (
     night_id_from_ms,
     ms_to_pt_iso,
+    ms_to_pt_sheets,
     PT,
     pt_time_to_ms,
     sheets_date_str,
@@ -26,6 +27,10 @@ REPORT_HEADERS = {
     "Notes": "notes",
     "Break Override Start (PT)": "break_override_start",
     "Break Override End (PT)": "break_override_end",
+    "Report Name": "report_name",
+    "Report Start (PT)": "report_start_pt",
+    "Report End (PT)": "report_end_pt",
+    "Created By": "created_by",
 }
 
 
@@ -166,6 +171,10 @@ def ingest_reports(s: Settings | None = None) -> dict:
     header = rows[0]
     colmap = {name: header.index(name) for name in REPORT_HEADERS if name in header}
     last_checked_idx = colmap.get("Last Checked PT")
+    report_name_idx = colmap.get("Report Name")
+    report_start_idx = colmap.get("Report Start (PT)")
+    report_end_idx = colmap.get("Report End (PT)")
+    created_by_idx = colmap.get("Created By")
 
     # Collect targets
     targets: List[dict] = []
@@ -219,13 +228,17 @@ def ingest_reports(s: Settings | None = None) -> dict:
         now_dt = datetime.now(PT)
         now_ms = int(now_dt.timestamp() * 1000)
         now_iso = ms_to_pt_iso(now_ms)
+        now_sheet = ms_to_pt_sheets(now_ms)
+        end_iso = ms_to_pt_iso(report_end_ms) if report_end_ms > 0 else ""
+        end_sheet = ms_to_pt_sheets(report_end_ms) if report_end_ms > 0 else ""
         rep_doc = {
             "code": code,
             "title": bundle.get("title"),
             "start_ms": report_start_ms,
             "end_ms": report_end_ms,
             "start_pt": ms_to_pt_iso(report_start_ms),
-            "end_pt": ms_to_pt_iso(report_end_ms),
+            "end_pt": end_iso,
+            "owner": (bundle.get("owner") or {}).get("name", ""),
             "night_id": night_id,
             "notes": rep.get("notes", ""),
             "break_override_start_ms": bos_ms,
@@ -239,10 +252,18 @@ def ingest_reports(s: Settings | None = None) -> dict:
         }
         db["reports"].update_one({"code": code}, {"$set": rep_doc}, upsert=True)
 
-        if last_checked_idx is not None:
-            col_letter = chr(ord("A") + last_checked_idx)
+        def _update(idx: int | None, value: str):
+            if idx is None:
+                return
+            col_letter = chr(ord("A") + idx)
             rng = f"{s.sheets.tabs.reports}!{col_letter}{rep['row']}"
-            updates.append({"range": rng, "values": [[now_iso]]})
+            updates.append({"range": rng, "values": [[value]]})
+
+        _update(last_checked_idx, now_sheet)
+        _update(report_name_idx, bundle.get("title", ""))
+        _update(report_start_idx, ms_to_pt_sheets(report_start_ms))
+        _update(report_end_idx, end_sheet)
+        _update(created_by_idx, (bundle.get("owner") or {}).get("name", ""))
 
         # actors (players) per report — small, useful for audits; dedup by (report_code, actor_id)
         actors = (bundle.get("masterData") or {}).get("actors") or []

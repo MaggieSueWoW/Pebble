@@ -148,6 +148,7 @@ class WCLClient:
               title
               startTime
               endTime
+              owner { name }
               zone { name }
               region { id name compactName }
               guild { id name server { name region { id name compactName } } }
