@@ -26,7 +26,7 @@ HEADERS = {
         "Notes",
     ],
     "Availability Overrides": [
-        "Night ID",
+        "Night",
         "Main",
         "Avail Pre?",
         "Avail Post?",

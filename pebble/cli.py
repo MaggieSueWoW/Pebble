@@ -1,6 +1,8 @@
 import click
 import json
 from collections import defaultdict
+from typing import Dict, List, Optional
+
 from .config_loader import load_settings
 from .logging_setup import setup_logging
 from .mongo_client import get_db, ensure_indexes
@@ -11,7 +13,12 @@ from .blocks import build_blocks
 from .bench_calc import bench_minutes_for_night, last_non_mythic_boss_mains
 from .participation import build_mythic_participation
 from .export_sheets import replace_values
-from .utils.time import ms_to_pt_iso, ms_to_pt_sheets, pt_time_to_ms
+from .utils.time import (
+    ms_to_pt_iso,
+    ms_to_pt_sheets,
+    pt_time_to_ms,
+    sheets_date_str,
+)
 
 
 @click.group()
@@ -70,6 +77,47 @@ def flush_cache_cmd(config):
     log.info("cache flushed", extra={"stage": "flush-cache", "keys": deleted})
 
 
+def _parse_bool(val: str) -> Optional[bool]:
+    v = val.strip().lower()
+    if v in ("", "-", "na"):
+        return None
+    if v in ("y", "yes", "true", "1", "t"):
+        return True
+    if v in ("n", "no", "false", "0", "f"):
+        return False
+    return None
+
+
+def parse_availability_overrides(
+    rows: List[List[str]], roster_map: Dict[str, str]
+) -> Dict[str, Dict[str, Dict[str, Optional[bool]]]]:
+    overrides_by_night: Dict[str, Dict[str, Dict[str, Optional[bool]]]] = {}
+    if not rows:
+        return overrides_by_night
+    header = rows[0]
+    try:
+        n_idx = header.index("Night")
+        m_idx = header.index("Main")
+        pre_idx = header.index("Avail Pre?")
+        post_idx = header.index("Avail Post?")
+    except ValueError:
+        return overrides_by_night
+
+    for r in rows[1:]:
+        night_txt = r[n_idx].strip() if n_idx < len(r) else ""
+        night = sheets_date_str(night_txt)
+        name = r[m_idx].strip() if m_idx < len(r) else ""
+        if not night or not name:
+            continue
+        ov = {
+            "pre": _parse_bool(r[pre_idx]) if pre_idx < len(r) else None,
+            "post": _parse_bool(r[post_idx]) if post_idx < len(r) else None,
+        }
+        main = roster_map.get(name, name)
+        overrides_by_night.setdefault(night, {})[main] = ov
+    return overrides_by_night
+
+
 @cli.command()
 @click.option("--config", default="config.yaml", show_default=True)
 def compute(config):
@@ -84,17 +132,6 @@ def compute(config):
     ensure_indexes(db)
 
     from pymongo import UpdateOne
-    from typing import Dict, Optional
-
-    def _parse_bool(val: str) -> Optional[bool]:
-        v = val.strip().lower()
-        if v in ("", "-", "na"):
-            return None
-        if v in ("y", "yes", "true", "1", "t"):
-            return True
-        if v in ("n", "no", "false", "0", "f"):
-            return False
-        return None
 
     # Load roster map from Sheets (alt -> main)
     roster_map: Dict[str, str] = {}
@@ -113,30 +150,10 @@ def compute(config):
             pass
 
     # Load availability overrides from Sheets
-    overrides_by_night: Dict[str, Dict[str, Dict[str, Optional[bool]]]] = {}
     rows = _sheet_values(
         s, s.sheets.tabs.availability_overrides, s.sheets.starts.availability_overrides
     )
-    if rows:
-        header = rows[0]
-        try:
-            n_idx = header.index("Night ID")
-            m_idx = header.index("Main")
-            pre_idx = header.index("Avail Pre?")
-            post_idx = header.index("Avail Post?")
-            for r in rows[1:]:
-                night = r[n_idx].strip() if n_idx < len(r) else ""
-                name = r[m_idx].strip() if m_idx < len(r) else ""
-                if not night or not name:
-                    continue
-                ov = {
-                    "pre": _parse_bool(r[pre_idx]) if pre_idx < len(r) else None,
-                    "post": _parse_bool(r[post_idx]) if post_idx < len(r) else None,
-                }
-                main = roster_map.get(name, name)
-                overrides_by_night.setdefault(night, {})[main] = ov
-        except ValueError:
-            pass
+    overrides_by_night = parse_availability_overrides(rows, roster_map)
 
     # Night loop: derive QA + bench
     nights = sorted(
