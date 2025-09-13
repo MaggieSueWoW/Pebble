@@ -377,7 +377,7 @@ The WCL client is pluggable; if WarcraftLogs releases v3 API, adapter can be swa
 **Team Roster**: `Main`, `Join Night (YYYY-MM-DD)`, `Leave Night (YYYY-MM-DD)`, `Active?`, `Notes`.  
 **Availability Overrides**: `Night ID`, `Main`, `Avail Pre?`, `Avail Post?`, `Reason`.
 
-**Night QA**: `Night ID`, `Reports Involved`, `Night Start/End (PT)`, `Break Start/End (PT)`, `Break Duration (min)`, `Mythic Start/End (PT)`, `Mythic Pre/Post Duration (min)`, `Gap Window`, `Min/Max Break`, `Dedupe Tol`, `Largest Gap (min)`, `Candidate Gaps (JSON)`, `Override Used?`.  
+**Night QA**: `Night ID`, `Reports Involved`, `Mains Seen` (unique mains in any boss fight), `Night Start/End (PT)`, `Break Start/End (PT)`, `Break Duration (min)`, `Mythic Start/End (PT)`, `Mythic Pre/Post Duration (min)`, `Gap Window`, `Min/Max Break`, `Dedupe Tol`, `Largest Gap (min)`, `Candidate Gaps (JSON)`, `Override Used?`.
 **Bench Night Totals**: `Night ID`, `Main`, `Bench Minutes Pre/Post/Total`, `Played Pre/Post/Total`, `Avail Pre?/Post?`, `Status Source`.
 **Bench Week Totals**: `Game Week (YYYY-MM-DD)`, `Main`, `Bench Minutes (Week)`, `Played Minutes (Week)`, `Bench Pre/Post`.
 **Service Log (Summary)**: timestamped stage summaries (counts, warnings, errors), last N entries only (full log in Mongo).

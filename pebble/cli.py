@@ -1,5 +1,6 @@
 import click
 import json
+from collections import defaultdict
 from .config_loader import load_settings
 from .logging_setup import setup_logging
 from .mongo_client import get_db, ensure_indexes
@@ -144,6 +145,7 @@ def compute(config):
         [
             "Night ID",
             "Reports Involved",
+            "Mains Seen",
             "Report Start (PT)",
             "Report End (PT)",
             "Night Start (PT)",
@@ -197,6 +199,21 @@ def compute(config):
         report_end_ms = max(r.get("end_ms") for r in reports)
         night_start_ms = min(f["fight_abs_start_ms"] for f in fights_all)
         night_end_ms = max(f["fight_abs_end_ms"] for f in fights_all)
+
+        mains_by_report: dict[str, set[str]] = {code: set() for code in report_codes}
+        for f in fights_all:
+            if int(f.get("encounter_id", 0)) <= 0:
+                continue
+            code = f.get("report_code")
+            if code not in mains_by_report:
+                mains_by_report[code] = set()
+            for p in f.get("participants", []) or []:
+                name = p.get("name")
+                if not name:
+                    continue
+                main = roster_map.get(name, name)
+                mains_by_report[code].add(main)
+        report_mains = [len(mains_by_report[c]) for c in report_codes]
         override_pair = next(
             (
                 (r.get("break_override_start_ms"), r.get("break_override_end_ms"))
@@ -251,6 +268,7 @@ def compute(config):
             [
                 night,
                 ",".join(report_codes),
+                ",".join(str(c) for c in report_mains),
                 ms_to_pt_sheets(report_start_ms),
                 ms_to_pt_sheets(report_end_ms),
                 ms_to_pt_sheets(night_start_ms),
@@ -276,6 +294,7 @@ def compute(config):
         qa_doc = {
             "night_id": night,
             "reports": report_codes,
+            "report_mains": report_mains,
             "report_start_ms": report_start_ms,
             "report_end_ms": report_end_ms,
             "night_start_ms": night_start_ms,
@@ -316,7 +335,6 @@ def compute(config):
 
         # Blocks stage
         blocks = build_blocks(part_rows, break_range=br_range, fights_all=fights_all)
-        from collections import defaultdict
 
         seq = defaultdict(int)
         ops = []
