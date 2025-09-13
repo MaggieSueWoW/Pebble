@@ -28,6 +28,8 @@ def test_pt_time_to_ms_formats():
     assert pt_time_to_ms("21:15", ref_ms) == ref_ms + 75 * 60000
     assert pt_time_to_ms("9:15:00 PM", ref_ms) == ref_ms + 75 * 60000
     assert pt_time_to_ms("9:15", ref_ms) == ref_ms + 75 * 60000
+    assert pt_time_to_ms("2024-07-02 21:15", ref_ms) == ref_ms + 75 * 60000
+    assert pt_time_to_ms("7/2/24 9:15 PM", ref_ms) == ref_ms + 75 * 60000
 
 
 def test_ms_to_pt_sheets_format():

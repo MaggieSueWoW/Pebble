@@ -7,7 +7,13 @@ from .sheets_client import SheetsClient
 from .config_loader import Settings, load_settings
 from .mongo_client import get_db, ensure_indexes
 from .wcl_client import WCLClient
-from .utils.time import night_id_from_ms, ms_to_pt_iso, PT, pt_time_to_ms
+from .utils.time import (
+    night_id_from_ms,
+    ms_to_pt_iso,
+    PT,
+    pt_time_to_ms,
+    sheets_date_str,
+)
 
 
 REPORT_HEADERS = {
@@ -91,8 +97,8 @@ def ingest_roster(s: Settings | None = None) -> int:
         main = r[m_idx].strip() if m_idx < len(r) else ""
         if not main:
             continue
-        join = r[j_idx].strip() if j_idx < len(r) else ""
-        leave = r[l_idx].strip() if l_idx < len(r) else ""
+        join = sheets_date_str(r[j_idx].strip() if j_idx < len(r) else "")
+        leave = sheets_date_str(r[l_idx].strip() if l_idx < len(r) else "")
         aval = r[a_idx].strip().lower() if a_idx < len(r) else ""
         active = aval not in ("n", "no", "false", "0", "f")
         docs.append(

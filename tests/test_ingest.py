@@ -7,8 +7,8 @@ def test_ingest_roster_parses_sheet(monkeypatch):
     db = mongomock.MongoClient().db
     rows = [
         ["Main", "Join Night (YYYY-MM-DD)", "Leave Night (YYYY-MM-DD)", "Active?"],
-        ["Alice-Illidan", "2024-06-25", "", "Y"],
-        ["Bob-Illidan", "2024-06-25", "", "n"],
+        ["Alice-Illidan", "6/25/24", "", "Y"],
+        ["Bob-Illidan", "June 25, 2024", "", "n"],
     ]
 
     monkeypatch.setattr("pebble.ingest._sheet_values", lambda s, tab: rows)
