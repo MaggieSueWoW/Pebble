@@ -167,6 +167,30 @@ def canonical_fight_key(
     }
 
 
+def _col_to_index(col: str) -> int:
+    """Return zero-based column index for ``col``.
+
+    ``col`` is expected to be in A1 notation (e.g. ``"B"`` or ``"AA"``).
+    """
+    idx = 0
+    for c in col.upper():
+        idx = idx * 26 + (ord(c) - ord("A") + 1)
+    return idx - 1
+
+
+def _index_to_col(idx: int) -> str:
+    """Return column letter(s) for zero-based ``idx``.
+
+    This is the inverse of :func:`_col_to_index`.
+    """
+    idx += 1
+    col = ""
+    while idx:
+        idx, rem = divmod(idx - 1, 26)
+        col = chr(ord("A") + rem) + col
+    return col
+
+
 def ingest_reports(s: Settings | None = None) -> dict:
     s = s or load_settings()
     db = get_db(s)
@@ -202,10 +226,18 @@ def ingest_reports(s: Settings | None = None) -> dict:
     created_by_idx = colmap.get("Created By")
     status_idx = colmap.get("Status")
 
+    # Determine starting row and column for the sheet range
+    start_row_match = re.search(r"\d+", start)
+    start_row = int(start_row_match.group()) if start_row_match else 1
+    start_col_match = re.match(r"[A-Za-z]+", start)
+    start_col_idx = _col_to_index(start_col_match.group()) if start_col_match else 0
+
+    def _col_letter(idx: int) -> str:
+        return _index_to_col(start_col_idx + idx)
+
     # Collect targets
     updates: List[dict] = []
     targets: List[dict] = []
-    start_row = int(re.search(r"\d+", start).group()) if re.search(r"\d+", start) else 1
     for r_index, row in enumerate(rows[1:], start=start_row + 1):
 
         def val(col: str) -> str:
@@ -221,7 +253,7 @@ def ingest_reports(s: Settings | None = None) -> dict:
             if url:
                 logger.warning("Bad report link at row %s: %s", r_index, url)
                 if status_idx is not None:
-                    col_letter = chr(ord("A") + status_idx)
+                    col_letter = _col_letter(status_idx)
                     rng = f"{s.sheets.tabs.reports}!{col_letter}{r_index}"
                     updates.append({"range": rng, "values": [["Bad report link"]]})
             continue
@@ -265,7 +297,7 @@ def ingest_reports(s: Settings | None = None) -> dict:
                 "Failed to fetch WCL report bundle", extra={"code": code}, exc_info=True
             )
             if status_idx is not None:
-                col_letter = chr(ord("A") + status_idx)
+                col_letter = _col_letter(status_idx)
                 rng = f"{s.sheets.tabs.reports}!{col_letter}{rep['row']}"
                 updates.append({"range": rng, "values": [["Bad report link"]]})
             continue
@@ -307,7 +339,7 @@ def ingest_reports(s: Settings | None = None) -> dict:
         def _update(idx: int | None, value: str):
             if idx is None:
                 return
-            col_letter = chr(ord("A") + idx)
+            col_letter = _col_letter(idx)
             rng = f"{s.sheets.tabs.reports}!{col_letter}{rep['row']}"
             updates.append({"range": rng, "values": [[value]]})
 
