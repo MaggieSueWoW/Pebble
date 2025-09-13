@@ -101,7 +101,7 @@ Cross‑cutting: Times stored PT ISO + UTC ms; deterministic sort; only Export t
 ### Inputs (authoritative in Sheets)
 
 - **Reports**
-  - `Report URL`, `Status` (*blank* | `in-progress` | `done`), `Last Checked PT`, `Notes`, `Break Override Start (PT)`, `Break Override End (PT)`.
+  - `Report URL`, `Status` (*blank* | `in-progress` | `done`), `Last Checked (PT)`, `Notes`, `Break Override Start (PT)`, `Break Override End (PT)`.
 - **Roster Map**
   - `Character (Name-Realm)`, `Main (Name-Realm)`.
 - **Team Roster**
@@ -369,7 +369,7 @@ The WCL client is pluggable; if WarcraftLogs releases v3 API, adapter can be swa
 
 ### Appendix A — Key Columns
 
-**Reports**: `Report URL`, `Status`, `Last Checked PT`, `Notes`, `Break Override Start (PT)`, `Break Override End (PT)`, `Report Name`, `Report Start (PT)`, `Report End (PT)`, `Created By`.
+**Reports**: `Report URL`, `Status`, `Last Checked (PT)`, `Notes`, `Break Override Start (PT)`, `Break Override End (PT)`, `Report Name`, `Report Start (PT)`, `Report End (PT)`, `Created By`.
 **Roster Map**: `Character (Name-Realm)`, `Main (Name-Realm)`.
 **Team Roster**: `Main`, `Join Night (YYYY-MM-DD)`, `Leave Night (YYYY-MM-DD)`, `Active?`, `Notes`.  
 **Availability Overrides**: `Night ID`, `Main`, `Avail Pre?`, `Avail Post?`, `Reason`.

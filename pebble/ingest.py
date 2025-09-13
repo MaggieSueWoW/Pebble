@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 REPORT_HEADERS = {
     "Report URL": "report_url",
     "Status": "status",
-    "Last Checked PT": "last_checked_pt",
+    "Last Checked (PT)": "last_checked_pt",
     "Notes": "notes",
     "Break Override Start (PT)": "break_override_start",
     "Break Override End (PT)": "break_override_end",
@@ -170,7 +170,7 @@ def ingest_reports(s: Settings | None = None) -> dict:
 
     header = rows[0]
     colmap = {name: header.index(name) for name in REPORT_HEADERS if name in header}
-    last_checked_idx = colmap.get("Last Checked PT")
+    last_checked_idx = colmap.get("Last Checked (PT)")
     report_name_idx = colmap.get("Report Name")
     report_start_idx = colmap.get("Report Start (PT)")
     report_end_idx = colmap.get("Report End (PT)")

@@ -10,7 +10,7 @@ def test_ingest_reports_updates_sheet(monkeypatch):
         [
             "Report URL",
             "Status",
-            "Last Checked PT",
+            "Last Checked (PT)",
             "Notes",
             "Break Override Start (PT)",
             "Break Override End (PT)",
