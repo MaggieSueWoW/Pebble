@@ -1,5 +1,5 @@
 sheets:
-  spreadsheet_id: "YOUR_SHEET_ID"
+  spreadsheet_id: "1b266t-HvbCS7wkApGNC6cJby0An72swatXmx5z8qTac"
   tabs:
     reports: "Reports"
     roster_map: "Roster Map"
@@ -47,7 +47,7 @@ redis:
   key_prefix: "pebble:wcl:"
 
 mongo:
-  db: "pebble"
+  db: "pebble-tww-s3"
   write_batch_size: 500
   uri: "mongodb://localhost:27017"
 
