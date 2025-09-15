@@ -163,6 +163,12 @@ def compute(config):
     )
     overrides_by_night = parse_availability_overrides(rows, roster_map)
 
+    roster_mains = {
+        r.get("main")
+        for r in db["team_roster"].find({}, {"_id": 0, "main": 1, "active": 1})
+        if r.get("main") and r.get("active", True) is not False
+    }
+
     # Night loop: derive QA + bench
     nights = sorted(
         set([r["night_id"] for r in db["reports"].find({}, {"night_id": 1, "_id": 0})])
@@ -173,6 +179,7 @@ def compute(config):
             "Night ID",
             "Reports Involved",
             "Mains Seen",
+            "Not on Roster",
             "Report Start (PT)",
             "Report End (PT)",
             "Night Start (PT)",
@@ -291,11 +298,23 @@ def compute(config):
         ]
         largest_gap = round(gap_meta.get("largest_gap_min", 0.0), 2)
 
+        mythic_mains: set[str] = set()
+        for f in fights_m:
+            for p in f.get("participants", []) or []:
+                name = p.get("name")
+                if not name:
+                    continue
+                main = roster_map.get(name, name)
+                mythic_mains.add(main)
+        not_on_roster = sorted(m for m in mythic_mains if m not in roster_mains)
+        not_on_roster_str = ", ".join(not_on_roster)
+
         night_qa_rows.append(
             [
                 night,
                 ",".join(report_codes),
                 ",".join(str(c) for c in report_mains),
+                not_on_roster_str,
                 ms_to_pt_sheets(report_start_ms),
                 ms_to_pt_sheets(report_end_ms),
                 ms_to_pt_sheets(night_start_ms),
@@ -341,6 +360,7 @@ def compute(config):
             "largest_gap_min": largest_gap,
             "gap_candidates": candidate_gaps_db,
             "override_used": override_used,
+            "not_on_roster_mains": not_on_roster,
         }
         db["night_qa"].update_one({"night_id": night}, {"$set": qa_doc}, upsert=True)
 
