@@ -1,6 +1,8 @@
 from __future__ import annotations
 from typing import Dict, Iterable, List, Optional, Set
 
+from .utils.names import NameResolver
+
 # Availability inference policy (V2):
 # - If a player has *any* block in pre, we infer availability for the *entire* post (benched when not playing).
 # - If they have any block in post, we infer availability for the entire pre.
@@ -112,6 +114,8 @@ def last_non_mythic_boss_mains(
     fights_all: List[dict],
     mythic_start_ms: int,
     roster_map: Optional[Dict[str, str]] = None,
+    *,
+    resolver: Optional[NameResolver] = None,
 ) -> Set[str]:
     """Return mains who appeared in the last non-Mythic boss fight before Mythic."""
 
@@ -128,8 +132,16 @@ def last_non_mythic_boss_mains(
         return set()
 
     last_nm = max(non_mythic_pre, key=lambda f: f.get("fight_abs_start_ms", 0))
-    return {
-        roster_map.get(p.get("name"), p.get("name"))
-        for p in last_nm.get("participants", [])
-        if p.get("name")
-    }
+    mains: Set[str] = set()
+    for p in last_nm.get("participants", []):
+        name = p.get("name")
+        if not name:
+            continue
+        if resolver:
+            resolved = resolver.resolve(name)
+            if not resolved:
+                continue
+            mains.add(resolved)
+        else:
+            mains.add(roster_map.get(name, name))
+    return mains

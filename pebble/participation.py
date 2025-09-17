@@ -1,13 +1,18 @@
 from __future__ import annotations
-from typing import List
+from typing import List, Optional
+
 from .utils.time import ms_to_pt_iso
+from .utils.names import NameResolver
 
 
 # TODO: V1 keeps participation simple (boss pulls only). Trash bridging handled in blocks.
 # A later iteration can integrate WCL tables/events to derive exact attendance.
 
 
-def build_mythic_participation(fights_mythic: List[dict]) -> List[dict]:
+def build_mythic_participation(
+    fights_mythic: List[dict],
+    resolver: Optional[NameResolver] = None,
+) -> List[dict]:
     """Return rows of per‑player participation for Mythic fights.
 
     Each fight is expected to include absolute start/end times and a
@@ -22,9 +27,12 @@ def build_mythic_participation(fights_mythic: List[dict]) -> List[dict]:
             name = p.get("name")
             if not name:
                 continue
+            main = resolver.resolve(name) if resolver else name
+            if resolver and not main:
+                continue
             rows.append(
                 {
-                    "main": name,
+                    "main": main,
                     "report_code": f.get("report_code"),
                     "fight_id": f.get("id"),
                     "start_ms": f.get("fight_abs_start_ms"),

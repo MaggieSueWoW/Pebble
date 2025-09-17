@@ -1,5 +1,6 @@
 def test_parse_availability_overrides_accepts_sheets_dates():
     from pebble.cli import parse_availability_overrides
+    from pebble.utils.names import NameResolver
 
     rows = [
         ["Night", "Main", "Avail Pre?", "Avail Post?", "Reason"],
@@ -7,8 +8,9 @@ def test_parse_availability_overrides_accepts_sheets_dates():
         ["2024-07-03", "Bob", "yes", "", ""],
         ["July 4, 2024", "Charlie", "", "t", ""],
     ]
-    roster_map = {"Charlie": "CharlieMain"}
-    overrides = parse_availability_overrides(rows, roster_map)
+    resolver = NameResolver(["Alice", "Bob", "CharlieMain"], {"Charlie": "CharlieMain"})
+    overrides, unmatched = parse_availability_overrides(rows, resolver)
+    assert unmatched == {}
     assert overrides == {
         "2024-07-02": {"Alice": {"pre": True, "post": False}},
         "2024-07-03": {"Bob": {"pre": True, "post": None}},

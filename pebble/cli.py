@@ -19,6 +19,7 @@ from .utils.time import (
     pt_time_to_ms,
     sheets_date_str,
 )
+from .utils.names import NameResolver
 
 
 @click.group()
@@ -89,11 +90,14 @@ def _parse_bool(val: str) -> Optional[bool]:
 
 
 def parse_availability_overrides(
-    rows: List[List[str]], roster_map: Dict[str, str]
-) -> Dict[str, Dict[str, Dict[str, Optional[bool]]]]:
+    rows: List[List[str]], resolver: NameResolver
+) -> tuple[Dict[str, Dict[str, Dict[str, Optional[bool]]]], Dict[str, set[str]]]:
+    from collections import defaultdict
+
     overrides_by_night: Dict[str, Dict[str, Dict[str, Optional[bool]]]] = {}
+    unmatched: Dict[str, set[str]] = defaultdict(set)
     if not rows:
-        return overrides_by_night
+        return overrides_by_night, {}
     header = rows[0]
     try:
         n_idx = header.index("Night")
@@ -101,7 +105,7 @@ def parse_availability_overrides(
         pre_idx = header.index("Avail Pre?")
         post_idx = header.index("Avail Post?")
     except ValueError:
-        return overrides_by_night
+        return overrides_by_night, {}
 
     for r in rows[1:]:
         night_txt = r[n_idx].strip() if n_idx < len(r) else ""
@@ -113,9 +117,12 @@ def parse_availability_overrides(
             "pre": _parse_bool(r[pre_idx]) if pre_idx < len(r) else None,
             "post": _parse_bool(r[post_idx]) if post_idx < len(r) else None,
         }
-        main = roster_map.get(name, name)
+        main = resolver.resolve(name)
+        if not main:
+            unmatched[night].add(name)
+            continue
         overrides_by_night.setdefault(night, {})[main] = ov
-    return overrides_by_night
+    return overrides_by_night, {night: set(names) for night, names in unmatched.items()}
 
 
 @cli.command()
@@ -154,6 +161,16 @@ def compute(config):
         except ValueError:
             pass
 
+    roster_docs = list(
+        db["team_roster"].find({}, {"_id": 0, "main": 1, "active": 1})
+    )
+    active_mains = [
+        r.get("main")
+        for r in roster_docs
+        if r.get("main") and r.get("active", True) is not False
+    ]
+    resolver = NameResolver(active_mains, roster_map)
+
     # Load availability overrides from Sheets
     rows = _sheet_values(
         s,
@@ -161,13 +178,9 @@ def compute(config):
         s.sheets.starts.availability_overrides,
         s.sheets.last_processed.availability_overrides,
     )
-    overrides_by_night = parse_availability_overrides(rows, roster_map)
-
-    roster_mains = {
-        r.get("main")
-        for r in db["team_roster"].find({}, {"_id": 0, "main": 1, "active": 1})
-        if r.get("main") and r.get("active", True) is not False
-    }
+    overrides_by_night, overrides_unmatched = parse_availability_overrides(
+        rows, resolver
+    )
 
     # Night loop: derive QA + bench
     nights = sorted(
@@ -227,6 +240,8 @@ def compute(config):
         if not env:
             continue
 
+        night_unmatched_start = set(resolver.not_on_roster)
+
         reports = list(db["reports"].find({"night_id": night}, {"_id": 0}))
         report_codes = sorted(r.get("code") for r in reports)
         report_start_ms = min(r.get("start_ms") for r in reports)
@@ -245,7 +260,9 @@ def compute(config):
                 name = p.get("name")
                 if not name:
                     continue
-                main = roster_map.get(name, name)
+                main = resolver.resolve(name)
+                if not main:
+                    continue
                 mains_by_report[code].add(main)
         report_mains = [len(mains_by_report[c]) for c in report_codes]
         override_pair = next(
@@ -304,9 +321,13 @@ def compute(config):
                 name = p.get("name")
                 if not name:
                     continue
-                main = roster_map.get(name, name)
+                main = resolver.resolve(name)
+                if not main:
+                    continue
                 mythic_mains.add(main)
-        not_on_roster = sorted(m for m in mythic_mains if m not in roster_mains)
+        new_unmatched = set(resolver.not_on_roster) - night_unmatched_start
+        override_unmatched = overrides_unmatched.get(night, set())
+        not_on_roster = sorted(new_unmatched | set(override_unmatched))
         not_on_roster_str = ", ".join(not_on_roster)
 
         night_qa_rows.append(
@@ -365,7 +386,7 @@ def compute(config):
         db["night_qa"].update_one({"night_id": night}, {"$set": qa_doc}, upsert=True)
 
         # Participation stage: build per-fight rows and persist
-        part_rows = build_mythic_participation(fights_m)
+        part_rows = build_mythic_participation(fights_m, resolver=resolver)
         ops = []
         for r in part_rows:
             key = {
@@ -402,7 +423,9 @@ def compute(config):
         blocks = list(db["blocks"].find({"night_id": night}, {"_id": 0}))
 
         # Determine participants from the last non-Mythic boss fight before Mythic start
-        last_nm_mains = last_non_mythic_boss_mains(fights_all, env[0], roster_map)
+        last_nm_mains = last_non_mythic_boss_mains(
+            fights_all, env[0], resolver=resolver
+        )
 
         bench = bench_minutes_for_night(
             blocks,
@@ -410,7 +433,7 @@ def compute(config):
             split["post_ms"],
             overrides=overrides_by_night.get(night, {}),
             last_fight_mains=last_nm_mains,
-            roster_map=roster_map,
+            roster_map=None,
         )
 
         # Persist bench_night_totals for this night
