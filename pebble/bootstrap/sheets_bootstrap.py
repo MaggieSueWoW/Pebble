@@ -24,6 +24,7 @@ HEADERS = {
         "Join Date",
         "Leave Date",
         "Active?",
+        "Class Color",
         "Notes",
     ],
     "Availability Overrides": [

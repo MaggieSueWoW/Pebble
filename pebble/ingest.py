@@ -1,8 +1,10 @@
 from __future__ import annotations
-from typing import Any, List, Optional
+from typing import Any, Dict, List, Optional
+from collections import defaultdict
 from datetime import datetime
 from pymongo import UpdateOne
 import re
+import string
 import logging
 from .sheets_client import SheetsClient
 from .config_loader import Settings, load_settings
@@ -19,6 +21,23 @@ from .utils.time import (
 from .utils.sheets import update_last_processed
 
 logger = logging.getLogger(__name__)
+
+
+WOW_CLASS_COLORS: Dict[str, str] = {
+    "DEATHKNIGHT": "#C41F3B",
+    "DEMONHUNTER": "#A330C9",
+    "DRUID": "#FF7C0A",
+    "EVOKER": "#33937F",
+    "HUNTER": "#ABD473",
+    "MAGE": "#3FC7EB",
+    "MONK": "#00FF96",
+    "PALADIN": "#F58CBA",
+    "PRIEST": "#FFFFFF",
+    "ROGUE": "#FFF569",
+    "SHAMAN": "#0070DE",
+    "WARLOCK": "#8788EE",
+    "WARRIOR": "#C79C6E",
+}
 
 
 REPORT_HEADERS = {
@@ -118,8 +137,37 @@ def ingest_roster(s: Settings | None = None) -> int:
         db["team_roster"].delete_many({})
         return 0
 
+    try:
+        class_color_idx = header.index("Class Color")
+    except ValueError:
+        class_color_idx = None
+
+    try:
+        _, header_row = _split_cell(s.sheets.starts.team_roster)
+    except ValueError:
+        header_row = 1
+    data_row_start = header_row + 1
+
+    actor_classes: Dict[str, set[str]] = defaultdict(set)
+    for actor in db["actors"].find({}, {"_id": 0, "name": 1, "subType": 1}):
+        name = (actor.get("name") or "").strip()
+        subtype = (actor.get("subType") or "").strip()
+        if not name or not subtype:
+            continue
+        actor_classes[name].add(subtype)
+        if "-" in name:
+            base, _ = name.split("-", 1)
+            if base:
+                actor_classes[base].add(subtype)
+
+    resolved_actor_classes: Dict[str, str] = {}
+    for key, classes in actor_classes.items():
+        if len(classes) == 1:
+            resolved_actor_classes[key] = next(iter(classes))
+
+    class_updates: list[tuple[int, str]] = []
     docs = []
-    for r in rows[1:]:
+    for offset, r in enumerate(rows[1:]):
         main = r[m_idx].strip() if m_idx < len(r) else ""
         if not main:
             continue
@@ -127,14 +175,31 @@ def ingest_roster(s: Settings | None = None) -> int:
         leave = sheets_date_str(r[l_idx].strip() if l_idx < len(r) else "")
         aval = r[a_idx].strip().lower() if a_idx < len(r) else ""
         active = aval not in ("n", "no", "false", "0", "f")
-        docs.append(
-            {
-                "main": main,
-                "join_night": join,
-                "leave_night": leave,
-                "active": active,
-            }
+        actor_class = resolved_actor_classes.get(main)
+        expected_color = _expected_class_color(actor_class)
+        raw_color = (
+            r[class_color_idx] if class_color_idx is not None and class_color_idx < len(r) else ""
         )
+        sheet_color = _normalize_hex_color(raw_color)
+        final_color = expected_color or ""
+        if class_color_idx is not None and expected_color and sheet_color != final_color:
+            row_number = data_row_start + offset
+            class_updates.append((row_number, final_color))
+        doc = {
+            "main": main,
+            "join_night": join,
+            "leave_night": leave,
+            "active": active,
+            "class_color": final_color,
+        }
+        docs.append(doc)
+
+    _ensure_class_colors(
+        s,
+        s.sheets.starts.team_roster,
+        class_color_idx,
+        class_updates,
+    )
 
     db["team_roster"].delete_many({})
     inserted = 0
@@ -189,6 +254,82 @@ def _index_to_col(idx: int) -> str:
         idx, rem = divmod(idx - 1, 26)
         col = chr(ord("A") + rem) + col
     return col
+
+
+def _split_cell(cell: str) -> tuple[int, int]:
+    match = re.match(r"^([A-Za-z]+)(\d+)$", cell or "")
+    if not match:
+        raise ValueError(f"Invalid cell reference: {cell}")
+    col, row = match.groups()
+    return _col_to_index(col), int(row)
+
+
+def _normalize_class_name(name: str | None) -> Optional[str]:
+    if not name:
+        return None
+    cleaned = re.sub(r"[^A-Za-z]", "", name).upper()
+    return cleaned or None
+
+
+def _expected_class_color(name: str | None) -> Optional[str]:
+    norm = _normalize_class_name(name)
+    if not norm:
+        return None
+    return WOW_CLASS_COLORS.get(norm)
+
+
+def _normalize_hex_color(value: str | None) -> str:
+    if not value:
+        return ""
+    val = (value or "").strip().upper()
+    if not val:
+        return ""
+    if val.startswith("#"):
+        digits = val[1:]
+    else:
+        digits = val
+        val = f"#{digits}"
+    if len(digits) != 6:
+        return ""
+    if any(ch not in string.hexdigits.upper() for ch in digits):
+        return ""
+    return val
+
+
+def _ensure_class_colors(
+    s: Settings,
+    start_cell: str,
+    class_col_idx: Optional[int],
+    updates: list[tuple[int, str]],
+) -> None:
+    if not updates or class_col_idx is None:
+        return
+    try:
+        start_col_idx, _ = _split_cell(start_cell)
+    except ValueError:
+        logger.warning(
+            "could not update class colors due to invalid start cell",
+            extra={"start_cell": start_cell},
+        )
+        return
+    col_letter = _index_to_col(start_col_idx + class_col_idx)
+    data = [
+        {
+            "range": f"{s.sheets.tabs.team_roster}!{col_letter}{row}",
+            "values": [[color]],
+        }
+        for row, color in updates
+    ]
+    if not data:
+        return
+    client = SheetsClient(s.service_account_json)
+    svc = client.svc
+    body = {"valueInputOption": "RAW", "data": data}
+    client.execute(
+        svc.spreadsheets()
+        .values()
+        .batchUpdate(spreadsheetId=s.sheets.spreadsheet_id, body=body)
+    )
 
 
 def ingest_reports(s: Settings | None = None) -> dict:
