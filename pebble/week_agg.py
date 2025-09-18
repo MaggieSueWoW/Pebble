@@ -36,7 +36,6 @@ def materialize_week_totals(db) -> int:
         }
     )
     weeks = set()
-    written = defaultdict(set)
 
     for r in nights:
         wk = week_id_from_night_id(r["night_id"])
@@ -70,48 +69,62 @@ def materialize_week_totals(db) -> int:
                         "bench_post": 0,
                     }
 
-    count = 0
-    for (wk, main), v in agg.items():
+    docs = []
+    for wk, main in sorted(agg.keys()):
+        v = agg[(wk, main)]
         bench_pre = v.get("bench_pre", 0)
         bench_post = v.get("bench_post", 0)
         bench_total = bench_pre + bench_post
-        doc = {
-            "game_week": wk,
-            "main": main,
-            "played_min": v["played"],
-            "bench_min": bench_total,
-            "bench_pre_min": bench_pre,
-            "bench_post_min": bench_post,
-            "updated_at": datetime.utcnow(),
-        }
-        db["bench_week_totals"].update_one(
-            {"game_week": wk, "main": main}, {"$set": doc}, upsert=True
+        docs.append(
+            {
+                "game_week": wk,
+                "main": main,
+                "played_min": v["played"],
+                "bench_min": bench_total,
+                "bench_pre_min": bench_pre,
+                "bench_post_min": bench_post,
+                "updated_at": datetime.utcnow(),
+            }
         )
-        written[wk].add(main)
-        count += 1
 
-    existing_weeks = set(db["bench_week_totals"].distinct("game_week"))
-    for wk in existing_weeks - weeks:
-        db["bench_week_totals"].delete_many({"game_week": wk})
-    for wk in weeks:
-        mains = list(written.get(wk, set()))
-        if mains:
-            db["bench_week_totals"].delete_many(
-                {"game_week": wk, "main": {"$nin": mains}}
-            )
-        else:
-            db["bench_week_totals"].delete_many({"game_week": wk})
+    db["bench_week_totals"].delete_many({})
+    if docs:
+        db["bench_week_totals"].insert_many(docs)
 
-    return count
+    return len(docs)
+
+
+def _latest_night_id(db) -> str | None:
+    """Return the most recent night_id observed in bench_night_totals."""
+
+    latest = db["bench_night_totals"].find_one(
+        {}, sort=[("night_id", -1)], projection={"night_id": 1}
+    )
+    if not latest:
+        return None
+    return latest.get("night_id")
 
 
 def materialize_rankings(db) -> int:
     """Materialize season-to-date bench rankings ordered by bench minutes."""
-    roster_mains = {
-        r["main"]
-        for r in db["team_roster"].find({}, {"_id": 0, "main": 1, "active": 1})
-        if r.get("main") and r.get("active", True) is not False
-    }
+
+    latest_night = _latest_night_id(db)
+
+    roster_mains = set()
+    for row in db["team_roster"].find(
+        {}, {"_id": 0, "main": 1, "active": 1, "leave_night": 1}
+    ):
+        main = row.get("main")
+        if not main:
+            continue
+        if row.get("active", True) is False:
+            continue
+
+        leave_night = row.get("leave_night")
+        if latest_night and leave_night and leave_night < latest_night:
+            continue
+
+        roster_mains.add(main)
 
     if not roster_mains:
         db["bench_rankings"].delete_many({})
@@ -124,22 +137,19 @@ def materialize_rankings(db) -> int:
     ]
     rows: List[dict] = list(db["bench_week_totals"].aggregate(pipeline))
 
-    count = 0
-    mains = []
+    docs = []
     for idx, r in enumerate(rows, start=1):
-        doc = {
-            "rank": idx,
-            "main": r["_id"],
-            "bench_min": r["bench_min"],
-            "updated_at": datetime.utcnow(),
-        }
-        db["bench_rankings"].update_one({"main": r["_id"]}, {"$set": doc}, upsert=True)
-        mains.append(r["_id"])
-        count += 1
+        docs.append(
+            {
+                "rank": idx,
+                "main": r["_id"],
+                "bench_min": r["bench_min"],
+                "updated_at": datetime.utcnow(),
+            }
+        )
 
-    if mains:
-        db["bench_rankings"].delete_many({"main": {"$nin": mains}})
-    else:
-        db["bench_rankings"].delete_many({})
+    db["bench_rankings"].delete_many({})
+    if docs:
+        db["bench_rankings"].insert_many(docs)
 
-    return count
+    return len(docs)

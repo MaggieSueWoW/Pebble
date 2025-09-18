@@ -138,8 +138,6 @@ def compute(config):
     db = get_db(s)
     ensure_indexes(db)
 
-    from pymongo import UpdateOne
-
     # Load roster map from Sheets (alt -> main)
     roster_map: Dict[str, str] = {}
     rows = _sheet_values(
@@ -387,17 +385,9 @@ def compute(config):
 
         # Participation stage: build per-fight rows and persist
         part_rows = build_mythic_participation(fights_m, resolver=resolver)
-        ops = []
-        for r in part_rows:
-            key = {
-                "night_id": r["night_id"],
-                "report_code": r["report_code"],
-                "fight_id": r["fight_id"],
-                "main": r["main"],
-            }
-            ops.append(UpdateOne(key, {"$set": r}, upsert=True))
-        if ops:
-            db["participation_m"].bulk_write(ops, ordered=False)
+        db["participation_m"].delete_many({"night_id": night})
+        if part_rows:
+            db["participation_m"].insert_many(part_rows)
 
         part_rows = list(db["participation_m"].find({"night_id": night}, {"_id": 0}))
 
@@ -405,20 +395,15 @@ def compute(config):
         blocks = build_blocks(part_rows, break_range=br_range, fights_all=fights_all)
 
         seq = defaultdict(int)
-        ops = []
+        block_docs = []
         for b in blocks:
             seq_key = (b["night_id"], b["main"], b["half"])
             seq[seq_key] += 1
-            doc = {**b, "block_seq": seq[seq_key]}
-            key = {
-                "night_id": b["night_id"],
-                "main": b["main"],
-                "half": b["half"],
-                "block_seq": doc["block_seq"],
-            }
-            ops.append(UpdateOne(key, {"$set": doc}, upsert=True))
-        if ops:
-            db["blocks"].bulk_write(ops, ordered=False)
+            block_docs.append({**b, "block_seq": seq[seq_key]})
+
+        db["blocks"].delete_many({"night_id": night})
+        if block_docs:
+            db["blocks"].insert_many(block_docs)
 
         blocks = list(db["blocks"].find({"night_id": night}, {"_id": 0}))
 
@@ -437,7 +422,7 @@ def compute(config):
         )
 
         # Persist bench_night_totals for this night
-        ops = []
+        bench_docs = []
         for row in bench:
             bench_rows.append(
                 [
@@ -467,20 +452,26 @@ def compute(config):
                 "avail_post": row["avail_post"],
                 "status_source": row["status_source"],
             }
-            ops.append(
-                UpdateOne(
-                    {"night_id": night, "main": row["main"]}, {"$set": doc}, upsert=True
-                )
-            )
-        if ops:
-            db["bench_night_totals"].bulk_write(ops, ordered=False)
-        mains = {row["main"] for row in bench}
-        if mains:
-            db["bench_night_totals"].delete_many(
-                {"night_id": night, "main": {"$nin": list(mains)}}
-            )
-        else:
-            db["bench_night_totals"].delete_many({"night_id": night})
+            bench_docs.append(doc)
+
+        db["bench_night_totals"].delete_many({"night_id": night})
+        if bench_docs:
+            db["bench_night_totals"].insert_many(bench_docs)
+
+    # Refresh weekly aggregates so Mongo mirrors the latest nightly totals
+    from .week_agg import materialize_rankings, materialize_week_totals
+
+    weeks_written = materialize_week_totals(db)
+    ranks_written = materialize_rankings(db)
+
+    log.info(
+        "weekly aggregates refreshed",
+        extra={
+            "stage": "compute.week",
+            "weeks": weeks_written,
+            "ranks": ranks_written,
+        },
+    )
 
     # Write to Sheets
     replace_values(
