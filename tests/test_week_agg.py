@@ -98,14 +98,40 @@ def test_materialize_week_totals_fills_roster():
     rc = materialize_rankings(db)
     ranks = list(
         db["bench_rankings"].find(
-            {}, {"_id": 0, "rank": 1, "main": 1, "bench_min": 1}
+            {},
+            {
+                "_id": 0,
+                "rank": 1,
+                "main": 1,
+                "bench_min": 1,
+                "played_min": 1,
+                "bench_to_played_ratio": 1,
+            },
         ).sort([("rank", 1)])
     )
     assert rc == 3
     assert ranks == [
-        {"rank": 1, "main": "Alice-Illidan", "bench_min": 10},
-        {"rank": 2, "main": "Bob-Illidan", "bench_min": 0},
-        {"rank": 3, "main": "Charlie-Illidan", "bench_min": 0},
+        {
+            "rank": 1,
+            "main": "Bob-Illidan",
+            "bench_min": 0,
+            "played_min": 20,
+            "bench_to_played_ratio": 0.0,
+        },
+        {
+            "rank": 2,
+            "main": "Charlie-Illidan",
+            "bench_min": 0,
+            "played_min": 0,
+            "bench_to_played_ratio": None,
+        },
+        {
+            "rank": 3,
+            "main": "Alice-Illidan",
+            "bench_min": 10,
+            "played_min": 10,
+            "bench_to_played_ratio": 1.0,
+        },
     ]
 
 
@@ -157,8 +183,18 @@ def test_materialize_rankings_removes_stale_players():
     db = mongomock.MongoClient().db
     db["bench_week_totals"].insert_many(
         [
-            {"game_week": "2024-07-02", "main": "Alice-Illidan", "bench_min": 10},
-            {"game_week": "2024-07-02", "main": "Bob-Illidan", "bench_min": 0},
+            {
+                "game_week": "2024-07-02",
+                "main": "Alice-Illidan",
+                "bench_min": 10,
+                "played_min": 0,
+            },
+            {
+                "game_week": "2024-07-02",
+                "main": "Bob-Illidan",
+                "bench_min": 0,
+                "played_min": 0,
+            },
         ]
     )
     db["team_roster"].insert_many(
@@ -171,10 +207,26 @@ def test_materialize_rankings_removes_stale_players():
     db["bench_week_totals"].delete_many({"main": "Bob-Illidan"})
     materialize_rankings(db)
     ranks = list(
-        db["bench_rankings"].find({}, {"_id": 0, "rank": 1, "main": 1, "bench_min": 1})
+        db["bench_rankings"].find(
+            {},
+            {
+                "_id": 0,
+                "rank": 1,
+                "main": 1,
+                "bench_min": 1,
+                "played_min": 1,
+                "bench_to_played_ratio": 1,
+            },
+        )
     )
     assert ranks == [
-        {"rank": 1, "main": "Alice-Illidan", "bench_min": 10}
+        {
+            "rank": 1,
+            "main": "Alice-Illidan",
+            "bench_min": 10,
+            "played_min": 0,
+            "bench_to_played_ratio": None,
+        }
     ]
 
 
@@ -182,8 +234,18 @@ def test_materialize_rankings_skips_non_roster_players():
     db = mongomock.MongoClient().db
     db["bench_week_totals"].insert_many(
         [
-            {"game_week": "2024-07-02", "main": "Alice-Illidan", "bench_min": 10},
-            {"game_week": "2024-07-02", "main": "Merc-Illidan", "bench_min": 5},
+            {
+                "game_week": "2024-07-02",
+                "main": "Alice-Illidan",
+                "bench_min": 10,
+                "played_min": 0,
+            },
+            {
+                "game_week": "2024-07-02",
+                "main": "Merc-Illidan",
+                "bench_min": 5,
+                "played_min": 0,
+            },
         ]
     )
     db["team_roster"].insert_one(
@@ -191,11 +253,27 @@ def test_materialize_rankings_skips_non_roster_players():
     )
     rc = materialize_rankings(db)
     ranks = list(
-        db["bench_rankings"].find({}, {"_id": 0, "rank": 1, "main": 1, "bench_min": 1})
+        db["bench_rankings"].find(
+            {},
+            {
+                "_id": 0,
+                "rank": 1,
+                "main": 1,
+                "bench_min": 1,
+                "played_min": 1,
+                "bench_to_played_ratio": 1,
+            },
+        )
     )
     assert rc == 1
     assert ranks == [
-        {"rank": 1, "main": "Alice-Illidan", "bench_min": 10}
+        {
+            "rank": 1,
+            "main": "Alice-Illidan",
+            "bench_min": 10,
+            "played_min": 0,
+            "bench_to_played_ratio": None,
+        }
     ]
 
 
@@ -203,8 +281,18 @@ def test_materialize_rankings_skips_roster_after_leave_date():
     db = mongomock.MongoClient().db
     db["bench_week_totals"].insert_many(
         [
-            {"game_week": "2025-09-09", "main": "Alice-Illidan", "bench_min": 12},
-            {"game_week": "2025-09-09", "main": "Bob-Illidan", "bench_min": 8},
+            {
+                "game_week": "2025-09-09",
+                "main": "Alice-Illidan",
+                "bench_min": 12,
+                "played_min": 0,
+            },
+            {
+                "game_week": "2025-09-09",
+                "main": "Bob-Illidan",
+                "bench_min": 8,
+                "played_min": 0,
+            },
         ]
     )
     db["bench_night_totals"].insert_one({"night_id": "2025-09-17", "main": "Alice-Illidan"})
@@ -226,10 +314,26 @@ def test_materialize_rankings_skips_roster_after_leave_date():
 
     rc = materialize_rankings(db)
     ranks = list(
-        db["bench_rankings"].find({}, {"_id": 0, "rank": 1, "main": 1, "bench_min": 1})
+        db["bench_rankings"].find(
+            {},
+            {
+                "_id": 0,
+                "rank": 1,
+                "main": 1,
+                "bench_min": 1,
+                "played_min": 1,
+                "bench_to_played_ratio": 1,
+            },
+        )
     )
 
     assert rc == 1
     assert ranks == [
-        {"rank": 1, "main": "Alice-Illidan", "bench_min": 12}
+        {
+            "rank": 1,
+            "main": "Alice-Illidan",
+            "bench_min": 12,
+            "played_min": 0,
+            "bench_to_played_ratio": None,
+        }
     ]

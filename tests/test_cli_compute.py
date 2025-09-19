@@ -398,7 +398,17 @@ def test_compute_refreshes_weekly_rankings(monkeypatch):
     cli.compute.callback("config.yaml")
 
     ranks = list(
-        db["bench_rankings"].find({}, {"_id": 0, "rank": 1, "main": 1, "bench_min": 1})
+        db["bench_rankings"].find(
+            {},
+            {
+                "_id": 0,
+                "rank": 1,
+                "main": 1,
+                "bench_min": 1,
+                "played_min": 1,
+                "bench_to_played_ratio": 1,
+            },
+        )
     )
     assert {r["main"] for r in ranks} == {"Alice-Illidan", "Bob-Illidan"}
 
@@ -408,10 +418,26 @@ def test_compute_refreshes_weekly_rankings(monkeypatch):
     cli.compute.callback("config.yaml")
 
     ranks = list(
-        db["bench_rankings"].find({}, {"_id": 0, "rank": 1, "main": 1, "bench_min": 1})
+        db["bench_rankings"].find(
+            {},
+            {
+                "_id": 0,
+                "rank": 1,
+                "main": 1,
+                "bench_min": 1,
+                "played_min": 1,
+                "bench_to_played_ratio": 1,
+            },
+        )
     )
     assert ranks == [
-        {"rank": 1, "main": "Alice-Illidan", "bench_min": 10},
+        {
+            "rank": 1,
+            "main": "Alice-Illidan",
+            "bench_min": 10,
+            "played_min": 0,
+            "bench_to_played_ratio": None,
+        }
     ]
 
     week_rows = list(

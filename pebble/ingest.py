@@ -24,14 +24,14 @@ logger = logging.getLogger(__name__)
 
 
 WOW_CLASS_COLORS: Dict[str, str] = {
-    "DEATHKNIGHT": "#C41E3A",
+    "DEATHKNIGHT": "#C41F3B",
     "DEMONHUNTER": "#A330C9",
     "DRUID": "#FF7C0A",
     "EVOKER": "#33937F",
     "HUNTER": "#AAD372",
     "MAGE": "#3FC7EB",
     "MONK": "#00FF98",
-    "PALADIN": "#F48CBA",
+    "PALADIN": "#F58CBA",
     "PRIEST": "#FFFFFF",
     "ROGUE": "#FFF468",
     "SHAMAN": "#0070DD",

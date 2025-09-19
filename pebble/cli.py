@@ -545,9 +545,27 @@ def week(config):
     )
 
     # export rankings
-    rank_rows = [["Rank", "Main", "Bench Season-to-date (min)"]]
+    rank_rows = [
+        [
+            "Rank",
+            "Main",
+            "Bench Season-to-date (min)",
+            "Time Played (min)",
+            "Bench:Played Ratio",
+        ]
+    ]
     for rec in db["bench_rankings"].find({}, {"_id": 0}).sort([("rank", 1)]):
-        rank_rows.append([rec["rank"], rec["main"], rec["bench_min"]])
+        ratio = rec.get("bench_to_played_ratio")
+        ratio_display = "" if ratio is None else f"{ratio:.2f}"
+        rank_rows.append(
+            [
+                rec["rank"],
+                rec["main"],
+                rec.get("bench_min", 0),
+                rec.get("played_min", 0),
+                ratio_display,
+            ]
+        )
     replace_values(
         s.sheets.spreadsheet_id,
         s.sheets.tabs.bench_rankings,

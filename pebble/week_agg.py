@@ -132,18 +132,33 @@ def materialize_rankings(db) -> int:
 
     pipeline = [
         {"$match": {"main": {"$in": list(roster_mains)}}},
-        {"$group": {"_id": "$main", "bench_min": {"$sum": "$bench_min"}}},
+        {
+            "$group": {
+                "_id": "$main",
+                "bench_min": {"$sum": "$bench_min"},
+                "played_min": {"$sum": "$played_min"},
+            }
+        },
         {"$sort": {"bench_min": 1, "_id": 1}},
     ]
     rows: List[dict] = list(db["bench_week_totals"].aggregate(pipeline))
 
     docs = []
     for idx, r in enumerate(rows, start=1):
+        bench_min = int(r.get("bench_min", 0))
+        played_min = int(r.get("played_min", 0))
+        ratio: float | None
+        if played_min > 0:
+            ratio = bench_min / played_min
+        else:
+            ratio = None
         docs.append(
             {
                 "rank": idx,
                 "main": r["_id"],
-                "bench_min": r["bench_min"],
+                "bench_min": bench_min,
+                "played_min": played_min,
+                "bench_to_played_ratio": ratio,
                 "updated_at": datetime.utcnow(),
             }
         )
