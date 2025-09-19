@@ -133,7 +133,7 @@ def materialize_rankings(db) -> int:
     pipeline = [
         {"$match": {"main": {"$in": list(roster_mains)}}},
         {"$group": {"_id": "$main", "bench_min": {"$sum": "$bench_min"}}},
-        {"$sort": {"bench_min": -1, "_id": 1}},
+        {"$sort": {"bench_min": 1, "_id": 1}},
     ]
     rows: List[dict] = list(db["bench_week_totals"].aggregate(pipeline))
 
