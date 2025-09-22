@@ -21,6 +21,8 @@ def bench_minutes_for_night(
     overrides: Optional[Dict[str, Dict[str, Optional[bool]]]] = None,
     last_fight_mains: Iterable[str] | None = None,
     roster_map: Optional[Dict[str, str]] = None,
+    post_extension_ms: int = 0,
+    post_extension_mains: Iterable[str] | None = None,
 ) -> List[dict]:
     """Aggregate bench/played minutes for a night.
 
@@ -30,12 +32,16 @@ def bench_minutes_for_night(
     representing officer availability overrides per half. ``last_fight_mains``
     lists mains who appeared in the final non‑Mythic fight and are therefore
     treated as available for the entire night. ``roster_map`` maps alt names to
-    main names.
+    main names. ``post_extension_ms`` and ``post_extension_mains`` allow
+    callers to credit mains from the final Mythic fight with additional post
+    time when the Mythic window is extended.
     """
 
     roster_map = roster_map or {}
     overrides = overrides or {}
     last_fight_mains = set(last_fight_mains or [])
+    post_extension_ms = max(0, int(post_extension_ms))
+    post_extension_mains = set(post_extension_mains or [])
 
     from collections import defaultdict
 
@@ -55,11 +61,14 @@ def bench_minutes_for_night(
     for main in sorted(all_mains):
         halves = agg.get(main, {})
         pre_played_ms = halves.get("pre", 0)
-        post_played_ms = halves.get("post", 0)
+        post_played_ms_raw = halves.get("post", 0)
+        post_played_ms = post_played_ms_raw
+        if post_extension_ms and main in post_extension_mains:
+            post_played_ms = min(post_full, post_played_ms + post_extension_ms)
 
         # infer availability
-        pre_avail = pre_played_ms > 0 or post_played_ms > 0
-        post_avail = pre_played_ms > 0 or post_played_ms > 0
+        pre_avail = pre_played_ms > 0 or post_played_ms_raw > 0
+        post_avail = pre_played_ms > 0 or post_played_ms_raw > 0
 
         if main in last_fight_mains:
             pre_avail = True

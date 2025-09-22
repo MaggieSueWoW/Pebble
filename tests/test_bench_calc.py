@@ -37,6 +37,29 @@ def test_bench_minutes_uses_split_durations():
     assert b["status_source"] == "blocks"
 
 
+def test_bench_minutes_extends_last_mythic_participants():
+    blocks = [
+        {"main": "A-Illidan", "half": "post", "start_ms": 0, "end_ms": 10 * 60000},
+        {"main": "B-Illidan", "half": "post", "start_ms": 0, "end_ms": 10 * 60000},
+    ]
+    res = bench_minutes_for_night(
+        blocks,
+        pre_ms=0,
+        post_ms=15 * 60000,
+        post_extension_ms=5 * 60000,
+        post_extension_mains={"A-Illidan"},
+    )
+    res_by_main = {r["main"]: r for r in res}
+
+    a = res_by_main["A-Illidan"]
+    assert a["played_post_min"] == 15
+    assert a["bench_post_min"] == 0
+
+    b = res_by_main["B-Illidan"]
+    assert b["played_post_min"] == 10
+    assert b["bench_post_min"] == 5
+
+
 def test_last_fight_overrides_and_roster_map():
     blocks = [
         {"main": "Alt1-Illidan", "half": "pre", "start_ms": 0, "end_ms": 5 * 60000},

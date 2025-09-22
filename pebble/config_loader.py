@@ -72,6 +72,7 @@ class BreakWindowConfig(BaseModel):
 class TimeConfig(BaseModel):
     tz: str = Field(default="America/Los_Angeles")
     break_window: BreakWindowConfig = Field(default_factory=BreakWindowConfig)
+    mythic_post_extension_min: float = Field(default=5.0)
 
 
 class Settings(BaseModel):

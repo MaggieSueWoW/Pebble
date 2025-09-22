@@ -35,6 +35,7 @@ time:
     end_pt: "21:30"    # HH:MM in PT
     min_gap_minutes: 8
     max_gap_minutes: 30
+  mythic_post_extension_min: 5
 
 wcl:
   client_id: "${WCL_CLIENT_ID}"

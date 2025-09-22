@@ -205,6 +205,7 @@ def compute(config):
             "Mythic End (PT)",
             "Mythic Pre (min)",
             "Mythic Post (min)",
+            "Mythic Post Extension (min)",
             "Gap Window",
             "Min/Max Break",
             "Largest Gap (min)",
@@ -291,10 +292,17 @@ def compute(config):
             br_range = (override_start_ms, override_end_ms)
             override_used = True
 
-        split = split_pre_post(env, br_range)
+        post_extension_min_cfg = getattr(s.time, "mythic_post_extension_min", 0.0) or 0.0
+        post_extension_ms = int(round(max(0.0, post_extension_min_cfg) * 60000))
+        effective_extension_ms = post_extension_ms if br_range else 0
+
+        split = split_pre_post(
+            env, br_range, post_extension_ms=effective_extension_ms
+        )
         break_duration = (
             round((br_range[1] - br_range[0]) / 60000.0, 2) if br_range else ""
         )
+        post_extension_min = round(effective_extension_ms / 60000.0, 2)
         candidate_gaps_db = [
             {
                 "start": ms_to_pt_iso(c["start_ms"]),
@@ -312,6 +320,25 @@ def compute(config):
             for c in gap_meta.get("candidates", [])
         ]
         largest_gap = round(gap_meta.get("largest_gap_min", 0.0), 2)
+
+        last_mythic_mains: set[str] = set()
+        if fights_m:
+            last_mythic_fight = max(
+                fights_m,
+                key=lambda f: (
+                    f.get("fight_abs_end_ms")
+                    if f.get("fight_abs_end_ms") is not None
+                    else f.get("fight_abs_start_ms", 0)
+                ),
+            )
+            for p in last_mythic_fight.get("participants", []) or []:
+                name = p.get("name")
+                if not name:
+                    continue
+                main = resolver.resolve(name)
+                if not main:
+                    continue
+                last_mythic_mains.add(main)
 
         mythic_mains: set[str] = set()
         for f in fights_m:
@@ -348,6 +375,7 @@ def compute(config):
                 ms_to_pt_sheets(env[1]),
                 f"{split['pre_ms'] / 60000.0:.2f}",
                 f"{split['post_ms'] / 60000.0:.2f}",
+                f"{post_extension_min:.2f}",
                 f"{bw.start_pt}-{bw.end_pt}",
                 f"{bw.min_gap_minutes}-{bw.max_gap_minutes}",
                 f"{largest_gap:.2f}",
@@ -374,6 +402,7 @@ def compute(config):
             "break_duration_min": break_duration if break_duration != "" else None,
             "mythic_pre_min": round(split["pre_ms"] / 60000.0, 2),
             "mythic_post_min": round(split["post_ms"] / 60000.0, 2),
+            "mythic_post_extension_min": post_extension_min,
             "gap_window": (bw.start_pt, bw.end_pt),
             "min_max_break": (bw.min_gap_minutes, bw.max_gap_minutes),
             "largest_gap_min": largest_gap,
@@ -419,6 +448,8 @@ def compute(config):
             overrides=overrides_by_night.get(night, {}),
             last_fight_mains=last_nm_mains,
             roster_map=None,
+            post_extension_ms=effective_extension_ms,
+            post_extension_mains=last_mythic_mains,
         )
 
         # Persist bench_night_totals for this night
