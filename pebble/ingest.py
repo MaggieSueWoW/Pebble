@@ -386,7 +386,7 @@ def ingest_reports(s: Settings | None = None) -> dict:
             return row[idx] if idx is not None and idx < len(row) else ""
 
         status = val("Status").strip().lower()
-        if status not in ("", "in-progress", "in‑progress", "in progress"):
+        if status not in ("", "in-progress", "in progress"):
             continue
         url = val("Report URL").strip()
         code = _extract_code_from_url(url)

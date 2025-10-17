@@ -612,30 +612,6 @@ def week(config):
     )
 
 
-@cli.command()
-@click.option("--config", default="config.yaml", show_default=True)
-def export(config):
-    log = setup_logging()
-    load_settings(config)
-    log.info("TODO: export results", extra={"stage": "export"})
-
-
-@cli.command()
-@click.option("--config", default="config.yaml", show_default=True)
-def backfill(config):
-    log = setup_logging()
-    load_settings(config)
-    log.info("TODO: backfill", extra={"stage": "backfill"})
-
-
-@cli.command()
-@click.option("--config", default="config.yaml", show_default=True)
-def verify(config):
-    log = setup_logging()
-    load_settings(config)
-    log.info("TODO: verify", extra={"stage": "verify"})
-
-
 def main():
     cli()
 
