@@ -25,9 +25,6 @@ from .utils.time import (
 from .utils.names import NameResolver
 
 
-TRIGGER_POLL_INTERVAL_SECONDS = 5.0
-
-
 def _require_ingest_trigger_range(settings) -> str:
     try:
         trigger_range = settings.sheets.triggers.ingest_compute_week
@@ -103,7 +100,6 @@ def _wait_for_ingest_trigger(
     log,
     timeout: int,
     iteration: int,
-    poll_interval: float = TRIGGER_POLL_INTERVAL_SECONDS,
     client: SheetsClient | None = None,
     *,
     trigger_range: str | None = None,
@@ -111,7 +107,7 @@ def _wait_for_ingest_trigger(
     rng = trigger_range or _require_ingest_trigger_range(settings)
     client = client or SheetsClient(settings.service_account_json)
     log.info(
-        "waiting for ingest-compute-week trigger",
+        "checking ingest-compute-week trigger",
         extra={
             "stage": "loop",
             "iteration": iteration,
@@ -120,37 +116,22 @@ def _wait_for_ingest_trigger(
         },
     )
 
-    deadline = time.monotonic() + timeout if timeout else None
-    while True:
-        if _read_ingest_trigger_checkbox(
-            settings, client=client, trigger_range=rng
-        ):
-            log.info(
-                "ingest-compute-week trigger detected",
-                extra={"stage": "loop", "iteration": iteration},
-            )
-            return True, client
+    deadline = time.monotonic() + timeout
+    if _read_ingest_trigger_checkbox(settings, client=client, trigger_range=rng):
+        log.info(
+            "ingest-compute-week trigger detected",
+            extra={"stage": "loop", "iteration": iteration},
+        )
+        return True, client
 
-        now = time.monotonic()
-        if deadline is not None and now >= deadline:
-            log.info(
-                "ingest-compute-week trigger wait timed out",
-                extra={"stage": "loop", "iteration": iteration},
-            )
-            return False, None
-
-        if deadline is None:
-            sleep_for = poll_interval
-        else:
-            remaining = max(0.0, deadline - now)
-            if remaining == 0:
-                log.info(
-                    "ingest-compute-week trigger wait timed out",
-                    extra={"stage": "loop", "iteration": iteration},
-                )
-                return False, None
-            sleep_for = min(poll_interval, remaining)
-        time.sleep(sleep_for)
+    now = time.monotonic()
+    remaining = max(0.0, deadline - now)
+    log.info(
+        "ingest-compute-week trigger not detected, waiting",
+        extra={"stage": "loop", "iteration": iteration, "delay": remaining},
+    )
+    time.sleep(remaining)
+    return False, None
 
 
 @click.group()
