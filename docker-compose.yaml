@@ -5,7 +5,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    command: ["loop", "--config", "/app/config-TWW-S3.yaml", "--interval", "30"]
+    command: ["loop", "--config", "/app/config-TWW-S3.yaml", "--trigger-timeout", "5"]
     restart: unless-stopped
     env_file:
       - .env
