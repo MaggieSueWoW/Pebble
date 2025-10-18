@@ -1,7 +1,13 @@
 import mongomock
 from datetime import datetime
 import logging
-from pebble.config_loader import Settings, SheetsConfig, MongoConfig, WCLConfig
+from pebble.config_loader import (
+    Settings,
+    SheetsConfig,
+    SheetsTriggers,
+    MongoConfig,
+    WCLConfig,
+)
 from pebble.ingest import ingest_reports
 from pebble.utils.time import ms_to_pt_sheets, PT
 
@@ -98,7 +104,10 @@ def test_ingest_reports_updates_sheet(monkeypatch):
     monkeypatch.setattr("pebble.ingest.datetime", DummyDateTime)
 
     settings = Settings(
-        sheets=SheetsConfig(spreadsheet_id="1"),
+        sheets=SheetsConfig(
+            spreadsheet_id="1",
+            triggers=SheetsTriggers(ingest_compute_week="Reports!B2"),
+        ),
         mongo=MongoConfig(uri="mongodb://example"),
         wcl=WCLConfig(client_id="id", client_secret="secret"),
     )
@@ -178,7 +187,10 @@ def test_ingest_reports_rejects_non_wcl_links(monkeypatch, caplog):
     monkeypatch.setattr("pebble.ingest.update_last_processed", lambda *a, **k: None)
 
     settings = Settings(
-        sheets=SheetsConfig(spreadsheet_id="1"),
+        sheets=SheetsConfig(
+            spreadsheet_id="1",
+            triggers=SheetsTriggers(ingest_compute_week="Reports!B2"),
+        ),
         mongo=MongoConfig(uri="mongodb://example"),
         wcl=WCLConfig(client_id="id", client_secret="secret"),
     )
@@ -266,7 +278,10 @@ def test_ingest_reports_marks_bad_links_on_fetch_error(monkeypatch, caplog):
     monkeypatch.setattr("pebble.ingest.WCLClient", DummyWCLClient)
 
     settings = Settings(
-        sheets=SheetsConfig(spreadsheet_id="1"),
+        sheets=SheetsConfig(
+            spreadsheet_id="1",
+            triggers=SheetsTriggers(ingest_compute_week="Reports!B2"),
+        ),
         mongo=MongoConfig(uri="mongodb://example"),
         wcl=WCLConfig(client_id="id", client_secret="secret"),
     )

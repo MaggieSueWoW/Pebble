@@ -14,6 +14,7 @@ from .blocks import build_blocks
 from .bench_calc import bench_minutes_for_night, last_non_mythic_boss_mains
 from .participation import build_mythic_participation
 from .export_sheets import replace_values
+from .sheets_client import SheetsClient
 from .week_agg import materialize_rankings, materialize_week_totals
 from .utils.time import (
     ms_to_pt_iso,
@@ -22,6 +23,134 @@ from .utils.time import (
     sheets_date_str,
 )
 from .utils.names import NameResolver
+
+
+TRIGGER_POLL_INTERVAL_SECONDS = 5.0
+
+
+def _require_ingest_trigger_range(settings) -> str:
+    try:
+        trigger_range = settings.sheets.triggers.ingest_compute_week
+    except AttributeError as exc:
+        raise click.ClickException(
+            "sheets.triggers.ingest_compute_week must be configured"
+        ) from exc
+    if not trigger_range:
+        raise click.ClickException(
+            "sheets.triggers.ingest_compute_week must be configured"
+        )
+    return trigger_range
+
+
+def _read_ingest_trigger_checkbox(
+    settings,
+    client: SheetsClient | None = None,
+    *,
+    trigger_range: str | None = None,
+) -> bool:
+    rng = trigger_range or _require_ingest_trigger_range(settings)
+    client = client or SheetsClient(settings.service_account_json)
+    svc = client.svc
+    resp = client.execute(
+        svc.spreadsheets()
+        .values()
+        .get(spreadsheetId=settings.sheets.spreadsheet_id, range=rng)
+    )
+    values = resp.get("values", [])
+    if not values or not values[0]:
+        return False
+
+    raw = values[0][0]
+    if isinstance(raw, bool):
+        return raw
+    if raw is None:
+        return False
+    if isinstance(raw, (int, float)):
+        return bool(raw)
+    if isinstance(raw, str):
+        return raw.strip().lower() in {"true", "1", "y", "yes", "t"}
+    return False
+
+
+def _set_ingest_trigger_checkbox(
+    settings,
+    value: bool,
+    client: SheetsClient | None = None,
+    *,
+    trigger_range: str | None = None,
+) -> None:
+    rng = trigger_range or _require_ingest_trigger_range(settings)
+    client = client or SheetsClient(settings.service_account_json)
+    svc = client.svc
+    body = {
+        "values": [["TRUE" if value else "FALSE"]],
+        "majorDimension": "ROWS",
+    }
+    client.execute(
+        svc.spreadsheets()
+        .values()
+        .update(
+            spreadsheetId=settings.sheets.spreadsheet_id,
+            range=rng,
+            valueInputOption="USER_ENTERED",
+            body=body,
+        )
+    )
+
+
+def _wait_for_ingest_trigger(
+    settings,
+    log,
+    timeout: int,
+    iteration: int,
+    poll_interval: float = TRIGGER_POLL_INTERVAL_SECONDS,
+    client: SheetsClient | None = None,
+    *,
+    trigger_range: str | None = None,
+) -> tuple[bool, SheetsClient | None]:
+    rng = trigger_range or _require_ingest_trigger_range(settings)
+    client = client or SheetsClient(settings.service_account_json)
+    log.info(
+        "waiting for ingest-compute-week trigger",
+        extra={
+            "stage": "loop",
+            "iteration": iteration,
+            "timeout_seconds": timeout,
+            "range": rng,
+        },
+    )
+
+    deadline = time.monotonic() + timeout if timeout else None
+    while True:
+        if _read_ingest_trigger_checkbox(
+            settings, client=client, trigger_range=rng
+        ):
+            log.info(
+                "ingest-compute-week trigger detected",
+                extra={"stage": "loop", "iteration": iteration},
+            )
+            return True, client
+
+        now = time.monotonic()
+        if deadline is not None and now >= deadline:
+            log.info(
+                "ingest-compute-week trigger wait timed out",
+                extra={"stage": "loop", "iteration": iteration},
+            )
+            return False, None
+
+        if deadline is None:
+            sleep_for = poll_interval
+        else:
+            remaining = max(0.0, deadline - now)
+            if remaining == 0:
+                log.info(
+                    "ingest-compute-week trigger wait timed out",
+                    extra={"stage": "loop", "iteration": iteration},
+                )
+                return False, None
+            sleep_for = min(poll_interval, remaining)
+        time.sleep(sleep_for)
 
 
 @click.group()
@@ -625,20 +754,23 @@ def compute(config):
 @cli.command()
 @click.option("--config", default="config.yaml", show_default=True)
 @click.option(
-    "--interval",
-    default=300,
-    show_default=True,
-    type=click.IntRange(0, None),
-    help="Seconds to wait between iterations.",
-)
-@click.option(
     "--max-errors",
     default=5,
     show_default=True,
     type=click.IntRange(0, None),
     help="Maximum consecutive errors before the loop exits. Use 0 to never exit.",
 )
-def loop(config, interval, max_errors):
+@click.option(
+    "--trigger-timeout",
+    default=0,
+    show_default=True,
+    type=click.IntRange(0, None),
+    help=(
+        "Seconds to wait for the ingest-compute-week trigger checkbox before running "
+        "the pipeline. Use 0 to wait indefinitely."
+    ),
+)
+def loop(config, max_errors, trigger_timeout):
     """Continuously ingest and compute outputs for the configured spreadsheet."""
 
     log = setup_logging()
@@ -648,18 +780,42 @@ def loop(config, interval, max_errors):
     try:
         while True:
             iteration += 1
-            start = time.monotonic()
             log.info(
                 "loop iteration started",
                 extra={"stage": "loop", "iteration": iteration},
             )
 
+            settings = None
+            should_run = False
+            trigger_range: str | None = None
+            trigger_client: SheetsClient | None = None
             try:
                 settings = load_settings(config)
-                run_ingest(settings, log)
-                run_compute(settings, log)
-                run_week(settings, log)
-                consecutive_errors = 0
+                trigger_range = _require_ingest_trigger_range(settings)
+                should_run, trigger_client = _wait_for_ingest_trigger(
+                    settings,
+                    log,
+                    trigger_timeout,
+                    iteration,
+                    trigger_range=trigger_range,
+                )
+                if not should_run:
+                    consecutive_errors = 0
+                    log.info(
+                        "loop iteration skipped",
+                        extra={
+                            "stage": "loop",
+                            "iteration": iteration,
+                            "reason": "trigger_timeout",
+                        },
+                    )
+                else:
+                    run_ingest(settings, log)
+                    run_compute(settings, log)
+                    run_week(settings, log)
+                    consecutive_errors = 0
+            except click.ClickException:
+                raise
             except Exception:
                 consecutive_errors += 1
                 log.error(
@@ -681,15 +837,22 @@ def loop(config, interval, max_errors):
                         },
                     )
                     break
+            finally:
+                if should_run and settings is not None:
+                    try:
+                        _set_ingest_trigger_checkbox(
+                            settings,
+                            False,
+                            client=trigger_client,
+                            trigger_range=trigger_range,
+                        )
+                    except Exception:
+                        log.warning(
+                            "failed to reset ingest-compute-week trigger",
+                            extra={"stage": "loop", "iteration": iteration},
+                            exc_info=True,
+                        )
 
-            elapsed = time.monotonic() - start
-            sleep_for = max(0.0, interval - elapsed)
-            if sleep_for > 0:
-                log.info(
-                    "loop sleeping",
-                    extra={"stage": "loop", "sleep_seconds": round(sleep_for, 2)},
-                )
-                time.sleep(sleep_for)
     except KeyboardInterrupt:
         log.info(
             "loop interrupted by user",

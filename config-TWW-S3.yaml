@@ -27,6 +27,8 @@ sheets:
     bench_night_totals: "C3"
     bench_week_totals: "C3"
     bench_rankings: "C3"
+  triggers:
+    ingest_compute_week: "Reports!B2"
 
 time:
   tz: "America/Los_Angeles"

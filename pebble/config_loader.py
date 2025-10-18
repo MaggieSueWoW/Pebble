@@ -41,11 +41,16 @@ class SheetsLastProcessed(BaseModel):
     bench_rankings: str = Field(default="B3")
 
 
+class SheetsTriggers(BaseModel):
+    ingest_compute_week: str
+
+
 class SheetsConfig(BaseModel):
     spreadsheet_id: str
     tabs: SheetsTabs = Field(default_factory=SheetsTabs)
     starts: SheetsStarts = Field(default_factory=SheetsStarts)
     last_processed: SheetsLastProcessed = Field(default_factory=SheetsLastProcessed)
+    triggers: SheetsTriggers
 
 
 class MongoConfig(BaseModel):
