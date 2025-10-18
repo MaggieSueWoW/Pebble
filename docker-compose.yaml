@@ -1,0 +1,11 @@
+services:
+  pebble-loop:
+    container_name: pebble-loop
+    image: pebble-loop:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ["loop", "--config", "/app/config-TWW-S3.yaml", "--interval", "30"]
+    restart: unless-stopped
+    env_file:
+      - .env

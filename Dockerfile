@@ -11,13 +11,13 @@ RUN apt-get update \
         build-essential \
     && rm -rf /var/lib/apt/lists/*
 
-COPY pyproject.toml README.md /app/
+COPY pyproject.toml /app/
 COPY pebble /app/pebble
-COPY config.yaml.example /app/
-COPY raid_time_fairness.md /app/
 
 RUN pip install --upgrade pip \
     && pip install --no-cache-dir .
 
+COPY config-TWW-S3.yaml /app/
+COPY service-account.json /app/
+
 ENTRYPOINT ["pebble"]
-CMD ["loop"]

@@ -3,6 +3,9 @@ from pydantic import BaseModel, Field
 from dotenv import load_dotenv
 from pathlib import Path
 import os, yaml
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class SheetsTabs(BaseModel):
@@ -87,6 +90,7 @@ class Settings(BaseModel):
 def _load_yaml(path: str | os.PathLike) -> dict:
     p = Path(path)
     if not p.exists():
+        logger.error(f"Config file {p} does not exist")
         return {}
     with p.open("r", encoding="utf-8") as f:
         return yaml.safe_load(f) or {}
