@@ -45,15 +45,11 @@ class NameResolver:
             self._main_to_display[main] = display
             display_counter[display] += 1
 
-        self._ambiguous_displays: Set[str] = {
-            display for display, count in display_counter.items() if count > 1
-        }
+        self._ambiguous_displays: Set[str] = {display for display, count in display_counter.items() if count > 1}
 
         # Displays that uniquely identify a main.
         self._display_to_main: Dict[str, str] = {
-            display: main
-            for main, display in self._main_to_display.items()
-            if display not in self._ambiguous_displays
+            display: main for main, display in self._main_to_display.items() if display not in self._ambiguous_displays
         }
 
         # Map raw names (mains, alts, or already-shortened) to display names.
@@ -75,11 +71,7 @@ class NameResolver:
                 self._alt_to_canonical[alt] = canonical
                 self._aliases.setdefault(alt, display)
                 base = _shorten(alt)
-                if (
-                    base
-                    and base not in self._ambiguous_displays
-                    and base not in self._aliases
-                ):
+                if base and base not in self._ambiguous_displays and base not in self._aliases:
                     self._aliases[base] = display
             else:
                 self._alt_to_canonical[alt] = None

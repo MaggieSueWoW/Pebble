@@ -12,7 +12,8 @@ class MongoCommandLogger(monitoring.CommandListener):
 
     def started(self, event: monitoring.CommandStartedEvent) -> None:
         level = logging.INFO if event.command_name in {"insert", "update", "delete"} else logging.DEBUG
-        self.logger.log(level,
+        self.logger.log(
+            level,
             "Mongo command started",
             extra={
                 "request_id": event.request_id,
@@ -106,18 +107,12 @@ def ensure_indexes(db) -> None:
     db["blocks"].create_index([("night_id", ASCENDING)])
 
     # optional actor cache per report (kept small; useful for audits)
-    db["actors"].create_index(
-        [("report_code", ASCENDING), ("actor_id", ASCENDING)], unique=True
-    )
+    db["actors"].create_index([("report_code", ASCENDING), ("actor_id", ASCENDING)], unique=True)
 
     # results
     db["night_qa"].create_index([("night_id", ASCENDING)], unique=True)
-    db["bench_night_totals"].create_index(
-        [("night_id", ASCENDING), ("main", ASCENDING)], unique=True
-    )
-    db["bench_week_totals"].create_index(
-        [("game_week", ASCENDING), ("main", ASCENDING)], unique=True
-    )
+    db["bench_night_totals"].create_index([("night_id", ASCENDING), ("main", ASCENDING)], unique=True)
+    db["bench_week_totals"].create_index([("game_week", ASCENDING), ("main", ASCENDING)], unique=True)
     db["bench_rankings"].create_index([("main", ASCENDING)], unique=True)
     db["team_roster"].create_index([("main", ASCENDING)], unique=True)
     db["service_log"].create_index([("ts", ASCENDING)])

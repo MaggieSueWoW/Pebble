@@ -19,9 +19,7 @@ def _upsert(
     fight_id,
     participants=None,
 ):
-    key = canonical_fight_key(
-        {"encounterID": encounter_id, "difficulty": difficulty}, start_ms, end_ms
-    )
+    key = canonical_fight_key({"encounterID": encounter_id, "difficulty": difficulty}, start_ms, end_ms)
     doc = {
         **key,
         "report_code": report_code,
@@ -54,9 +52,7 @@ def test_overlapping_reports_deduped():
     assert len(fights) == 1
     assert (
         fights[0]["start_rounded_ms"]
-        == canonical_fight_key(
-            {"encounterID": encounter_id, "difficulty": diff}, start1, end1
-        )["start_rounded_ms"]
+        == canonical_fight_key({"encounterID": encounter_id, "difficulty": diff}, start1, end1)["start_rounded_ms"]
     )
     # first report's metadata retained
     assert fights[0]["report_code"] == "R1"
@@ -97,7 +93,5 @@ def test_participants_upsert_no_conflict():
     _upsert(db, encounter_id, diff, start, end, "R1", 1, participants=p1)
     _upsert(db, encounter_id, diff, start, end, "R1", 1, participants=p2)
 
-    doc = db["fights_all"].find_one(
-        canonical_fight_key({"encounterID": encounter_id, "difficulty": diff}, start, end)
-    )
+    doc = db["fights_all"].find_one(canonical_fight_key({"encounterID": encounter_id, "difficulty": diff}, start, end))
     assert {p["actor_id"] for p in doc["participants"]} == {1, 2}

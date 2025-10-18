@@ -22,13 +22,11 @@ def replace_values(
     svc = client.svc
     rng = f"{tab}!{start_cell}"
     body = {"values": values, "majorDimension": "ROWS"}
+    client.execute(svc.spreadsheets().values().clear(spreadsheetId=spreadsheet_id, range=f"{tab}!{start_cell}:Z"))
     client.execute(
-        svc.spreadsheets().values().clear(
-            spreadsheetId=spreadsheet_id, range=f"{tab}!{start_cell}:Z"
-        )
-    )
-    client.execute(
-        svc.spreadsheets().values().update(
+        svc.spreadsheets()
+        .values()
+        .update(
             spreadsheetId=spreadsheet_id,
             range=rng,
             valueInputOption="USER_ENTERED",
@@ -42,4 +40,3 @@ def replace_values(
         last_processed_cell,
         client,
     )
-

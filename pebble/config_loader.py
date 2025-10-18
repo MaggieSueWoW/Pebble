@@ -109,28 +109,24 @@ def load_settings(config_path: str = "config.yaml") -> Settings:
     # Allow env overrides for secrets
     env_overrides = {
         "sheets": {
-            "spreadsheet_id": os.getenv(
-                "SHEETS_SPREADSHEET_ID", data.get("sheets", {}).get("spreadsheet_id")
-            ),
+            "spreadsheet_id": os.getenv("SHEETS_SPREADSHEET_ID", data.get("sheets", {}).get("spreadsheet_id")),
         },
         "mongo": {
             "uri": os.getenv("MONGODB_URI", data.get("mongo", {}).get("uri")),
             "db": data.get("mongo", {}).get("db", "pebble"),
         },
         "wcl": {
-            "client_id": os.getenv(
-                "WCL_CLIENT_ID", data.get("wcl", {}).get("client_id")
-            ),
-            "client_secret": os.getenv(
-                "WCL_CLIENT_SECRET", data.get("wcl", {}).get("client_secret")
-            ),
+            "client_id": os.getenv("WCL_CLIENT_ID", data.get("wcl", {}).get("client_id")),
+            "client_secret": os.getenv("WCL_CLIENT_SECRET", data.get("wcl", {}).get("client_secret")),
         },
         "redis": {
             "url": os.getenv(
-                "REDIS_URL", data.get("redis", {}).get("url", "redis://localhost:6379/0")
+                "REDIS_URL",
+                data.get("redis", {}).get("url", "redis://localhost:6379/0"),
             ),
             "key_prefix": os.getenv(
-                "REDIS_KEY_PREFIX", data.get("redis", {}).get("key_prefix", "pebble:wcl:")
+                "REDIS_KEY_PREFIX",
+                data.get("redis", {}).get("key_prefix", "pebble:wcl:"),
             ),
         },
         "service_account_json": os.getenv(

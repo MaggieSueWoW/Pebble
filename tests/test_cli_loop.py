@@ -189,6 +189,8 @@ def test_wait_for_ingest_trigger_eventually_true(monkeypatch):
     assert should_run is True
     assert client is fake_client
     assert clock.monotonic() >= 102.0
+
+
 def test_require_ingest_trigger_range_missing():
     sheets = SimpleNamespace(spreadsheet_id="sheet-id", triggers=SimpleNamespace(ingest_compute_week=""))
     settings = SimpleNamespace(service_account_json="creds.json", sheets=sheets)

@@ -28,9 +28,7 @@ _FRESH_MS = 24 * 60 * 60 * 1000
 
 def _is_retryable(exc: Exception) -> bool:
     if isinstance(exc, requests.HTTPError):
-        return (
-            exc.response is not None and exc.response.status_code in _RETRY_STATUS_CODES
-        )
+        return exc.response is not None and exc.response.status_code in _RETRY_STATUS_CODES
     return isinstance(exc, (requests.ConnectionError, requests.Timeout))
 
 
@@ -158,9 +156,7 @@ class WCLClient:
           }
         }
         """
-        report = self._post(q, {"code": code, "translate": translate})["data"][
-            "reportData"
-        ]["report"]
+        report = self._post(q, {"code": code, "translate": translate})["data"]["reportData"]["report"]
         if self._redis:
             start_ms = int(report.get("startTime") or 0)
             now_ms = int(time.time() * 1000)

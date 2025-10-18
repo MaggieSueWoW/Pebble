@@ -133,9 +133,7 @@ def last_non_mythic_boss_mains(
     non_mythic_pre = [
         f
         for f in fights_all
-        if not f.get("is_mythic")
-        and f.get("encounter_id", 0) > 0
-        and f.get("fight_abs_start_ms", 0) < mythic_start_ms
+        if not f.get("is_mythic") and f.get("encounter_id", 0) > 0 and f.get("fight_abs_start_ms", 0) < mythic_start_ms
     ]
     if not non_mythic_pre:
         return set()

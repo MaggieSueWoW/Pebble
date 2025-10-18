@@ -29,13 +29,9 @@ def _require_ingest_trigger_range(settings) -> str:
     try:
         trigger_range = settings.sheets.triggers.ingest_compute_week
     except AttributeError as exc:
-        raise click.ClickException(
-            "sheets.triggers.ingest_compute_week must be configured"
-        ) from exc
+        raise click.ClickException("sheets.triggers.ingest_compute_week must be configured") from exc
     if not trigger_range:
-        raise click.ClickException(
-            "sheets.triggers.ingest_compute_week must be configured"
-        )
+        raise click.ClickException("sheets.triggers.ingest_compute_week must be configured")
     return trigger_range
 
 
@@ -48,11 +44,7 @@ def _read_ingest_trigger_checkbox(
     rng = trigger_range or _require_ingest_trigger_range(settings)
     client = client or SheetsClient(settings.service_account_json)
     svc = client.svc
-    resp = client.execute(
-        svc.spreadsheets()
-        .values()
-        .get(spreadsheetId=settings.sheets.spreadsheet_id, range=rng)
-    )
+    resp = client.execute(svc.spreadsheets().values().get(spreadsheetId=settings.sheets.spreadsheet_id, range=rng))
     values = resp.get("values", [])
     if not values or not values[0]:
         return False
@@ -154,9 +146,7 @@ def sheets(config):
         from .bootstrap.sheets_bootstrap import bootstrap_sheets
 
         res = bootstrap_sheets(s)
-        log.info(
-            "sheets bootstrap complete", extra={"stage": "bootstrap.sheets", **res}
-        )
+        log.info("sheets bootstrap complete", extra={"stage": "bootstrap.sheets", **res})
     except Exception:
         log.warning(
             "bootstrap sheets failed",
@@ -241,8 +231,6 @@ def parse_availability_overrides(
     return overrides_by_night, {night: set(names) for night, names in unmatched.items()}
 
 
-
-
 def run_compute(settings, log):
     """Compute Night QA and bench tables from staged Mongo collections.
 
@@ -274,14 +262,8 @@ def run_compute(settings, log):
         except ValueError:
             pass
 
-    roster_docs = list(
-        db["team_roster"].find({}, {"_id": 0, "main": 1, "active": 1})
-    )
-    active_mains = [
-        r.get("main")
-        for r in roster_docs
-        if r.get("main") and r.get("active", True) is not False
-    ]
+    roster_docs = list(db["team_roster"].find({}, {"_id": 0, "main": 1, "active": 1}))
+    active_mains = [r.get("main") for r in roster_docs if r.get("main") and r.get("active", True) is not False]
     resolver = NameResolver(active_mains, roster_map)
 
     # Load availability overrides from Sheets
@@ -291,14 +273,10 @@ def run_compute(settings, log):
         s.sheets.starts.availability_overrides,
         s.sheets.last_processed.availability_overrides,
     )
-    overrides_by_night, overrides_unmatched = parse_availability_overrides(
-        rows, resolver
-    )
+    overrides_by_night, overrides_unmatched = parse_availability_overrides(rows, resolver)
 
     # Night loop: derive QA + bench
-    nights = sorted(
-        set([r["night_id"] for r in db["reports"].find({}, {"night_id": 1, "_id": 0})])
-    )
+    nights = sorted(set([r["night_id"] for r in db["reports"].find({}, {"night_id": 1, "_id": 0})]))
 
     night_qa_rows = [
         [
@@ -411,12 +389,8 @@ def run_compute(settings, log):
         post_extension_ms = int(round(max(0.0, post_extension_min_cfg) * 60000))
         effective_extension_ms = post_extension_ms if br_range else 0
 
-        split = split_pre_post(
-            env, br_range, post_extension_ms=effective_extension_ms
-        )
-        break_duration = (
-            round((br_range[1] - br_range[0]) / 60000.0, 2) if br_range else ""
-        )
+        split = split_pre_post(env, br_range, post_extension_ms=effective_extension_ms)
+        break_duration = round((br_range[1] - br_range[0]) / 60000.0, 2) if br_range else ""
         post_extension_min = round(effective_extension_ms / 60000.0, 2)
         candidate_gaps_db = [
             {
@@ -552,9 +526,7 @@ def run_compute(settings, log):
         blocks = list(db["blocks"].find({"night_id": night}, {"_id": 0}))
 
         # Determine participants from the last non-Mythic boss fight before Mythic start
-        last_nm_mains = last_non_mythic_boss_mains(
-            fights_all, env[0], resolver=resolver
-        )
+        last_nm_mains = last_non_mythic_boss_mains(fights_all, env[0], resolver=resolver)
 
         bench = bench_minutes_for_night(
             blocks,
@@ -655,11 +627,7 @@ def run_week(settings, log):
             "Bench Post (min)",
         ]
     ]
-    for rec in (
-        db["bench_week_totals"]
-        .find({}, {"_id": 0})
-        .sort([("game_week", 1), ("main", 1)])
-    ):
+    for rec in db["bench_week_totals"].find({}, {"_id": 0}).sort([("game_week", 1), ("main", 1)]):
         rows.append(
             [
                 rec["game_week"],

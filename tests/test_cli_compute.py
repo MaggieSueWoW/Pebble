@@ -241,6 +241,7 @@ def test_compute_extends_last_mythic_players(monkeypatch):
     assert doc_for("Charlie")["played_post_min"] == 15
     assert doc_for("Bob")["played_post_min"] == 0
 
+
 def test_compute_removes_stale_bench_entries(monkeypatch):
     db = mongomock.MongoClient().db
 
@@ -577,11 +578,7 @@ def test_compute_refreshes_weekly_rankings(monkeypatch):
         }
     ]
 
-    week_rows = list(
-        db["bench_week_totals"].find(
-            {}, {"_id": 0, "game_week": 1, "main": 1, "bench_min": 1}
-        )
-    )
+    week_rows = list(db["bench_week_totals"].find({}, {"_id": 0, "game_week": 1, "main": 1, "bench_min": 1}))
     assert week_rows == [
         {
             "game_week": "2024-07-09",

@@ -97,7 +97,8 @@ def test_materialize_week_totals_fills_roster():
     # rankings
     rc = materialize_rankings(db)
     ranks = list(
-        db["bench_rankings"].find(
+        db["bench_rankings"]
+        .find(
             {},
             {
                 "_id": 0,
@@ -107,7 +108,8 @@ def test_materialize_week_totals_fills_roster():
                 "played_min": 1,
                 "bench_to_played_ratio": 1,
             },
-        ).sort([("rank", 1)])
+        )
+        .sort([("rank", 1)])
     )
     assert rc == 3
     assert ranks == [
@@ -248,9 +250,7 @@ def test_materialize_rankings_skips_non_roster_players():
             },
         ]
     )
-    db["team_roster"].insert_one(
-        {"main": "Alice-Illidan", "join_night": "2024-06-25", "active": True}
-    )
+    db["team_roster"].insert_one({"main": "Alice-Illidan", "join_night": "2024-06-25", "active": True})
     rc = materialize_rankings(db)
     ranks = list(
         db["bench_rankings"].find(

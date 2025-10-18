@@ -74,28 +74,18 @@ def _extract_code_from_url(url: str | None) -> Optional[str]:
         return None
 
 
-def _sheet_values(
-    s: Settings, tab: str, start: str = "A5", last_processed: str = "B3"
-) -> List[List[Any]]:
+def _sheet_values(s: Settings, tab: str, start: str = "A5", last_processed: str = "B3") -> List[List[Any]]:
     client = SheetsClient(s.service_account_json)
     svc = client.svc
     rng = f"{tab}!{start}:Z"
-    values = (
-        client.execute(
-            svc.spreadsheets()
-            .values()
-            .get(spreadsheetId=s.sheets.spreadsheet_id, range=rng)
-        ).get("values", [])
+    values = client.execute(svc.spreadsheets().values().get(spreadsheetId=s.sheets.spreadsheet_id, range=rng)).get(
+        "values", []
     )
-    update_last_processed(
-        s.sheets.spreadsheet_id, tab, s.service_account_json, last_processed, client
-    )
+    update_last_processed(s.sheets.spreadsheet_id, tab, s.service_account_json, last_processed, client)
     return values
 
 
-def _normalize_fight_times(
-    report_start_ms: int, fight_start: int, fight_end: int
-) -> tuple[int, int, int, int]:
+def _normalize_fight_times(report_start_ms: int, fight_start: int, fight_end: int) -> tuple[int, int, int, int]:
     """Return (rel_start, rel_end, abs_start, abs_end) in ms.
     WCL GraphQL fights are *usually* relative to report start; use a robust heuristic.
     """
@@ -177,9 +167,7 @@ def ingest_roster(s: Settings | None = None) -> int:
         active = aval not in ("n", "no", "false", "0", "f")
         actor_class = resolved_actor_classes.get(main)
         expected_color = _expected_class_color(actor_class)
-        raw_color = (
-            r[class_color_idx] if class_color_idx is not None and class_color_idx < len(r) else ""
-        )
+        raw_color = r[class_color_idx] if class_color_idx is not None and class_color_idx < len(r) else ""
         sheet_color = _normalize_hex_color(raw_color)
         final_color = expected_color or ""
         if class_color_idx is not None and expected_color and sheet_color != final_color:
@@ -209,9 +197,7 @@ def ingest_roster(s: Settings | None = None) -> int:
     return inserted
 
 
-def canonical_fight_key(
-    fight: dict, abs_start_ms: int, abs_end_ms: int
-) -> dict:
+def canonical_fight_key(fight: dict, abs_start_ms: int, abs_end_ms: int) -> dict:
     """Return canonical key for a fight.
 
     The key is independent of the report code so that the same pull logged in
@@ -325,11 +311,7 @@ def _ensure_class_colors(
     client = SheetsClient(s.service_account_json)
     svc = client.svc
     body = {"valueInputOption": "RAW", "data": data}
-    client.execute(
-        svc.spreadsheets()
-        .values()
-        .batchUpdate(spreadsheetId=s.sheets.spreadsheet_id, body=body)
-    )
+    client.execute(svc.spreadsheets().values().batchUpdate(spreadsheetId=s.sheets.spreadsheet_id, body=body))
 
 
 def ingest_reports(s: Settings | None = None) -> dict:
@@ -341,12 +323,8 @@ def ingest_reports(s: Settings | None = None) -> dict:
     svc = client.svc
     start = s.sheets.starts.reports
     rng = f"{s.sheets.tabs.reports}!{start}:Z"
-    rows = (
-        client.execute(
-            svc.spreadsheets()
-            .values()
-            .get(spreadsheetId=s.sheets.spreadsheet_id, range=rng)
-        ).get("values", [])
+    rows = client.execute(svc.spreadsheets().values().get(spreadsheetId=s.sheets.spreadsheet_id, range=rng)).get(
+        "values", []
     )
     update_last_processed(
         s.sheets.spreadsheet_id,
@@ -411,7 +389,9 @@ def ingest_reports(s: Settings | None = None) -> dict:
     if not targets:
         if updates:
             client.execute(
-                svc.spreadsheets().values().batchUpdate(
+                svc.spreadsheets()
+                .values()
+                .batchUpdate(
                     spreadsheetId=s.sheets.spreadsheet_id,
                     body={"valueInputOption": "RAW", "data": updates},
                 )
@@ -434,9 +414,7 @@ def ingest_reports(s: Settings | None = None) -> dict:
         try:
             bundle = wcl.fetch_report_bundle(code)
         except Exception:
-            logger.warning(
-                "Failed to fetch WCL report bundle", extra={"code": code}, exc_info=True
-            )
+            logger.warning("Failed to fetch WCL report bundle", extra={"code": code}, exc_info=True)
             if status_idx is not None:
                 col_letter = _col_letter(status_idx)
                 rng = f"{s.sheets.tabs.reports}!{col_letter}{rep['row']}"
@@ -468,9 +446,7 @@ def ingest_reports(s: Settings | None = None) -> dict:
             "notes": rep.get("notes", ""),
             "break_override_start_ms": bos_ms,
             "break_override_end_ms": boe_ms,
-            "break_override_start_pt": (
-                ms_to_pt_iso(bos_ms) if bos_ms is not None else ""
-            ),
+            "break_override_start_pt": (ms_to_pt_iso(bos_ms) if bos_ms is not None else ""),
             "break_override_end_pt": ms_to_pt_iso(boe_ms) if boe_ms is not None else "",
             "ingested_at": now_dt,
             "last_checked_pt": now_iso,
@@ -495,11 +471,7 @@ def ingest_reports(s: Settings | None = None) -> dict:
         actor_map = {
             int(a.get("id")): {
                 "actor_id": int(a.get("id")),
-                "name": (
-                    f"{a.get('name')}-{a.get('server')}"
-                    if a.get("server")
-                    else a.get("name")
-                ),
+                "name": (f"{a.get('name')}-{a.get('server')}" if a.get("server") else a.get("name")),
                 "type": a.get("type"),
                 "subType": a.get("subType"),
                 "server": a.get("server"),
@@ -518,9 +490,7 @@ def ingest_reports(s: Settings | None = None) -> dict:
         fights = bundle.get("fights", []) or []
         fops = []
         for f in fights:
-            rel_s, rel_e, abs_s, abs_e = _normalize_fight_times(
-                report_start_ms, f.get("startTime"), f.get("endTime")
-            )
+            rel_s, rel_e, abs_s, abs_e = _normalize_fight_times(report_start_ms, f.get("startTime"), f.get("endTime"))
             participants = []
             for pid in f.get("friendlyPlayers") or []:
                 a = actor_map.get(int(pid))
@@ -575,7 +545,9 @@ def ingest_reports(s: Settings | None = None) -> dict:
 
     if updates:
         client.execute(
-            svc.spreadsheets().values().batchUpdate(
+            svc.spreadsheets()
+            .values()
+            .batchUpdate(
                 spreadsheetId=s.sheets.spreadsheet_id,
                 body={"valueInputOption": "RAW", "data": updates},
             )

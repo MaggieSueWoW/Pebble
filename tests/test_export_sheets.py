@@ -31,6 +31,7 @@ def test_replace_values_user_entered(monkeypatch):
     class FakeClient:
         def __init__(self, path):
             self.svc = FakeSvc()
+
         def execute(self, req):
             req.execute()
 

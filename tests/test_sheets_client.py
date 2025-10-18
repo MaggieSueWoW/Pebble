@@ -27,4 +27,3 @@ def test_execute_retries(monkeypatch):
     data = client.execute(req)
     assert data == {"ok": True}
     assert attempts["count"] == 3
-

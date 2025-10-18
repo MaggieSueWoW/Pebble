@@ -115,7 +115,9 @@ def _ensure_headers(
 ):
     rng = f"'{name}'!{start}"
     client.execute(
-        client.svc.spreadsheets().values().update(
+        client.svc.spreadsheets()
+        .values()
+        .update(
             spreadsheetId=sheet_id,
             range=rng,
             valueInputOption="RAW",

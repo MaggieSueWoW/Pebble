@@ -41,9 +41,7 @@ def materialize_week_totals(db) -> int:
         wk = week_id_from_night_id(r["night_id"])
         weeks.add(wk)
         key = (wk, r["main"])
-        agg[key]["played"] += int(r.get("played_pre_min", 0)) + int(
-            r.get("played_post_min", 0)
-        )
+        agg[key]["played"] += int(r.get("played_pre_min", 0)) + int(r.get("played_post_min", 0))
         agg[key]["bench_pre"] += int(r.get("bench_pre_min", 0))
         agg[key]["bench_post"] += int(r.get("bench_post_min", 0))
         agg[key]["bench"] = agg[key]["bench_pre"] + agg[key]["bench_post"]
@@ -97,9 +95,7 @@ def materialize_week_totals(db) -> int:
 def _latest_night_id(db) -> str | None:
     """Return the most recent night_id observed in bench_night_totals."""
 
-    latest = db["bench_night_totals"].find_one(
-        {}, sort=[("night_id", -1)], projection={"night_id": 1}
-    )
+    latest = db["bench_night_totals"].find_one({}, sort=[("night_id", -1)], projection={"night_id": 1})
     if not latest:
         return None
     return latest.get("night_id")
@@ -111,9 +107,7 @@ def materialize_rankings(db) -> int:
     latest_night = _latest_night_id(db)
 
     roster_mains = set()
-    for row in db["team_roster"].find(
-        {}, {"_id": 0, "main": 1, "active": 1, "leave_night": 1}
-    ):
+    for row in db["team_roster"].find({}, {"_id": 0, "main": 1, "active": 1, "leave_night": 1}):
         main = row.get("main")
         if not main:
             continue

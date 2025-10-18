@@ -43,7 +43,8 @@ def _setup_monkeypatch(monkeypatch, rows, db, updates):
             return req.execute()
 
     monkeypatch.setattr(
-        "pebble.ingest._sheet_values", lambda s, tab, start="A5", last_processed="B3": rows
+        "pebble.ingest._sheet_values",
+        lambda s, tab, start="A5", last_processed="B3": rows,
     )
     monkeypatch.setattr("pebble.ingest.get_db", lambda s: db)
     monkeypatch.setattr("pebble.ingest.ensure_indexes", lambda db: None)

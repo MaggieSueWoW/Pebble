@@ -10,9 +10,7 @@ def mythic_envelope(fights_mythic: List[dict]) -> Optional[Tuple[int, int]]:
     return (s, e)
 
 
-def split_pre_post(
-    envelope: Tuple[int, int], break_range, *, post_extension_ms: int = 0
-):
+def split_pre_post(envelope: Tuple[int, int], break_range, *, post_extension_ms: int = 0):
     s, e = envelope
     if not break_range:
         return {"pre_ms": e - s, "post_ms": 0}
