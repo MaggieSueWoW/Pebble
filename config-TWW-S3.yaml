@@ -10,7 +10,7 @@ sheets:
     bench_week_totals: "Bench Week Totals"
     bench_rankings: "Bench Rankings"
   starts:
-    reports: "B7"
+    reports: "B8"
     roster_map: "B6"
     team_roster: "B5"
     availability_overrides: "B9"
@@ -28,7 +28,7 @@ sheets:
     bench_week_totals: "C3"
     bench_rankings: "C3"
   triggers:
-    ingest_compute_week: "Reports!B2"
+    ingest_compute_week: "Reports!D6"
 
 time:
   tz: "America/Los_Angeles"
