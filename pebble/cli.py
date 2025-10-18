@@ -1,5 +1,6 @@
 import click
 import json
+import time
 from collections import defaultdict
 from typing import Dict, List, Optional
 
@@ -13,6 +14,7 @@ from .blocks import build_blocks
 from .bench_calc import bench_minutes_for_night, last_non_mythic_boss_mains
 from .participation import build_mythic_participation
 from .export_sheets import replace_values
+from .week_agg import materialize_rankings, materialize_week_totals
 from .utils.time import (
     ms_to_pt_iso,
     ms_to_pt_sheets,
@@ -54,17 +56,21 @@ def sheets(config):
         raise
 
 
+def run_ingest(settings, log):
+    report_res = ingest_reports(settings)
+    roster_count = ingest_roster(settings)
+    log.info(
+        "ingest complete",
+        extra={"stage": "ingest", **report_res, "team_roster": roster_count},
+    )
+
+
 @cli.command()
 @click.option("--config", default="config.yaml", show_default=True)
 def ingest(config):
     log = setup_logging()
     s = load_settings(config)
-    report_res = ingest_reports(s)
-    roster_count = ingest_roster(s)
-    log.info(
-        "ingest complete",
-        extra={"stage": "ingest", **report_res, "team_roster": roster_count},
-    )
+    run_ingest(s, log)
 
 
 @cli.command("flush-cache", help="Flush cached WCL reports from Redis.")
@@ -125,16 +131,15 @@ def parse_availability_overrides(
     return overrides_by_night, {night: set(names) for night, names in unmatched.items()}
 
 
-@cli.command()
-@click.option("--config", default="config.yaml", show_default=True)
-def compute(config):
+
+
+def run_compute(settings, log):
     """Compute Night QA and bench tables from staged Mongo collections.
 
     Reads from ``fights_all`` then materializes ``participation_m`` and
     ``blocks`` before aggregating bench minutes.
     """
-    log = setup_logging()
-    s = load_settings(config)
+    s = settings
     db = get_db(s)
     ensure_indexes(db)
 
@@ -525,22 +530,11 @@ def compute(config):
     log.info("compute complete", extra={"stage": "compute", "nights": len(nights)})
 
 
-@cli.command()
-@click.option("--config", default="config.yaml", show_default=True)
-def week(config):
-    from .config_loader import load_settings
-    from .logging_setup import setup_logging
-    from .mongo_client import get_db
-    from .week_agg import materialize_rankings, materialize_week_totals
-    from .export_sheets import replace_values
+def run_week(settings, log):
+    db = get_db(settings)
+    totals = materialize_week_totals(db)
+    rankings = materialize_rankings(db)
 
-    log = setup_logging()
-    s = load_settings(config)
-    db = get_db(s)
-    n = materialize_week_totals(db)
-    r = materialize_rankings(db)
-
-    # export week totals
     rows = [
         [
             "Game Week",
@@ -567,15 +561,14 @@ def week(config):
             ]
         )
     replace_values(
-        s.sheets.spreadsheet_id,
-        s.sheets.tabs.bench_week_totals,
+        settings.sheets.spreadsheet_id,
+        settings.sheets.tabs.bench_week_totals,
         rows,
-        s.service_account_json,
-        start_cell=s.sheets.starts.bench_week_totals,
-        last_processed_cell=s.sheets.last_processed.bench_week_totals,
+        settings.service_account_json,
+        start_cell=settings.sheets.starts.bench_week_totals,
+        last_processed_cell=settings.sheets.last_processed.bench_week_totals,
     )
 
-    # export rankings
     rank_rows = [
         [
             "Rank",
@@ -598,18 +591,118 @@ def week(config):
             ]
         )
     replace_values(
-        s.sheets.spreadsheet_id,
-        s.sheets.tabs.bench_rankings,
+        settings.sheets.spreadsheet_id,
+        settings.sheets.tabs.bench_rankings,
         rank_rows,
-        s.service_account_json,
-        start_cell=s.sheets.starts.bench_rankings,
-        last_processed_cell=s.sheets.last_processed.bench_rankings,
+        settings.service_account_json,
+        start_cell=settings.sheets.starts.bench_rankings,
+        last_processed_cell=settings.sheets.last_processed.bench_rankings,
     )
 
     log.info(
         "week export complete",
-        extra={"stage": "week", "rows": n, "rankings": r},
+        extra={
+            "stage": "week",
+            "totals_updated": totals,
+            "rankings_updated": rankings,
+        },
     )
+
+
+@cli.command()
+@click.option("--config", default="config.yaml", show_default=True)
+def compute(config):
+    """Compute Night QA and bench tables from staged Mongo collections.
+
+    Reads from ``fights_all`` then materializes ``participation_m`` and
+    ``blocks`` before aggregating bench minutes.
+    """
+    log = setup_logging()
+    s = load_settings(config)
+    run_compute(s, log)
+
+
+@cli.command()
+@click.option("--config", default="config.yaml", show_default=True)
+@click.option(
+    "--interval",
+    default=300,
+    show_default=True,
+    type=click.IntRange(0, None),
+    help="Seconds to wait between iterations.",
+)
+@click.option(
+    "--max-errors",
+    default=5,
+    show_default=True,
+    type=click.IntRange(0, None),
+    help="Maximum consecutive errors before the loop exits. Use 0 to never exit.",
+)
+def loop(config, interval, max_errors):
+    """Continuously ingest and compute outputs for the configured spreadsheet."""
+
+    log = setup_logging()
+    iteration = 0
+    consecutive_errors = 0
+
+    try:
+        while True:
+            iteration += 1
+            start = time.monotonic()
+            log.info(
+                "loop iteration started",
+                extra={"stage": "loop", "iteration": iteration},
+            )
+
+            try:
+                settings = load_settings(config)
+                run_ingest(settings, log)
+                run_compute(settings, log)
+                run_week(settings, log)
+                consecutive_errors = 0
+            except Exception:
+                consecutive_errors += 1
+                log.error(
+                    "loop iteration failed",
+                    extra={
+                        "stage": "loop",
+                        "iteration": iteration,
+                        "consecutive_errors": consecutive_errors,
+                    },
+                    exc_info=True,
+                )
+                if max_errors > 0 and consecutive_errors >= max_errors:
+                    log.error(
+                        "max consecutive errors reached, stopping loop",
+                        extra={
+                            "stage": "loop",
+                            "iteration": iteration,
+                            "consecutive_errors": consecutive_errors,
+                        },
+                    )
+                    break
+
+            elapsed = time.monotonic() - start
+            sleep_for = max(0.0, interval - elapsed)
+            if sleep_for > 0:
+                log.info(
+                    "loop sleeping",
+                    extra={"stage": "loop", "sleep_seconds": round(sleep_for, 2)},
+                )
+                time.sleep(sleep_for)
+    except KeyboardInterrupt:
+        log.info(
+            "loop interrupted by user",
+            extra={"stage": "loop", "iteration": iteration},
+        )
+
+
+@cli.command()
+@click.option("--config", default="config.yaml", show_default=True)
+def week(config):
+    log = setup_logging()
+    s = load_settings(config)
+    run_week(s, log)
 
 
 def main():
