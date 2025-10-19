@@ -59,6 +59,19 @@ class FakeSheetsClient:
         return req.execute()
 
 
+class FakeClock:
+    def __init__(self, start=100.0):
+        self._now = float(start)
+        self.sleeps = []
+
+    def monotonic(self):
+        return self._now
+
+    def sleep(self, seconds):
+        self.sleeps.append(seconds)
+        self._now += seconds
+
+
 def _settings_with_trigger():
     trigger = "Reports!B2"
     sheets = SimpleNamespace(
@@ -100,44 +113,27 @@ def test_set_ingest_trigger_checkbox_updates_cell():
     }
 
 
-class FakeClock:
-    def __init__(self, start=100.0):
-        self._now = float(start)
-
-    def monotonic(self):
-        return self._now
-
-    def sleep(self, seconds):
-        self._now += seconds
-
-
-def test_wait_for_ingest_trigger_timeout_zero(monkeypatch):
+def test_wait_for_ingest_trigger_returns_when_checkbox_set(monkeypatch):
     settings = _settings_with_trigger()
     log = SimpleNamespace(info=lambda *a, **k: None)
     fake_client = object()
-
-    states = iter([False, False, True])
-
-    def fake_read(*_args, **_kwargs):
-        return next(states)
-
     clock = FakeClock()
 
-    monkeypatch.setattr(cli, "_read_ingest_trigger_checkbox", fake_read)
+    monkeypatch.setattr(cli, "_read_ingest_trigger_checkbox", lambda *_args, **_kwargs: True)
     monkeypatch.setattr(cli, "time", clock)
 
     should_run, client = cli._wait_for_ingest_trigger(
         settings,
         log,
-        timeout=0,
+        timeout=5,
         iteration=1,
-        poll_interval=1.0,
         client=fake_client,
     )
 
     assert should_run is True
     assert client is fake_client
-    assert clock.monotonic() >= 102.0
+    assert clock.sleeps == []
+    assert clock.monotonic() == pytest.approx(100.0)
 
 
 def test_wait_for_ingest_trigger_times_out(monkeypatch):
@@ -146,7 +142,7 @@ def test_wait_for_ingest_trigger_times_out(monkeypatch):
     fake_client = object()
     clock = FakeClock()
 
-    monkeypatch.setattr(cli, "_read_ingest_trigger_checkbox", lambda *a, **k: False)
+    monkeypatch.setattr(cli, "_read_ingest_trigger_checkbox", lambda *_args, **_kwargs: False)
     monkeypatch.setattr(cli, "time", clock)
 
     should_run, client = cli._wait_for_ingest_trigger(
@@ -154,41 +150,36 @@ def test_wait_for_ingest_trigger_times_out(monkeypatch):
         log,
         timeout=3,
         iteration=2,
-        poll_interval=1.0,
         client=fake_client,
     )
 
     assert should_run is False
     assert client is None
-    assert clock.monotonic() >= 103.0
+    assert clock.sleeps == [3.0]
+    assert clock.monotonic() == pytest.approx(103.0)
 
 
-def test_wait_for_ingest_trigger_eventually_true(monkeypatch):
+def test_wait_for_ingest_trigger_zero_timeout(monkeypatch):
     settings = _settings_with_trigger()
     log = SimpleNamespace(info=lambda *a, **k: None)
     fake_client = object()
     clock = FakeClock()
 
-    states = iter([False, False, True])
-
-    def fake_read(*_args, **_kwargs):
-        return next(states)
-
-    monkeypatch.setattr(cli, "_read_ingest_trigger_checkbox", fake_read)
+    monkeypatch.setattr(cli, "_read_ingest_trigger_checkbox", lambda *_args, **_kwargs: False)
     monkeypatch.setattr(cli, "time", clock)
 
     should_run, client = cli._wait_for_ingest_trigger(
         settings,
         log,
-        timeout=10,
+        timeout=0,
         iteration=3,
-        poll_interval=1.0,
         client=fake_client,
     )
 
-    assert should_run is True
-    assert client is fake_client
-    assert clock.monotonic() >= 102.0
+    assert should_run is False
+    assert client is None
+    assert clock.sleeps == [0.0]
+    assert clock.monotonic() == pytest.approx(100.0)
 
 
 def test_require_ingest_trigger_range_missing():
