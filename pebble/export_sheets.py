@@ -141,13 +141,18 @@ def replace_values(
     values: List[List],
     creds_path: str,
     start_cell: str = "A5",
-    last_processed_cell: str = "B3",
+    last_processed_cell: str | None = None,
     ensure_tail_space: bool = False,
+    clear_range: bool = True,
 ) -> None:
     """Replace all values in ``tab`` with ``values``.
 
     ``USER_ENTERED`` is used so that any date/time strings are parsed by
     Google Sheets and treated as proper datetimes rather than plain text.
+
+    By default the existing table data is cleared prior to writing the new
+    values and the "last processed" timestamp is updated (if a cell is
+    provided). Clearing can be disabled via ``clear_range``.
     """
     client = SheetsClient(creds_path)
     svc = client.svc
@@ -163,7 +168,12 @@ def replace_values(
             )
     rng = f"{tab}!{start_cell}"
     body = {"values": values, "majorDimension": "ROWS"}
-    client.execute(svc.spreadsheets().values().clear(spreadsheetId=spreadsheet_id, range=f"{tab}!{start_cell}:Z"))
+    if clear_range:
+        client.execute(
+            svc.spreadsheets()
+            .values()
+            .clear(spreadsheetId=spreadsheet_id, range=f"{tab}!{start_cell}:Z")
+        )
     client.execute(
         svc.spreadsheets()
         .values()
@@ -174,10 +184,11 @@ def replace_values(
             body=body,
         )
     )
-    update_last_processed(
-        spreadsheet_id,
-        tab,
-        creds_path,
-        last_processed_cell,
-        client,
-    )
+    if last_processed_cell:
+        update_last_processed(
+            spreadsheet_id,
+            tab,
+            creds_path,
+            last_processed_cell,
+            client,
+        )

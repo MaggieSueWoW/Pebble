@@ -696,7 +696,7 @@ def run_week(settings, log):
         probability_rows,
         settings.service_account_json,
         start_cell=settings.sheets.starts.attendance_probability,
-        last_processed_cell=settings.sheets.last_processed.attendance_probability,
+        clear_range=False,
     )
 
     log.info(

@@ -131,3 +131,56 @@ def test_replace_values_does_not_insert_when_space_exists(monkeypatch):
     )
 
     assert "batch" not in recorded
+
+
+def test_replace_values_skips_timestamp_when_cell_missing(monkeypatch):
+    recorded = {}
+
+    def _client_factory(_creds_path):
+        return _FakeClient(["Player"], recorded)
+
+    monkeypatch.setattr(export_sheets, "SheetsClient", _client_factory)
+
+    called = False
+
+    def _fake_update_last_processed(*args, **kwargs):
+        nonlocal called
+        called = True
+
+    monkeypatch.setattr(export_sheets, "update_last_processed", _fake_update_last_processed)
+
+    export_sheets.replace_values(
+        "sheet",
+        "Attendance",
+        [["Player"]],
+        "creds.json",
+    )
+
+    assert called is False
+
+
+def test_replace_values_updates_timestamp_when_cell_provided(monkeypatch):
+    recorded = {}
+
+    def _client_factory(_creds_path):
+        return _FakeClient(["Player"], recorded)
+
+    monkeypatch.setattr(export_sheets, "SheetsClient", _client_factory)
+
+    captured = {}
+
+    def _fake_update_last_processed(spreadsheet_id, tab, creds_path, cell, client):
+        captured["args"] = (spreadsheet_id, tab, creds_path, cell, client)
+
+    monkeypatch.setattr(export_sheets, "update_last_processed", _fake_update_last_processed)
+
+    export_sheets.replace_values(
+        "sheet",
+        "Attendance",
+        [["Player"]],
+        "creds.json",
+        last_processed_cell="B9",
+    )
+
+    assert captured["args"][3] == "B9"
+    assert captured["args"][4] is not None

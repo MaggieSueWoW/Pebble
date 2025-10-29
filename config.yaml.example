@@ -31,7 +31,6 @@ sheets:
     bench_week_totals: "B3"
     bench_rankings: "B3"
     attendance: "B3"
-    attendance_probability: "N3"
   triggers:
     ingest_compute_week: "Reports!B2"
 
