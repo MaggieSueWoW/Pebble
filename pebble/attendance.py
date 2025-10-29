@@ -3,11 +3,25 @@ from __future__ import annotations
 import math
 from collections import defaultdict
 from dataclasses import dataclass
-from typing import Dict, List
+from typing import Dict, List, Tuple
 
 from .week_agg import week_id_from_night_id
 
 STATUS_ORDER: tuple[str, ...] = ("P", "B", "O")
+
+
+@dataclass
+class PlayerAttendance:
+    main: str
+    total_played: float
+    total_bench: float
+    total_possible: float
+    week_status: Dict[str, set[str]]
+    attendance_probability: float | None
+
+    @property
+    def available_minutes(self) -> float:
+        return self.total_played + self.total_bench
 
 
 @dataclass
@@ -59,7 +73,7 @@ def _night_meta_from_doc(doc: dict) -> NightMeta | None:
     return NightMeta(night_id=night_id, pre=pre_meta, post=post_meta)
 
 
-def build_attendance_rows(db) -> List[List]:
+def _collect_attendance_stats(db) -> Tuple[List[str], List[PlayerAttendance]]:
     night_docs = list(db["night_qa"].find({}, {"_id": 0}))
     night_meta_by_id: Dict[str, NightMeta] = {}
     weeks: Dict[str, List[str]] = defaultdict(list)
@@ -88,23 +102,15 @@ def build_attendance_rows(db) -> List[List]:
     mains = set(roster.keys()) | bench_mains
     sorted_mains = sorted(mains)
 
-    header = [
-        "Player",
-        "Attendance %",
-        "Mythic Played (min)",
-        "Mythic Bench (min)",
-        "Mythic Possible (min)",
-    ] + week_ids
-
-    rows: List[List] = [header]
-
     if not sorted_mains:
-        return rows
+        return week_ids, []
 
     earliest_night = all_night_ids[0] if all_night_ids else None
     latest_night = all_night_ids[-1] if all_night_ids else None
     default_join = earliest_night or "1970-01-01"
     default_leave = latest_night or "9999-12-31"
+
+    players: List[PlayerAttendance] = []
 
     for main in sorted_mains:
         roster_entry = roster.get(main)
@@ -174,24 +180,86 @@ def build_attendance_rows(db) -> List[List]:
                         break
 
         available = total_played + total_bench
-        if total_possible > 0:
-            attendance_pct = f"{(available / total_possible) * 100:.1f}%"
+        attendance_probability = (
+            (available / total_possible) if total_possible > 0 else None
+        )
+
+        players.append(
+            PlayerAttendance(
+                main=main,
+                total_played=total_played,
+                total_bench=total_bench,
+                total_possible=total_possible,
+                week_status=week_status,
+                attendance_probability=attendance_probability,
+            )
+        )
+
+    return week_ids, players
+
+
+def build_attendance_rows(db) -> List[List]:
+    week_ids, players = _collect_attendance_stats(db)
+
+    header = [
+        "Player",
+        "Attendance %",
+        "Mythic Played (min)",
+        "Mythic Bench (min)",
+        "Mythic Possible (min)",
+    ] + week_ids
+
+    rows: List[List] = [header]
+
+    for player in players:
+        if player.total_possible > 0 and player.attendance_probability is not None:
+            attendance_pct = f"{player.attendance_probability * 100:.1f}%"
         else:
             attendance_pct = ""
 
         row = [
-            main,
+            player.main,
             attendance_pct,
-            _normalize_minutes(total_played),
-            _normalize_minutes(total_bench),
-            _normalize_minutes(total_possible),
+            _normalize_minutes(player.total_played),
+            _normalize_minutes(player.total_bench),
+            _normalize_minutes(player.total_possible),
         ]
 
         for week in week_ids:
-            letters = week_status.get(week, set())
+            letters = player.week_status.get(week, set())
             status_str = "".join(letter for letter in STATUS_ORDER if letter in letters)
             row.append(status_str)
 
         rows.append(row)
+
+    return rows
+
+
+def build_attendance_probability_rows(db, min_players: int = 20) -> List[List]:
+    _, players = _collect_attendance_stats(db)
+
+    header = ["Minimum Players", "Probability"]
+    rows: List[List] = [header]
+
+    if not players:
+        return rows
+
+    attendance_rates = [
+        (player.attendance_probability or 0.0)
+        for player in players
+    ]
+
+    team_size = len(attendance_rates)
+    dp: List[float] = [0.0] * (team_size + 1)
+    dp[0] = 1.0
+
+    for rate in attendance_rates:
+        for attendees in range(team_size, 0, -1):
+            dp[attendees] = dp[attendees] * (1 - rate) + dp[attendees - 1] * rate
+        dp[0] *= 1 - rate
+
+    for minimum_players in range(min_players, team_size + 1):
+        probability = sum(dp[minimum_players:])
+        rows.append([minimum_players, f"{probability * 100:.1f}%"])
 
     return rows

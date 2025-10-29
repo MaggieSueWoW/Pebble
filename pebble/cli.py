@@ -16,7 +16,7 @@ from .participation import build_mythic_participation
 from .export_sheets import replace_values
 from .sheets_client import SheetsClient
 from .week_agg import materialize_rankings, materialize_week_totals
-from .attendance import build_attendance_rows
+from .attendance import build_attendance_probability_rows, build_attendance_rows
 from .utils.time import (
     ms_to_pt_iso,
     ms_to_pt_sheets,
@@ -687,6 +687,16 @@ def run_week(settings, log):
         start_cell=settings.sheets.starts.attendance,
         last_processed_cell=settings.sheets.last_processed.attendance,
         ensure_tail_space=True,
+    )
+
+    probability_rows = build_attendance_probability_rows(db)
+    replace_values(
+        settings.sheets.spreadsheet_id,
+        settings.sheets.tabs.attendance,
+        probability_rows,
+        settings.service_account_json,
+        start_cell=settings.sheets.starts.attendance_probability,
+        last_processed_cell=settings.sheets.last_processed.attendance_probability,
     )
 
     log.info(

@@ -30,6 +30,7 @@ class SheetsStarts(BaseModel):
     bench_week_totals: str = Field(default="A5")
     bench_rankings: str = Field(default="A5")
     attendance: str = Field(default="A5")
+    attendance_probability: str = Field(default="A5")
 
 
 class SheetsLastProcessed(BaseModel):
@@ -42,6 +43,7 @@ class SheetsLastProcessed(BaseModel):
     bench_week_totals: str = Field(default="B3")
     bench_rankings: str = Field(default="B3")
     attendance: str = Field(default="B3")
+    attendance_probability: str = Field(default="B3")
 
 
 class SheetsTriggers(BaseModel):

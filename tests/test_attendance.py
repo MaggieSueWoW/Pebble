@@ -5,7 +5,10 @@ import mongomock
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
-from pebble.attendance import build_attendance_rows
+from pebble.attendance import (
+    build_attendance_probability_rows,
+    build_attendance_rows,
+)
 
 
 def _minutes(minutes: int) -> int:
@@ -320,3 +323,91 @@ def test_build_attendance_rows_skips_players_joining_after_last_night():
     rows = build_attendance_rows(db)
 
     assert [row[0] for row in rows[1:]] == ["Current-Illidan"]
+
+
+def _expected_probabilities(rates):
+    team_size = len(rates)
+    dp = [0.0] * (team_size + 1)
+    dp[0] = 1.0
+
+    for rate in rates:
+        for attendees in range(team_size, 0, -1):
+            dp[attendees] = dp[attendees] * (1 - rate) + dp[attendees - 1] * rate
+        dp[0] *= 1 - rate
+
+    tail = 0.0
+    for minimum in range(team_size, -1, -1):
+        tail += dp[minimum]
+        yield minimum, tail
+
+
+def test_attendance_probability_table_uses_top_attendance_rates():
+    db = mongomock.MongoClient().db
+
+    db["night_qa"].insert_one(
+        {
+            "night_id": "2024-08-01",
+            "mythic_pre_min": 50,
+            "mythic_post_min": 50,
+        }
+    )
+
+    rates = [
+        0.95,
+        0.5,
+        0.7,
+        0.85,
+        0.6,
+        0.4,
+        0.8,
+        0.3,
+        0.9,
+        0.65,
+        0.55,
+        0.75,
+        0.45,
+        0.35,
+        0.25,
+        0.15,
+        0.05,
+        1.0,
+        0.88,
+        0.77,
+        0.66,
+    ]
+
+    total_possible = 100
+
+    db["team_roster"].insert_many(
+        [
+            {"main": f"Player-{i:02d}", "join_night": "2024-07-01", "active": True}
+            for i in range(len(rates))
+        ]
+    )
+
+    db["bench_night_totals"].insert_many(
+        [
+            {
+                "night_id": "2024-08-01",
+                "main": f"Player-{i:02d}",
+                "played_total_min": rate * total_possible,
+                "bench_total_min": 0,
+                "avail_pre": True,
+                "avail_post": True,
+            }
+            for i, rate in enumerate(rates)
+        ]
+    )
+
+    probability_rows = build_attendance_probability_rows(db)
+
+    assert probability_rows[0] == ["Minimum Players", "Probability"]
+    assert [row[0] for row in probability_rows[1:]] == list(
+        range(20, len(rates) + 1)
+    )
+
+    expected = dict(_expected_probabilities(rates))
+
+    for minimum_players, probability_str in probability_rows[1:]:
+        expected_str = f"{expected[minimum_players] * 100:.1f}%"
+        assert probability_str == expected_str
