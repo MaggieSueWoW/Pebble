@@ -17,6 +17,7 @@ class SheetsTabs(BaseModel):
     bench_night_totals: str = Field(default="Bench Night Totals")
     bench_week_totals: str = Field(default="Bench Week Totals")
     bench_rankings: str = Field(default="Bench Rankings")
+    attendance: str = Field(default="Attendance")
 
 
 class SheetsStarts(BaseModel):
@@ -28,6 +29,7 @@ class SheetsStarts(BaseModel):
     bench_night_totals: str = Field(default="A5")
     bench_week_totals: str = Field(default="A5")
     bench_rankings: str = Field(default="A5")
+    attendance: str = Field(default="A5")
 
 
 class SheetsLastProcessed(BaseModel):
@@ -39,6 +41,7 @@ class SheetsLastProcessed(BaseModel):
     bench_night_totals: str = Field(default="B3")
     bench_week_totals: str = Field(default="B3")
     bench_rankings: str = Field(default="B3")
+    attendance: str = Field(default="B3")
 
 
 class SheetsTriggers(BaseModel):

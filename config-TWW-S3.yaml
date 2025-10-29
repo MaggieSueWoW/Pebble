@@ -9,6 +9,7 @@ sheets:
     bench_night_totals: "Bench Night Totals"
     bench_week_totals: "Bench Week Totals"
     bench_rankings: "Bench Rankings"
+    attendance: "Attendance"
   starts:
     reports: "B8"
     roster_map: "B6"
@@ -18,6 +19,7 @@ sheets:
     bench_night_totals: "B5"
     bench_week_totals: "B5"
     bench_rankings: "B5"
+    attendance: "B5"
   last_processed:
     reports: "D5"
     roster_map: "C4"
@@ -27,6 +29,7 @@ sheets:
     bench_night_totals: "C3"
     bench_week_totals: "C3"
     bench_rankings: "C3"
+    attendance: "C3"
   triggers:
     ingest_compute_week: "Reports!D6"
 

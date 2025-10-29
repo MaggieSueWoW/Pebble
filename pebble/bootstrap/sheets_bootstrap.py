@@ -83,6 +83,12 @@ HEADERS = {
         "Main",
         "Bench Season-to-date (min)",
     ],
+    "Attendance": [
+        "Player",
+        "Attendance %",
+        "Mythic Played (min)",
+        "Mythic Bench (min)",
+    ],
 }
 
 
@@ -170,6 +176,11 @@ def bootstrap_sheets(settings: Settings) -> Dict[str, Any]:
             "Bench Rankings",
             settings.sheets.starts.bench_rankings,
             settings.sheets.last_processed.bench_rankings,
+        ),
+        settings.sheets.tabs.attendance: (
+            "Attendance",
+            settings.sheets.starts.attendance,
+            settings.sheets.last_processed.attendance,
         ),
     }
     tabs = []
