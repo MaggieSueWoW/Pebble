@@ -178,3 +178,145 @@ def test_full_participation_rounds_to_hundred_percent():
     assert rows[1][3] == 0
     assert rows[1][4] == 149
     assert rows[1][5] == "P"
+
+
+def test_build_attendance_rows_skips_players_outside_roster_window():
+    db = mongomock.MongoClient().db
+
+    db["night_qa"].insert_one(
+        {
+            "night_id": "2024-07-09",
+            "mythic_pre_min": 30,
+            "mythic_post_min": 30,
+        }
+    )
+
+    db["team_roster"].insert_many(
+        [
+            {"main": "Active-Illidan", "join_night": "2024-07-01", "active": True},
+            {
+                "main": "Past-Illidan",
+                "join_night": "2024-06-01",
+                "leave_night": "2024-07-01",
+                "active": True,
+            },
+        ]
+    )
+
+    db["bench_night_totals"].insert_many(
+        [
+            {
+                "night_id": "2024-07-09",
+                "main": "Active-Illidan",
+                "played_total_min": 30,
+                "bench_total_min": 30,
+                "avail_pre": True,
+                "avail_post": True,
+            },
+            {
+                "night_id": "2024-07-09",
+                "main": "Past-Illidan",
+                "played_total_min": 0,
+                "bench_total_min": 0,
+            },
+        ]
+    )
+
+    rows = build_attendance_rows(db)
+
+    assert [row[0] for row in rows[1:]] == ["Active-Illidan"]
+
+
+def test_build_attendance_rows_skips_inactive_roster_entries():
+    db = mongomock.MongoClient().db
+
+    db["night_qa"].insert_one(
+        {
+            "night_id": "2024-07-09",
+            "mythic_pre_min": 30,
+            "mythic_post_min": 30,
+        }
+    )
+
+    db["team_roster"].insert_many(
+        [
+            {
+                "main": "Rostered-Illidan",
+                "join_night": "2024-07-01",
+                "active": True,
+            },
+            {
+                "main": "OffRoster-Illidan",
+                "join_night": "2024-07-01",
+                "active": False,
+            },
+        ]
+    )
+
+    db["bench_night_totals"].insert_many(
+        [
+            {
+                "night_id": "2024-07-09",
+                "main": "Rostered-Illidan",
+                "played_total_min": 30,
+                "bench_total_min": 30,
+                "avail_pre": True,
+                "avail_post": True,
+            },
+            {
+                "night_id": "2024-07-09",
+                "main": "OffRoster-Illidan",
+                "played_total_min": 30,
+                "bench_total_min": 30,
+                "avail_pre": True,
+                "avail_post": True,
+            },
+        ]
+    )
+
+    rows = build_attendance_rows(db)
+
+    assert [row[0] for row in rows[1:]] == ["Rostered-Illidan"]
+
+
+def test_build_attendance_rows_skips_players_joining_after_last_night():
+    db = mongomock.MongoClient().db
+
+    db["night_qa"].insert_many(
+        [
+            {"night_id": "2024-07-09", "mythic_pre_min": 30, "mythic_post_min": 30},
+            {"night_id": "2024-07-11", "mythic_pre_min": 30, "mythic_post_min": 30},
+        ]
+    )
+
+    db["team_roster"].insert_many(
+        [
+            {"main": "Current-Illidan", "join_night": "2024-07-01", "active": True},
+            {"main": "Future-Illidan", "join_night": "2024-08-01", "active": True},
+        ]
+    )
+
+    db["bench_night_totals"].insert_many(
+        [
+            {
+                "night_id": "2024-07-09",
+                "main": "Current-Illidan",
+                "played_total_min": 30,
+                "bench_total_min": 30,
+                "avail_pre": True,
+                "avail_post": True,
+            },
+            {
+                "night_id": "2024-07-11",
+                "main": "Current-Illidan",
+                "played_total_min": 30,
+                "bench_total_min": 30,
+                "avail_pre": True,
+                "avail_post": True,
+            },
+        ]
+    )
+
+    rows = build_attendance_rows(db)
+
+    assert [row[0] for row in rows[1:]] == ["Current-Illidan"]

@@ -101,18 +101,34 @@ def build_attendance_rows(db) -> List[List]:
     if not sorted_mains:
         return rows
 
-    earliest_night = all_night_ids[0] if all_night_ids else "1970-01-01"
-    latest_night = all_night_ids[-1] if all_night_ids else "9999-12-31"
+    earliest_night = all_night_ids[0] if all_night_ids else None
+    latest_night = all_night_ids[-1] if all_night_ids else None
+    default_join = earliest_night or "1970-01-01"
+    default_leave = latest_night or "9999-12-31"
 
     for main in sorted_mains:
-        roster_entry = roster.get(main, {})
-        if roster_entry.get("active", True) is False and main not in bench_mains:
-            continue
+        roster_entry = roster.get(main)
 
-        join = roster_entry.get("join_night") or earliest_night
-        leave = roster_entry.get("leave_night") or latest_night
+        if roster_entry:
+            if not bool(roster_entry.get("active", True)):
+                continue
+
+            if latest_night:
+                join_night = roster_entry.get("join_night")
+                if join_night and join_night > latest_night:
+                    continue
+
+                leave_night = roster_entry.get("leave_night")
+                if leave_night and leave_night < latest_night:
+                    continue
+
+        join = (roster_entry or {}).get("join_night") or default_join
+        leave = (roster_entry or {}).get("leave_night") or default_leave
 
         membership_nights = [n for n in all_night_ids if join <= n <= leave]
+
+        if roster_entry and all_night_ids and not membership_nights:
+            continue
 
         total_played = 0.0
         total_bench = 0.0
