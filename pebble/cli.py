@@ -689,7 +689,7 @@ def run_week(settings, log):
         ensure_tail_space=True,
     )
 
-    probability_rows = build_attendance_probability_rows(db)
+    probability_rows = build_attendance_probability_rows(db, min_players=18)
     replace_values(
         settings.sheets.spreadsheet_id,
         settings.sheets.tabs.attendance,

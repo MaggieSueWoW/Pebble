@@ -203,10 +203,10 @@ def build_attendance_rows(db) -> List[List]:
 
     header = [
         "Player",
-        "Attendance %",
-        "Mythic Played (min)",
-        "Mythic Bench (min)",
-        "Mythic Possible (min)",
+        "Attendance",
+        "Played",
+        "Bench",
+        "Possible",
     ] + week_ids
 
     rows: List[List] = [header]
@@ -238,7 +238,7 @@ def build_attendance_rows(db) -> List[List]:
 def build_attendance_probability_rows(db, min_players: int = 20) -> List[List]:
     _, players = _collect_attendance_stats(db)
 
-    header = ["Minimum Players", "Probability"]
+    header = ["Minimum Players", "At least K", "Exactly K"]
     rows: List[List] = [header]
 
     if not players:
@@ -260,6 +260,6 @@ def build_attendance_probability_rows(db, min_players: int = 20) -> List[List]:
 
     for minimum_players in range(min_players, team_size + 1):
         probability = sum(dp[minimum_players:])
-        rows.append([minimum_players, f"{probability * 100:.1f}%"])
+        rows.append([minimum_players, f"{probability * 100:.1f}%", f"{dp[minimum_players] * 100:.1f}%"])
 
     return rows

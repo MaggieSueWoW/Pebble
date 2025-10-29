@@ -85,9 +85,9 @@ HEADERS = {
     ],
     "Attendance": [
         "Player",
-        "Attendance %",
-        "Mythic Played (min)",
-        "Mythic Bench (min)",
+        "Attendance",
+        "Played",
+        "Bench",
     ],
 }
 

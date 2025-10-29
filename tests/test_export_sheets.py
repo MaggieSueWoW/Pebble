@@ -75,10 +75,10 @@ class _FakeClient:
 def test_replace_values_inserts_columns_before_trailing_cells(monkeypatch):
     header_prefix = [
         "Player",
-        "Attendance %",
-        "Mythic Played (min)",
-        "Mythic Bench (min)",
-        "Mythic Possible (min)",
+        "Attendance",
+        "Played",
+        "Bench",
+        "Possible",
     ]
     existing_header = header_prefix + ["2024-07-09", "Legend"]
     values = [header_prefix + ["2024-07-09", "2024-07-16", "Legend"]]
@@ -108,10 +108,10 @@ def test_replace_values_inserts_columns_before_trailing_cells(monkeypatch):
 def test_replace_values_does_not_insert_when_space_exists(monkeypatch):
     header_prefix = [
         "Player",
-        "Attendance %",
-        "Mythic Played (min)",
-        "Mythic Bench (min)",
-        "Mythic Possible (min)",
+        "Attendance",
+        "Played",
+        "Bench",
+        "Possible",
     ]
     existing_header = header_prefix + ["2024-07-09", "2024-07-16", "Legend"]
     values = [header_prefix + ["2024-07-09", "2024-07-16", "Legend"]]

@@ -114,10 +114,10 @@ def test_build_attendance_rows_includes_week_markers():
 
     assert rows[0][:5] == [
         "Player",
-        "Attendance %",
-        "Mythic Played (min)",
-        "Mythic Bench (min)",
-        "Mythic Possible (min)",
+        "Attendance",
+        "Played",
+        "Bench",
+        "Possible",
     ]
     assert rows[0][5:] == ["2024-07-09"]
 
@@ -338,7 +338,7 @@ def _expected_probabilities(rates):
     tail = 0.0
     for minimum in range(team_size, -1, -1):
         tail += dp[minimum]
-        yield minimum, tail
+        yield minimum, (tail, dp[minimum])
 
 
 def test_attendance_probability_table_uses_top_attendance_rates():
@@ -401,13 +401,15 @@ def test_attendance_probability_table_uses_top_attendance_rates():
 
     probability_rows = build_attendance_probability_rows(db)
 
-    assert probability_rows[0] == ["Minimum Players", "Probability"]
+    assert probability_rows[0] == ["Minimum Players", "At least K", "Exactly K"]
     assert [row[0] for row in probability_rows[1:]] == list(
         range(20, len(rates) + 1)
     )
 
     expected = dict(_expected_probabilities(rates))
 
-    for minimum_players, probability_str in probability_rows[1:]:
-        expected_str = f"{expected[minimum_players] * 100:.1f}%"
-        assert probability_str == expected_str
+    for minimum_players, at_least_str, exactly_str in probability_rows[1:]:
+        expected_at_least_str = f"{expected[minimum_players][0] * 100:.1f}%"
+        expected_exactly_str = f"{expected[minimum_players][1] * 100:.1f}%"
+        assert at_least_str == expected_at_least_str
+        assert exactly_str == expected_exactly_str
