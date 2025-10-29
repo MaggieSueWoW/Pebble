@@ -1,55 +1,133 @@
-import pebble.export_sheets as es
+import sys
+from pathlib import Path
+
+sys.path.append(str(Path(__file__).resolve().parents[1]))
+
+from pebble import export_sheets
 
 
-def test_replace_values_user_entered(monkeypatch):
-    updates = []
+class _FakeRequest:
+    def __init__(self, callback):
+        self._callback = callback
+        self.uri = "fake"
 
-    class FakeReq:
-        def __init__(self, bucket):
-            self.bucket = bucket
+    def execute(self):
+        return self._callback()
 
-        def execute(self):
-            return None
 
-    class FakeValues:
-        def clear(self, **kwargs):
-            updates.append(("clear", kwargs))
-            return FakeReq(updates)
+class _FakeValues:
+    def __init__(self, header, recorded):
+        self._header = header
+        self._recorded = recorded
 
-        def update(self, **kwargs):
-            updates.append(("update", kwargs))
-            return FakeReq(updates)
+    def clear(self, *, spreadsheetId, range):  # noqa: N803 (Google API signature)
+        def _run():
+            self._recorded.setdefault("clears", []).append(range)
+            return {}
 
-    class FakeSpreadsheets:
-        def values(self):
-            return FakeValues()
+        return _FakeRequest(_run)
 
-    class FakeSvc:
-        def spreadsheets(self):
-            return FakeSpreadsheets()
+    def update(self, *, spreadsheetId, range, valueInputOption, body):  # noqa: N803
+        def _run():
+            self._recorded.setdefault("updates", []).append((range, body))
+            return {}
 
-    class FakeClient:
-        def __init__(self, path):
-            self.svc = FakeSvc()
+        return _FakeRequest(_run)
 
-        def execute(self, req):
-            req.execute()
+    def get(self, *, spreadsheetId, range):  # noqa: N803
+        def _run():
+            return {"values": [self._header]}
 
-    monkeypatch.setattr(es, "SheetsClient", FakeClient)
+        return _FakeRequest(_run)
 
-    es.replace_values(
-        "sid",
-        "Sheet1",
-        [["2024-07-02 20:00:00"]],
+
+class _FakeSpreadsheets:
+    def __init__(self, header, recorded):
+        self._header = header
+        self._recorded = recorded
+
+    def values(self):
+        return _FakeValues(self._header, self._recorded)
+
+    def batchUpdate(self, *, spreadsheetId, body):  # noqa: N803
+        def _run():
+            self._recorded.setdefault("batch", []).append(body["requests"])
+            return {}
+
+        return _FakeRequest(_run)
+
+    def get(self, *, spreadsheetId, fields=None):  # noqa: N803
+        def _run():
+            return {"sheets": [{"properties": {"title": "Attendance", "sheetId": 314}}]}
+
+        return _FakeRequest(_run)
+
+
+class _FakeClient:
+    def __init__(self, header, recorded):
+        self.svc = type("_FakeSvc", (), {"spreadsheets": lambda _self: _FakeSpreadsheets(header, recorded)})()
+        self._recorded = recorded
+
+    def execute(self, request):
+        return request.execute()
+
+
+def test_replace_values_inserts_columns_before_trailing_cells(monkeypatch):
+    header_prefix = [
+        "Player",
+        "Attendance %",
+        "Mythic Played (min)",
+        "Mythic Bench (min)",
+        "Mythic Possible (min)",
+    ]
+    existing_header = header_prefix + ["2024-07-09", "Legend"]
+    values = [header_prefix + ["2024-07-09", "2024-07-16", "Legend"]]
+    recorded = {}
+
+    def _client_factory(_creds_path):
+        return _FakeClient(existing_header, recorded)
+
+    monkeypatch.setattr(export_sheets, "SheetsClient", _client_factory)
+
+    export_sheets.replace_values(
+        "sheet",
+        "Attendance",
+        values,
         "creds.json",
-        start_cell="B2",
+        ensure_tail_space=True,
     )
 
-    # First call clears, second updates data, third updates last processed
-    assert updates[0][0] == "clear"
-    assert updates[0][1]["range"] == "Sheet1!B2:Z"
-    assert updates[1][0] == "update"
-    assert updates[1][1]["valueInputOption"] == "USER_ENTERED"
-    assert updates[1][1]["range"] == "Sheet1!B2"
-    assert updates[2][0] == "update"
-    assert updates[2][1]["range"] == "Sheet1!B3"
+    requests = recorded.get("batch")
+    assert requests is not None
+    insert = requests[0][0]["insertDimension"]
+    assert insert["range"]["startIndex"] == 6
+    assert insert["range"]["endIndex"] == 7
+    assert insert["inheritFromBefore"] is True
+
+
+def test_replace_values_does_not_insert_when_space_exists(monkeypatch):
+    header_prefix = [
+        "Player",
+        "Attendance %",
+        "Mythic Played (min)",
+        "Mythic Bench (min)",
+        "Mythic Possible (min)",
+    ]
+    existing_header = header_prefix + ["2024-07-09", "2024-07-16", "Legend"]
+    values = [header_prefix + ["2024-07-09", "2024-07-16", "Legend"]]
+    recorded = {}
+
+    def _client_factory(_creds_path):
+        return _FakeClient(existing_header, recorded)
+
+    monkeypatch.setattr(export_sheets, "SheetsClient", _client_factory)
+
+    export_sheets.replace_values(
+        "sheet",
+        "Attendance",
+        values,
+        "creds.json",
+        ensure_tail_space=True,
+    )
+
+    assert "batch" not in recorded

@@ -686,6 +686,7 @@ def run_week(settings, log):
         settings.service_account_json,
         start_cell=settings.sheets.starts.attendance,
         last_processed_cell=settings.sheets.last_processed.attendance,
+        ensure_tail_space=True,
     )
 
     log.info(
