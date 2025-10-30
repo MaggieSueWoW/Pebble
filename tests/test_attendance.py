@@ -401,15 +401,55 @@ def test_attendance_probability_table_uses_top_attendance_rates():
 
     probability_rows = build_attendance_probability_rows(db)
 
-    assert probability_rows[0] == ["Minimum Players", "At least K", "Exactly K"]
-    assert [row[0] for row in probability_rows[1:]] == list(
-        range(20, len(rates) + 1)
-    )
+    assert probability_rows[0] == [
+        "Players",
+        "Predicted",
+        "At least K",
+        "Delta",
+        "Exactly K",
+    ]
+    assert len(probability_rows) == 13
+
+    data_rows = [row for row in probability_rows[1:] if row[0] != ""]
+
+    assert [row[0] for row in data_rows] == list(range(20, 20 + len(data_rows)))
 
     expected = dict(_expected_probabilities(rates))
+    expected_predicted = dict(_expected_probabilities([0.9] * len(rates)))
 
-    for minimum_players, at_least_str, exactly_str in probability_rows[1:]:
-        expected_at_least_str = f"{expected[minimum_players][0] * 100:.1f}%"
-        expected_exactly_str = f"{expected[minimum_players][1] * 100:.1f}%"
-        assert at_least_str == expected_at_least_str
-        assert exactly_str == expected_exactly_str
+    for (
+        minimum_players,
+        predicted_str,
+        at_least_str,
+        delta_str,
+        exactly_str,
+    ) in data_rows:
+        expected_at_least = expected[minimum_players][0]
+        expected_exactly = expected[minimum_players][1]
+        expected_predicted_at_least = expected_predicted[minimum_players][0]
+        expected_delta = expected_predicted_at_least - expected_at_least
+
+        assert at_least_str == f"{expected_at_least * 100:.1f}%"
+        assert exactly_str == f"{expected_exactly * 100:.1f}%"
+        assert predicted_str == f"{expected_predicted_at_least * 100:.1f}%"
+        assert delta_str == f"{expected_delta * 100:.1f}%"
+
+    blank_rows = [row for row in probability_rows[1:] if row[0] == ""]
+    assert len(probability_rows) - 1 == len(data_rows) + len(blank_rows)
+    assert all(row == [""] * 5 for row in blank_rows)
+
+
+def test_attendance_probability_table_contains_blank_rows_without_roster():
+    db = mongomock.MongoClient().db
+
+    probability_rows = build_attendance_probability_rows(db)
+
+    assert probability_rows[0] == [
+        "Players",
+        "Predicted",
+        "At least K",
+        "Delta",
+        "Exactly K",
+    ]
+    assert len(probability_rows) == 13
+    assert all(row == [""] * 5 for row in probability_rows[1:])

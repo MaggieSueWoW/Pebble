@@ -238,10 +238,14 @@ def build_attendance_rows(db) -> List[List]:
 def build_attendance_probability_rows(db, min_players: int = 20) -> List[List]:
     _, players = _collect_attendance_stats(db)
 
-    header = ["Minimum Players", "At least K", "Exactly K"]
+    header = ["Players", "Predicted", "At least K", "Delta", "Exactly K"]
     rows: List[List] = [header]
 
+    total_rows = 12
+
     if not players:
+        blank_row = [""] * len(header)
+        rows.extend([blank_row[:] for _ in range(total_rows)])
         return rows
 
     attendance_rates = [
@@ -250,16 +254,61 @@ def build_attendance_probability_rows(db, min_players: int = 20) -> List[List]:
     ]
 
     team_size = len(attendance_rates)
-    dp: List[float] = [0.0] * (team_size + 1)
-    dp[0] = 1.0
+    dp_actual: List[float] = [0.0] * (team_size + 1)
+    dp_actual[0] = 1.0
+
+    dp_predicted: List[float] = [0.0] * (team_size + 1)
+    dp_predicted[0] = 1.0
 
     for rate in attendance_rates:
         for attendees in range(team_size, 0, -1):
-            dp[attendees] = dp[attendees] * (1 - rate) + dp[attendees - 1] * rate
-        dp[0] *= 1 - rate
+            dp_actual[attendees] = (
+                dp_actual[attendees] * (1 - rate)
+                + dp_actual[attendees - 1] * rate
+            )
+        dp_actual[0] *= 1 - rate
 
-    for minimum_players in range(min_players, team_size + 1):
-        probability = sum(dp[minimum_players:])
-        rows.append([minimum_players, f"{probability * 100:.1f}%", f"{dp[minimum_players] * 100:.1f}%"])
+    predicted_rate = 0.9
+    for _ in range(team_size):
+        for attendees in range(team_size, 0, -1):
+            dp_predicted[attendees] = (
+                dp_predicted[attendees] * (1 - predicted_rate)
+                + dp_predicted[attendees - 1] * predicted_rate
+            )
+        dp_predicted[0] *= 1 - predicted_rate
+
+    cumulative_actual: List[float] = [0.0] * (team_size + 1)
+    cumulative_predicted: List[float] = [0.0] * (team_size + 1)
+    running_actual = 0.0
+    running_predicted = 0.0
+
+    for attendees in range(team_size, -1, -1):
+        running_actual += dp_actual[attendees]
+        running_predicted += dp_predicted[attendees]
+        cumulative_actual[attendees] = running_actual
+        cumulative_predicted[attendees] = running_predicted
+
+    available_rows = team_size - min_players + 1
+    if available_rows < 0:
+        available_rows = 0
+    rows_to_render = min(total_rows, available_rows)
+
+    for minimum_players in range(min_players, min_players + rows_to_render):
+        at_least_probability = cumulative_actual[minimum_players]
+        predicted_probability = cumulative_predicted[minimum_players]
+        delta = predicted_probability - at_least_probability
+        rows.append(
+            [
+                minimum_players,
+                f"{predicted_probability * 100:.1f}%",
+                f"{at_least_probability * 100:.1f}%",
+                f"{delta * 100:.1f}%",
+                f"{dp_actual[minimum_players] * 100:.1f}%",
+            ]
+        )
+
+    blank_row = [""] * len(header)
+    remaining_rows = total_rows - rows_to_render
+    rows.extend([blank_row[:] for _ in range(remaining_rows)])
 
     return rows
