@@ -238,7 +238,7 @@ def build_attendance_rows(db) -> List[List]:
 def build_attendance_probability_rows(db, min_players: int = 20) -> List[List]:
     _, players = _collect_attendance_stats(db)
 
-    header = ["Players", "Predicted", "At least K", "Delta", "Exactly K"]
+    header = ["Players", "Predicted", "Actual", "Delta"]
     rows: List[List] = [header]
 
     total_rows = 12
@@ -296,14 +296,13 @@ def build_attendance_probability_rows(db, min_players: int = 20) -> List[List]:
     for minimum_players in range(min_players, min_players + rows_to_render):
         at_least_probability = cumulative_actual[minimum_players]
         predicted_probability = cumulative_predicted[minimum_players]
-        delta = predicted_probability - at_least_probability
+        delta = at_least_probability - predicted_probability
         rows.append(
             [
                 minimum_players,
                 f"{predicted_probability * 100:.1f}%",
                 f"{at_least_probability * 100:.1f}%",
                 f"{delta * 100:.1f}%",
-                f"{dp_actual[minimum_players] * 100:.1f}%",
             ]
         )
 

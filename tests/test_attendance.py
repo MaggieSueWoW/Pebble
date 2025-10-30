@@ -404,9 +404,8 @@ def test_attendance_probability_table_uses_top_attendance_rates():
     assert probability_rows[0] == [
         "Players",
         "Predicted",
-        "At least K",
+        "Actual",
         "Delta",
-        "Exactly K",
     ]
     assert len(probability_rows) == 13
 
@@ -422,21 +421,18 @@ def test_attendance_probability_table_uses_top_attendance_rates():
         predicted_str,
         at_least_str,
         delta_str,
-        exactly_str,
     ) in data_rows:
         expected_at_least = expected[minimum_players][0]
-        expected_exactly = expected[minimum_players][1]
         expected_predicted_at_least = expected_predicted[minimum_players][0]
-        expected_delta = expected_predicted_at_least - expected_at_least
+        expected_delta =  expected_at_least - expected_predicted_at_least
 
         assert at_least_str == f"{expected_at_least * 100:.1f}%"
-        assert exactly_str == f"{expected_exactly * 100:.1f}%"
         assert predicted_str == f"{expected_predicted_at_least * 100:.1f}%"
         assert delta_str == f"{expected_delta * 100:.1f}%"
 
     blank_rows = [row for row in probability_rows[1:] if row[0] == ""]
     assert len(probability_rows) - 1 == len(data_rows) + len(blank_rows)
-    assert all(row == [""] * 5 for row in blank_rows)
+    assert all(row == [""] * 4 for row in blank_rows)
 
 
 def test_attendance_probability_table_contains_blank_rows_without_roster():
@@ -447,9 +443,8 @@ def test_attendance_probability_table_contains_blank_rows_without_roster():
     assert probability_rows[0] == [
         "Players",
         "Predicted",
-        "At least K",
+        "Actual",
         "Delta",
-        "Exactly K",
     ]
     assert len(probability_rows) == 13
-    assert all(row == [""] * 5 for row in probability_rows[1:])
+    assert all(row == [""] * 4 for row in probability_rows[1:])

@@ -19,7 +19,7 @@ sheets:
     bench_night_totals: "B5"
     bench_week_totals: "B5"
     bench_rankings: "B5"
-    attendance: "F7"
+    attendance: "G7"
     attendance_probability: "B7"
   last_processed:
     reports: "D5"
