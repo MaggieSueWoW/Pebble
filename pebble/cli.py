@@ -689,15 +689,15 @@ def run_week(settings, log):
         ensure_tail_space=True,
     )
 
-    probability_rows = build_attendance_probability_rows(db, min_players=18)
-    replace_values(
-        settings.sheets.spreadsheet_id,
-        settings.sheets.tabs.attendance,
-        probability_rows,
-        settings.service_account_json,
-        start_cell=settings.sheets.starts.attendance_probability,
-        clear_range=False,
-    )
+    # probability_rows = build_attendance_probability_rows(db, min_players=18)
+    # replace_values(
+    #     settings.sheets.spreadsheet_id,
+    #     settings.sheets.tabs.attendance,
+    #     probability_rows,
+    #     settings.service_account_json,
+    #     start_cell=settings.sheets.starts.attendance_probability,
+    #     clear_range=False,
+    # )
 
     log.info(
         "week export complete",
