@@ -2,7 +2,7 @@ import click
 import json
 import time
 from collections import defaultdict
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Union
 
 from .config_loader import load_settings
 from .logging_setup import setup_logging
@@ -185,23 +185,40 @@ def flush_cache_cmd(config):
     log.info("cache flushed", extra={"stage": "flush-cache", "keys": deleted})
 
 
-def _parse_bool(val: str) -> Optional[bool]:
-    v = val.strip().lower()
-    if v in ("", "-", "na"):
+def _parse_availability_value(val: str) -> Optional[Union[bool, int]]:
+    v = val.strip()
+    if not v:
         return None
-    if v in ("y", "yes", "true", "1", "t"):
+
+    lowered = v.lower()
+    if lowered in ("-", "na"):
+        return None
+
+    try:
+        minutes = int(v)
+    except ValueError:
+        pass
+    else:
+        if minutes == 0:
+            return False
+        return minutes
+
+    if lowered in ("y", "yes", "true", "t"):
         return True
-    if v in ("n", "no", "false", "0", "f"):
+    if lowered in ("n", "no", "false", "f"):
         return False
     return None
 
 
 def parse_availability_overrides(
     rows: List[List[str]], resolver: NameResolver
-) -> tuple[Dict[str, Dict[str, Dict[str, Optional[bool]]]], Dict[str, set[str]]]:
+) -> tuple[
+    Dict[str, Dict[str, Dict[str, Optional[Union[bool, int]]]]],
+    Dict[str, set[str]],
+]:
     from collections import defaultdict
 
-    overrides_by_night: Dict[str, Dict[str, Dict[str, Optional[bool]]]] = {}
+    overrides_by_night: Dict[str, Dict[str, Dict[str, Optional[Union[bool, int]]]]] = {}
     unmatched: Dict[str, set[str]] = defaultdict(set)
     if not rows:
         return overrides_by_night, {}
@@ -221,8 +238,8 @@ def parse_availability_overrides(
         if not night or not name:
             continue
         ov = {
-            "pre": _parse_bool(r[pre_idx]) if pre_idx < len(r) else None,
-            "post": _parse_bool(r[post_idx]) if post_idx < len(r) else None,
+            "pre": _parse_availability_value(r[pre_idx]) if pre_idx < len(r) else None,
+            "post": _parse_availability_value(r[post_idx]) if post_idx < len(r) else None,
         }
         main = resolver.resolve(name)
         if not main:

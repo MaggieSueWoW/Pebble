@@ -126,6 +126,40 @@ def test_override_adds_no_show_player():
     assert m["status_source"] == "override"
 
 
+def test_numeric_override_partial_availability():
+    blocks = [
+        {"main": "Main-Illidan", "half": "pre", "start_ms": 0, "end_ms": 10 * 60000},
+    ]
+    overrides = {"Main-Illidan": {"pre": 30, "post": None}}
+    res = bench_minutes_for_night(
+        blocks,
+        pre_ms=60 * 60000,
+        post_ms=0,
+        overrides=overrides,
+    )
+    assert len(res) == 1
+    m = res[0]
+    assert m["played_pre_min"] == 10
+    assert m["bench_pre_min"] == 20  # 30 min availability - 10 played
+    assert m["avail_pre"] is True
+    assert m["bench_post_min"] == 0
+
+
+def test_numeric_override_late_arrival():
+    overrides = {"Main-Illidan": {"pre": -15, "post": None}}
+    res = bench_minutes_for_night(
+        [],
+        pre_ms=60 * 60000,
+        post_ms=60 * 60000,
+        overrides=overrides,
+    )
+    assert len(res) == 1
+    m = res[0]
+    assert m["bench_pre_min"] == 45  # 60 - 15
+    assert m["avail_pre"] is True
+    assert m["bench_post_min"] == 0
+
+
 def test_last_non_mythic_boss_mains_excludes_trash():
     fights_all = [
         {

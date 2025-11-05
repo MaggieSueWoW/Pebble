@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Dict, Iterable, List, Optional, Set
+from typing import Dict, Iterable, List, Optional, Set, Union
 
 from .utils.names import NameResolver
 
@@ -18,7 +18,7 @@ def bench_minutes_for_night(
     pre_ms: int,
     post_ms: int,
     *,
-    overrides: Optional[Dict[str, Dict[str, Optional[bool]]]] = None,
+    overrides: Optional[Dict[str, Dict[str, Optional[Union[bool, int]]]]] = None,
     last_fight_mains: Iterable[str] | None = None,
     roster_map: Optional[Dict[str, str]] = None,
     post_extension_ms: int = 0,
@@ -28,7 +28,7 @@ def bench_minutes_for_night(
 
     ``pre_ms`` and ``post_ms`` are the durations of the pre- and post-break
     halves of the night expressed in milliseconds.  ``overrides`` is an
-    optional mapping of ``main`` → ``{"pre": bool|None, "post": bool|None}``
+    optional mapping of ``main`` → ``{"pre": bool|int|None, "post": bool|int|None}``
     representing officer availability overrides per half. ``last_fight_mains``
     lists mains who appeared in the final non‑Mythic fight and are therefore
     treated as available for the entire night. ``roster_map`` maps alt names to
@@ -70,19 +70,44 @@ def bench_minutes_for_night(
         pre_avail = pre_played_ms > 0 or post_played_ms_raw > 0
         post_avail = pre_played_ms > 0 or post_played_ms_raw > 0
 
+        pre_available_ms = pre_full if pre_avail else pre_played_ms
+        post_available_ms = post_full if post_avail else post_played_ms
+
         if main in last_fight_mains:
             pre_avail = True
             post_avail = True
+            pre_available_ms = pre_full
+            post_available_ms = post_full
 
         ov = overrides.get(main)
-        if ov:
-            if ov.get("pre") is not None:
-                pre_avail = bool(ov["pre"])
-            if ov.get("post") is not None:
-                post_avail = bool(ov["post"])
 
-        pre_bench_ms = max(0, pre_full - pre_played_ms) if pre_avail else 0
-        post_bench_ms = max(0, post_full - post_played_ms) if post_avail else 0
+        def _available_ms_from_numeric(value: int, full_ms: int, played_ms: int) -> int:
+            if value > 0:
+                available_ms = min(full_ms, value * 60000)
+            else:
+                unavailable_ms = abs(value) * 60000
+                available_ms = max(0, full_ms - unavailable_ms)
+            return max(available_ms, played_ms)
+
+        if ov:
+            pre_val = ov.get("pre")
+            if isinstance(pre_val, bool):
+                pre_avail = pre_val
+                pre_available_ms = pre_full if pre_val else pre_played_ms
+            elif isinstance(pre_val, int):
+                pre_available_ms = _available_ms_from_numeric(pre_val, pre_full, pre_played_ms)
+                pre_avail = pre_available_ms > 0
+
+            post_val = ov.get("post")
+            if isinstance(post_val, bool):
+                post_avail = post_val
+                post_available_ms = post_full if post_val else post_played_ms
+            elif isinstance(post_val, int):
+                post_available_ms = _available_ms_from_numeric(post_val, post_full, post_played_ms)
+                post_avail = post_available_ms > 0
+
+        pre_bench_ms = max(0, pre_available_ms - pre_played_ms) if pre_avail else 0
+        post_bench_ms = max(0, post_available_ms - post_played_ms) if post_avail else 0
 
         played_pre_min = pre_played_ms // 60000
         played_post_min = post_played_ms // 60000

@@ -7,12 +7,16 @@ def test_parse_availability_overrides_accepts_sheets_dates():
         ["7/2/24", "Alice", "y", "n", ""],
         ["2024-07-03", "Bob", "yes", "", ""],
         ["July 4, 2024", "Charlie", "", "t", ""],
+        ["July 5, 2024", "Dana", "30", "-15", ""],
     ]
-    resolver = NameResolver(["Alice", "Bob", "CharlieMain"], {"Charlie": "CharlieMain"})
+    resolver = NameResolver(
+        ["Alice", "Bob", "CharlieMain", "Dana"], {"Charlie": "CharlieMain"}
+    )
     overrides, unmatched = parse_availability_overrides(rows, resolver)
     assert unmatched == {}
     assert overrides == {
         "2024-07-02": {"Alice": {"pre": True, "post": False}},
         "2024-07-03": {"Bob": {"pre": True, "post": None}},
         "2024-07-04": {"CharlieMain": {"pre": None, "post": True}},
+        "2024-07-05": {"Dana": {"pre": 30, "post": -15}},
     }
