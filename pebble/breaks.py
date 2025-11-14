@@ -9,6 +9,7 @@ def detect_break(
     window_end_min: int = 120,
     min_break_min: int = 10,
     max_break_min: int = 30,
+    night_start_ms: int = 0,
 ) -> Tuple[Optional[Tuple[int, int]], Dict[str, Any]]:
     """Identify the raid break window.
 
@@ -26,7 +27,6 @@ def detect_break(
     if not fights:
         return None, {"largest_gap_min": 0, "candidates": []}
     fights = sorted(fights, key=lambda f: f["fight_abs_start_ms"])  # expects absolute times
-    night0 = fights[0]["fight_abs_start_ms"]
 
     best = None
     best_gap = 0.0
@@ -35,7 +35,7 @@ def detect_break(
         gap = (b["fight_abs_start_ms"] - a["fight_abs_end_ms"]) / 60000.0  # minutes
         if gap <= 0:
             continue
-        mid_min = ((a["fight_abs_end_ms"] + b["fight_abs_start_ms"]) / 2 - night0) / 60000.0
+        mid_min = ((a["fight_abs_end_ms"] + b["fight_abs_start_ms"]) / 2 - night_start_ms) / 60000.0
         if window_start_min <= mid_min <= window_end_min:
             cand = {
                 "start_ms": a["fight_abs_end_ms"],

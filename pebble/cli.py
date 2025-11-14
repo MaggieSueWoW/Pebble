@@ -396,6 +396,7 @@ def run_compute(settings, log):
             window_end_min=window_end_min,
             min_break_min=bw.min_gap_minutes,
             max_break_min=bw.max_gap_minutes,
+            night_start_ms=night_start_ms,
         )
         br_range = br_auto
         override_used = False
