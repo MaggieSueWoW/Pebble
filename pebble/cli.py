@@ -166,14 +166,6 @@ def run_ingest(settings, log):
     )
 
 
-@cli.command()
-@click.option("--config", default="config.yaml", show_default=True)
-def ingest(config):
-    log = setup_logging()
-    s = load_settings(config)
-    run_ingest(s, log)
-
-
 @cli.command("flush-cache", help="Flush cached WCL reports from Redis.")
 @click.option("--config", default="config.yaml", show_default=True)
 def flush_cache_cmd(config):
@@ -729,19 +721,6 @@ def run_week(settings, log):
 
 @cli.command()
 @click.option("--config", default="config.yaml", show_default=True)
-def compute(config):
-    """Compute Night QA and bench tables from staged Mongo collections.
-
-    Reads from ``fights_all`` then materializes ``participation_m`` and
-    ``blocks`` before aggregating bench minutes.
-    """
-    log = setup_logging()
-    s = load_settings(config)
-    run_compute(s, log)
-
-
-@cli.command()
-@click.option("--config", default="config.yaml", show_default=True)
 @click.option(
     "--max-errors",
     default=5,
@@ -847,14 +826,6 @@ def loop(config, max_errors, trigger_timeout):
             "loop interrupted by user",
             extra={"stage": "loop", "iteration": iteration},
         )
-
-
-@cli.command()
-@click.option("--config", default="config.yaml", show_default=True)
-def week(config):
-    log = setup_logging()
-    s = load_settings(config)
-    run_week(s, log)
 
 
 def main():

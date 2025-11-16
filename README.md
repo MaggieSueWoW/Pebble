@@ -10,10 +10,10 @@ There is a spec in [raid_time_fairness.md](raid_time_fairness.md) which covers m
 
 ## Continuous processing loop
 
-Use the `loop` command to continuously ingest new data and recompute exports. Each iteration runs the full pipeline (`ingest`, `compute`, and `week`) and reloads configuration so changes are picked up without restarting the process.
+Use the `loop` command to continuously ingest new data and recompute exports. Each iteration runs the full ingest, compute, and week phases and reloads configuration so changes are picked up without restarting the process.
 
 ```bash
-pebble loop --config config.yaml --interval 180
+pebble loop --config config.yaml --trigger-timeout 180
 ```
 
 The loop continues until interrupted. Use `--max-errors 0` to keep it running regardless of transient failures.

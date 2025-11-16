@@ -311,8 +311,7 @@ Runtime: Python 3.12
 **CLI entry points (Click)**
 - `cli.py` — root CLI.
   - `pebble bootstrap sheets` — create sheets/ranges.
-  - `pebble ingest` — pull WCL fights for new/changed reports.
-  - `pebble compute` — run blocks → QA → bench night/week.
+  - `pebble loop` — continuously pull fights, compute outputs, and update Sheets.
   - `pebble export` — export Night QA / Bench outputs to Sheets.
   - `pebble backfill --from YYYY-MM-DD --to YYYY-MM-DD` — historical runs.
   - `pebble verify` — run validations (invariants/consistency).
