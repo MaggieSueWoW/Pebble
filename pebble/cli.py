@@ -157,15 +157,6 @@ def sheets(config):
         raise
 
 
-def run_ingest(settings, log):
-    report_res = ingest_reports(settings)
-    roster_count = ingest_roster(settings)
-    log.info(
-        "ingest complete",
-        extra={"stage": "ingest", **report_res, "team_roster": roster_count},
-    )
-
-
 @cli.command("flush-cache", help="Flush cached WCL reports from Redis.")
 @click.option("--config", default="config.yaml", show_default=True)
 def flush_cache_cmd(config):
@@ -241,12 +232,16 @@ def parse_availability_overrides(
     return overrides_by_night, {night: set(names) for night, names in unmatched.items()}
 
 
-def run_compute(settings, log):
-    """Compute Night QA and bench tables from staged Mongo collections.
+def run_pipeline(settings, log):
+    """Ingest reports, compute nightly tables, and refresh weekly exports."""
 
-    Reads from ``fights_all`` then materializes ``participation_m`` and
-    ``blocks`` before aggregating bench minutes.
-    """
+    report_res = ingest_reports(settings)
+    roster_count = ingest_roster(settings)
+    log.info(
+        "ingest complete",
+        extra={"stage": "ingest", **report_res, "team_roster": roster_count},
+    )
+
     s = settings
     db = get_db(s)
     ensure_indexes(db)
@@ -622,9 +617,6 @@ def run_compute(settings, log):
 
     log.info("compute complete", extra={"stage": "compute", "nights": len(nights)})
 
-
-def run_week(settings, log):
-    db = get_db(settings)
     totals = materialize_week_totals(db)
     rankings = materialize_rankings(db)
 
@@ -814,9 +806,7 @@ def loop(
                         },
                     )
                 else:
-                    run_ingest(settings, log)
-                    run_compute(settings, log)
-                    run_week(settings, log)
+                    run_pipeline(settings, log)
                     consecutive_errors = 0
             except click.ClickException:
                 raise
