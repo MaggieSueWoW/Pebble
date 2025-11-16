@@ -738,7 +738,29 @@ def run_week(settings, log):
         "the pipeline. Use 0 to wait indefinitely."
     ),
 )
-def loop(config, max_errors, trigger_timeout):
+@click.option(
+    "--max-iterations",
+    default=0,
+    show_default=True,
+    type=click.IntRange(0, None),
+    help="Maximum loop iterations to execute. Use 0 to run indefinitely.",
+)
+@click.option(
+    "--ignore-trigger-state/--respect-trigger-state",
+    default=False,
+    show_default=True,
+    help=(
+        "Run the pipeline even if the ingest-compute-week trigger checkbox is not "
+        "checked."
+    ),
+)
+def loop(
+    config,
+    max_errors,
+    trigger_timeout,
+    max_iterations,
+    ignore_trigger_state,
+):
     """Continuously ingest and compute outputs for the configured spreadsheet."""
 
     log = setup_logging()
@@ -747,6 +769,12 @@ def loop(config, max_errors, trigger_timeout):
 
     try:
         while True:
+            if max_iterations > 0 and iteration >= max_iterations:
+                log.info(
+                    "max iterations reached, stopping loop",
+                    extra={"stage": "loop", "iteration": iteration},
+                )
+                break
             iteration += 1
             log.info(
                 "loop iteration started",
@@ -760,13 +788,21 @@ def loop(config, max_errors, trigger_timeout):
             try:
                 settings = load_settings(config)
                 trigger_range = _require_ingest_trigger_range(settings)
-                should_run, trigger_client = _wait_for_ingest_trigger(
-                    settings,
-                    log,
-                    trigger_timeout,
-                    iteration,
-                    trigger_range=trigger_range,
-                )
+
+                if ignore_trigger_state:
+                    should_run = True
+                    log.info(
+                        "trigger state ignored; running pipeline",
+                        extra={"stage": "loop", "iteration": iteration},
+                    )
+                else:
+                    should_run, trigger_client = _wait_for_ingest_trigger(
+                        settings,
+                        log,
+                        trigger_timeout,
+                        iteration,
+                        trigger_range=trigger_range,
+                    )
                 if not should_run:
                     consecutive_errors = 0
                     log.info(
@@ -806,7 +842,7 @@ def loop(config, max_errors, trigger_timeout):
                     )
                     break
             finally:
-                if should_run and settings is not None:
+                if should_run and settings is not None and trigger_range is not None:
                     try:
                         _set_ingest_trigger_checkbox(
                             settings,
