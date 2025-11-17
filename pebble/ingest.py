@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 from collections import defaultdict
 from datetime import datetime
 from pymongo import UpdateOne
@@ -83,6 +83,51 @@ def _sheet_values(s: Settings, tab: str, start: str = "A5", last_processed: str 
     )
     update_last_processed(s.sheets.spreadsheet_id, tab, s.service_account_json, last_processed, client)
     return values
+
+
+def _sheet_values_batch(
+    s: Settings,
+    requests: Sequence[Tuple[str, str, str, str]],
+) -> Dict[str, List[List[Any]]]:
+    """Fetch multiple sheet ranges in a single request.
+
+    Args:
+        s: Application settings.
+        requests: Sequence of tuples (key, tab, start_cell, last_processed_cell).
+
+    Returns:
+        Mapping from ``key`` to the 2D list of values retrieved for that range.
+    """
+
+    if not requests:
+        return {}
+
+    client = SheetsClient(s.service_account_json)
+    svc = client.svc
+
+    ranges = [f"{tab}!{start}:Z" for _, tab, start, _ in requests]
+    resp = client.execute(
+        svc.spreadsheets()
+        .values()
+        .batchGet(spreadsheetId=s.sheets.spreadsheet_id, ranges=ranges)
+    )
+    value_ranges = resp.get("valueRanges", [])
+
+    values_by_key: Dict[str, List[List[Any]]] = {}
+    for idx, (key, tab, _start, last_processed) in enumerate(requests):
+        values = []
+        if idx < len(value_ranges):
+            values = value_ranges[idx].get("values", [])
+        values_by_key[key] = values
+        update_last_processed(
+            s.sheets.spreadsheet_id,
+            tab,
+            s.service_account_json,
+            last_processed,
+            client,
+        )
+
+    return values_by_key
 
 
 def _normalize_fight_times(report_start_ms: int, fight_start: int, fight_end: int) -> tuple[int, int, int, int]:

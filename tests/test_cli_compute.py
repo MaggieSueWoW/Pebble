@@ -6,7 +6,79 @@ import pebble.cli as cli
 from pebble.utils.time import PT
 
 
-def test_compute_includes_not_on_roster(monkeypatch):
+def _base_settings():
+    tabs = SimpleNamespace(
+        roster_map="Roster Map",
+        availability_overrides="Availability Overrides",
+        night_qa="Night QA",
+        bench_night_totals="Bench Night Totals",
+        bench_week_totals="Bench Week Totals",
+        bench_rankings="Bench Rankings",
+        attendance="Attendance",
+    )
+    starts = SimpleNamespace(
+        roster_map="A2",
+        availability_overrides="A2",
+        night_qa="A1",
+        bench_night_totals="A1",
+        bench_week_totals="A1",
+        bench_rankings="A1",
+        attendance="A1",
+    )
+    last_processed = SimpleNamespace(
+        roster_map="B2",
+        availability_overrides="B2",
+        night_qa="B1",
+        bench_night_totals="B1",
+        bench_week_totals="B1",
+        bench_rankings="B1",
+        attendance="B1",
+    )
+    sheets = SimpleNamespace(
+        spreadsheet_id="sheet",
+        tabs=tabs,
+        starts=starts,
+        last_processed=last_processed,
+    )
+    time = SimpleNamespace(
+        break_window=SimpleNamespace(
+            start_pt="19:30",
+            end_pt="21:00",
+            min_gap_minutes=10,
+            max_gap_minutes=30,
+        ),
+        mythic_post_extension_min=5,
+    )
+    return SimpleNamespace(service_account_json="creds.json", sheets=sheets, time=time)
+
+
+def _fake_log():
+    return SimpleNamespace(info=lambda *a, **k: None, warning=lambda *a, **k: None)
+
+
+def _sheet_map(settings, roster=None, overrides=None):
+    return {
+        settings.sheets.tabs.roster_map: roster or [],
+        settings.sheets.tabs.availability_overrides: overrides or [],
+    }
+
+
+def _setup_pipeline(monkeypatch, db, settings, sheet_values_map):
+    monkeypatch.setattr("pebble.cli.get_db", lambda s: db)
+    monkeypatch.setattr("pebble.cli.ensure_indexes", lambda db: None)
+    monkeypatch.setattr("pebble.cli.ingest_reports", lambda s: {"reports": 0, "fights": 0})
+    monkeypatch.setattr("pebble.cli.ingest_roster", lambda s: db["team_roster"].count_documents({}))
+
+    def fake_batch(_settings, requests):
+        values = {}
+        for key, tab, *_ in requests:
+            values[key] = sheet_values_map.get(tab, [])
+        return values
+
+    monkeypatch.setattr("pebble.cli._sheet_values_batch", fake_batch)
+
+
+def test_run_pipeline_includes_not_on_roster(monkeypatch):
     db = mongomock.MongoClient().db
 
     night_id = "2024-07-10"
@@ -47,57 +119,13 @@ def test_compute_includes_not_on_roster(monkeypatch):
     def fake_replace_values(spreadsheet_id, tab, values, creds_path, **kwargs):
         captured[tab] = values
 
-    def fake_sheet_values(settings, tab, start, last_processed):
-        if tab == settings.sheets.tabs.roster_map:
-            return [["Alt", "Main"], ["Bobalt-Illidan", "Bob-Illidan"]]
-        if tab == settings.sheets.tabs.availability_overrides:
-            return []
-        return []
+    settings = _base_settings()
+    roster_rows = [["Alt", "Main"], ["Bobalt-Illidan", "Bob-Illidan"]]
 
-    def fake_logging():
-        return SimpleNamespace(info=lambda *a, **k: None, warning=lambda *a, **k: None)
-
-    settings = SimpleNamespace(
-        service_account_json="creds.json",
-        sheets=SimpleNamespace(
-            spreadsheet_id="sheet",
-            tabs=SimpleNamespace(
-                roster_map="Roster Map",
-                availability_overrides="Availability Overrides",
-                night_qa="Night QA",
-                bench_night_totals="Bench Night Totals",
-            ),
-            starts=SimpleNamespace(
-                roster_map="A2",
-                availability_overrides="A2",
-                night_qa="A1",
-                bench_night_totals="A1",
-            ),
-            last_processed=SimpleNamespace(
-                roster_map="B2",
-                availability_overrides="B2",
-                night_qa="B1",
-                bench_night_totals="B1",
-            ),
-        ),
-        time=SimpleNamespace(
-            break_window=SimpleNamespace(
-                start_pt="19:30",
-                end_pt="21:00",
-                min_gap_minutes=10,
-                max_gap_minutes=30,
-            ),
-            mythic_post_extension_min=5,
-        ),
-    )
-
-    monkeypatch.setattr("pebble.cli.load_settings", lambda _: settings)
-    monkeypatch.setattr("pebble.cli.get_db", lambda s: db)
-    monkeypatch.setattr("pebble.cli.ensure_indexes", lambda db: None)
-    monkeypatch.setattr("pebble.cli.setup_logging", fake_logging)
     monkeypatch.setattr("pebble.cli.replace_values", fake_replace_values)
-    monkeypatch.setattr("pebble.cli._sheet_values", fake_sheet_values)
-    cli.compute.callback("config.yaml")
+    _setup_pipeline(monkeypatch, db, settings, _sheet_map(settings, roster_rows, []))
+
+    cli.run_pipeline(settings, _fake_log())
 
     assert settings.sheets.tabs.night_qa in captured
     header = captured[settings.sheets.tabs.night_qa][0]
@@ -110,7 +138,7 @@ def test_compute_includes_not_on_roster(monkeypatch):
     assert data_row[ext_idx] == "0.00"
 
 
-def test_compute_extends_last_mythic_players(monkeypatch):
+def test_run_pipeline_extends_last_mythic_players(monkeypatch):
     db = mongomock.MongoClient().db
 
     night_id = "2024-07-10"
@@ -179,58 +207,12 @@ def test_compute_extends_last_mythic_players(monkeypatch):
     def fake_replace_values(spreadsheet_id, tab, values, creds_path, **kwargs):
         captured[tab] = values
 
-    def fake_sheet_values(settings, tab, start, last_processed):
-        if tab == settings.sheets.tabs.roster_map:
-            return []
-        if tab == settings.sheets.tabs.availability_overrides:
-            return []
-        return []
+    settings = _base_settings()
 
-    def fake_logging():
-        return SimpleNamespace(info=lambda *a, **k: None, warning=lambda *a, **k: None)
-
-    settings = SimpleNamespace(
-        service_account_json="creds.json",
-        sheets=SimpleNamespace(
-            spreadsheet_id="sheet",
-            tabs=SimpleNamespace(
-                roster_map="Roster Map",
-                availability_overrides="Availability Overrides",
-                night_qa="Night QA",
-                bench_night_totals="Bench Night Totals",
-            ),
-            starts=SimpleNamespace(
-                roster_map="A2",
-                availability_overrides="A2",
-                night_qa="A1",
-                bench_night_totals="A1",
-            ),
-            last_processed=SimpleNamespace(
-                roster_map="B2",
-                availability_overrides="B2",
-                night_qa="B1",
-                bench_night_totals="B1",
-            ),
-        ),
-        time=SimpleNamespace(
-            break_window=SimpleNamespace(
-                start_pt="19:30",
-                end_pt="21:00",
-                min_gap_minutes=10,
-                max_gap_minutes=30,
-            ),
-            mythic_post_extension_min=5,
-        ),
-    )
-
-    monkeypatch.setattr("pebble.cli.load_settings", lambda _: settings)
-    monkeypatch.setattr("pebble.cli.get_db", lambda s: db)
-    monkeypatch.setattr("pebble.cli.ensure_indexes", lambda db: None)
-    monkeypatch.setattr("pebble.cli.setup_logging", fake_logging)
     monkeypatch.setattr("pebble.cli.replace_values", fake_replace_values)
-    monkeypatch.setattr("pebble.cli._sheet_values", fake_sheet_values)
+    _setup_pipeline(monkeypatch, db, settings, _sheet_map(settings))
 
-    cli.compute.callback("config.yaml")
+    cli.run_pipeline(settings, _fake_log())
 
     bench_docs = list(db["bench_night_totals"].find({}, {"_id": 0}))
 
@@ -242,7 +224,7 @@ def test_compute_extends_last_mythic_players(monkeypatch):
     assert doc_for("Bob")["played_post_min"] == 0
 
 
-def test_compute_removes_stale_bench_entries(monkeypatch):
+def test_run_pipeline_removes_stale_bench_entries(monkeypatch):
     db = mongomock.MongoClient().db
 
     night_id = "2024-07-10"
@@ -327,71 +309,25 @@ def test_compute_removes_stale_bench_entries(monkeypatch):
     def fake_replace_values(spreadsheet_id, tab, values, creds_path, **kwargs):
         captured.setdefault(tab, []).append(values)
 
-    def fake_sheet_values(settings, tab, start, last_processed):
-        if tab == settings.sheets.tabs.roster_map:
-            return []
-        if tab == settings.sheets.tabs.availability_overrides:
-            return []
-        return []
+    settings = _base_settings()
 
-    def fake_logging():
-        return SimpleNamespace(info=lambda *a, **k: None, warning=lambda *a, **k: None)
-
-    settings = SimpleNamespace(
-        service_account_json="creds.json",
-        sheets=SimpleNamespace(
-            spreadsheet_id="sheet",
-            tabs=SimpleNamespace(
-                roster_map="Roster Map",
-                availability_overrides="Availability Overrides",
-                night_qa="Night QA",
-                bench_night_totals="Bench Night Totals",
-            ),
-            starts=SimpleNamespace(
-                roster_map="A2",
-                availability_overrides="A2",
-                night_qa="A1",
-                bench_night_totals="A1",
-            ),
-            last_processed=SimpleNamespace(
-                roster_map="B2",
-                availability_overrides="B2",
-                night_qa="B1",
-                bench_night_totals="B1",
-            ),
-        ),
-        time=SimpleNamespace(
-            break_window=SimpleNamespace(
-                start_pt="19:30",
-                end_pt="21:00",
-                min_gap_minutes=10,
-                max_gap_minutes=30,
-            ),
-            mythic_post_extension_min=5,
-        ),
-    )
-
-    monkeypatch.setattr("pebble.cli.load_settings", lambda _: settings)
-    monkeypatch.setattr("pebble.cli.get_db", lambda s: db)
-    monkeypatch.setattr("pebble.cli.ensure_indexes", lambda db: None)
-    monkeypatch.setattr("pebble.cli.setup_logging", fake_logging)
     monkeypatch.setattr("pebble.cli.replace_values", fake_replace_values)
-    monkeypatch.setattr("pebble.cli._sheet_values", fake_sheet_values)
     monkeypatch.setattr("pebble.cli.bench_minutes_for_night", fake_bench_minutes)
+    _setup_pipeline(monkeypatch, db, settings, _sheet_map(settings))
 
-    cli.compute.callback("config.yaml")
+    cli.run_pipeline(settings, _fake_log())
 
     docs = list(db["bench_night_totals"].find({}, {"_id": 0}))
     assert {d["main"] for d in docs} == {"Alice-Illidan", "Bob-Illidan"}
 
     # Second run should remove Bob's entry
-    cli.compute.callback("config.yaml")
+    cli.run_pipeline(settings, _fake_log())
 
     docs = list(db["bench_night_totals"].find({}, {"_id": 0}))
     assert {d["main"] for d in docs} == {"Alice-Illidan"}
 
 
-def test_compute_refreshes_weekly_rankings(monkeypatch):
+def test_run_pipeline_refreshes_weekly_rankings(monkeypatch):
     db = mongomock.MongoClient().db
 
     night_id = "2024-07-10"
@@ -481,59 +417,13 @@ def test_compute_refreshes_weekly_rankings(monkeypatch):
     def fake_replace_values(spreadsheet_id, tab, values, creds_path, **kwargs):
         captured.setdefault(tab, []).append(values)
 
-    def fake_sheet_values(settings, tab, start, last_processed):
-        if tab == settings.sheets.tabs.roster_map:
-            return []
-        if tab == settings.sheets.tabs.availability_overrides:
-            return []
-        return []
+    settings = _base_settings()
 
-    def fake_logging():
-        return SimpleNamespace(info=lambda *a, **k: None, warning=lambda *a, **k: None)
-
-    settings = SimpleNamespace(
-        service_account_json="creds.json",
-        sheets=SimpleNamespace(
-            spreadsheet_id="sheet",
-            tabs=SimpleNamespace(
-                roster_map="Roster Map",
-                availability_overrides="Availability Overrides",
-                night_qa="Night QA",
-                bench_night_totals="Bench Night Totals",
-            ),
-            starts=SimpleNamespace(
-                roster_map="A2",
-                availability_overrides="A2",
-                night_qa="A1",
-                bench_night_totals="A1",
-            ),
-            last_processed=SimpleNamespace(
-                roster_map="B2",
-                availability_overrides="B2",
-                night_qa="B1",
-                bench_night_totals="B1",
-            ),
-        ),
-        time=SimpleNamespace(
-            break_window=SimpleNamespace(
-                start_pt="19:30",
-                end_pt="21:00",
-                min_gap_minutes=10,
-                max_gap_minutes=30,
-            ),
-            mythic_post_extension_min=5,
-        ),
-    )
-
-    monkeypatch.setattr("pebble.cli.load_settings", lambda _: settings)
-    monkeypatch.setattr("pebble.cli.get_db", lambda s: db)
-    monkeypatch.setattr("pebble.cli.ensure_indexes", lambda db: None)
-    monkeypatch.setattr("pebble.cli.setup_logging", fake_logging)
     monkeypatch.setattr("pebble.cli.replace_values", fake_replace_values)
-    monkeypatch.setattr("pebble.cli._sheet_values", fake_sheet_values)
     monkeypatch.setattr("pebble.cli.bench_minutes_for_night", fake_bench_minutes)
+    _setup_pipeline(monkeypatch, db, settings, _sheet_map(settings))
 
-    cli.compute.callback("config.yaml")
+    cli.run_pipeline(settings, _fake_log())
 
     ranks = list(
         db["bench_rankings"].find(
@@ -553,7 +443,7 @@ def test_compute_refreshes_weekly_rankings(monkeypatch):
     # Mark Bob inactive and rerun with updated bench sequences (only Alice)
     db["team_roster"].update_one({"main": "Bob-Illidan"}, {"$set": {"active": False}})
 
-    cli.compute.callback("config.yaml")
+    cli.run_pipeline(settings, _fake_log())
 
     ranks = list(
         db["bench_rankings"].find(

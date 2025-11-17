@@ -7,7 +7,7 @@ from typing import Dict, List, Optional, Union
 from .config_loader import load_settings
 from .logging_setup import setup_logging
 from .mongo_client import get_db, ensure_indexes
-from .ingest import ingest_reports, ingest_roster, _sheet_values
+from .ingest import ingest_reports, ingest_roster, _sheet_values_batch
 from .envelope import mythic_envelope, split_pre_post
 from .breaks import detect_break
 from .blocks import build_blocks
@@ -166,8 +166,6 @@ def flush_cache_cmd(config):
 
     deleted = _flush(s.redis.url, s.redis.key_prefix)
     log.info("cache flushed", extra={"stage": "flush-cache", "keys": deleted})
-
-
 def _parse_availability_value(val: str) -> Optional[Union[bool, int]]:
     v = val.strip()
     if not v:
@@ -246,14 +244,27 @@ def run_pipeline(settings, log):
     db = get_db(s)
     ensure_indexes(db)
 
+    sheet_values = _sheet_values_batch(
+        s,
+        [
+            (
+                "roster_map",
+                s.sheets.tabs.roster_map,
+                s.sheets.starts.roster_map,
+                s.sheets.last_processed.roster_map,
+            ),
+            (
+                "availability_overrides",
+                s.sheets.tabs.availability_overrides,
+                s.sheets.starts.availability_overrides,
+                s.sheets.last_processed.availability_overrides,
+            ),
+        ],
+    )
+
     # Load roster map from Sheets (alt -> main)
     roster_map: Dict[str, str] = {}
-    rows = _sheet_values(
-        s,
-        s.sheets.tabs.roster_map,
-        s.sheets.starts.roster_map,
-        s.sheets.last_processed.roster_map,
-    )
+    rows = sheet_values.get("roster_map", [])
     if rows:
         header = rows[0]
         try:
@@ -272,12 +283,7 @@ def run_pipeline(settings, log):
     resolver = NameResolver(active_mains, roster_map)
 
     # Load availability overrides from Sheets
-    rows = _sheet_values(
-        s,
-        s.sheets.tabs.availability_overrides,
-        s.sheets.starts.availability_overrides,
-        s.sheets.last_processed.availability_overrides,
-    )
+    rows = sheet_values.get("availability_overrides", [])
     overrides_by_night, overrides_unmatched = parse_availability_overrides(rows, resolver)
 
     # Night loop: derive QA + bench
