@@ -5,7 +5,6 @@ import mongomock
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
-from pebble.mongo_client import ensure_indexes
 from pebble.ingest import canonical_fight_key
 
 
@@ -36,7 +35,6 @@ def _upsert(
 def test_overlapping_reports_deduped():
     client = mongomock.MongoClient()
     db = client.db
-    ensure_indexes(db)
 
     encounter_id = 123
     diff = 5
@@ -61,7 +59,6 @@ def test_overlapping_reports_deduped():
 def test_close_fights_no_collision():
     client = mongomock.MongoClient()
     db = client.db
-    ensure_indexes(db)
 
     encounter_id = 123
     diff = 5
@@ -80,7 +77,6 @@ def test_close_fights_no_collision():
 def test_participants_upsert_no_conflict():
     client = mongomock.MongoClient()
     db = client.db
-    ensure_indexes(db)
 
     encounter_id = 123
     diff = 5

@@ -43,7 +43,6 @@ def _setup_monkeypatch(monkeypatch, db, updates):
             return req.execute()
 
     monkeypatch.setattr("pebble.ingest.get_db", lambda s: db)
-    monkeypatch.setattr("pebble.ingest.ensure_indexes", lambda db: None)
     s = SimpleNamespace(
         service_account_json="",
         sheets=SimpleNamespace(

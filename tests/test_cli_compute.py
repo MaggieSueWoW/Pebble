@@ -82,7 +82,6 @@ def _sheet_map(settings, roster=None, overrides=None, attendance=None):
 
 def _setup_pipeline(monkeypatch, db, settings, sheet_values_map, *, sheets_client_cls=None):
     monkeypatch.setattr("pebble.cli.get_db", lambda s: db)
-    monkeypatch.setattr("pebble.cli.ensure_indexes", lambda db: None)
 
     def fake_ingest_reports(_settings, *, rows=None, client=None):
         return {"reports": 0, "fights": 0}

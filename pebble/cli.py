@@ -163,6 +163,16 @@ def flush_cache_cmd(config):
 
     deleted = _flush(s.redis.url, s.redis.key_prefix)
     log.info("cache flushed", extra={"stage": "flush-cache", "keys": deleted})
+
+
+@cli.command("ensure-indexes", help="Ensure MongoDB indexes are created.")
+@click.option("--config", default="config.yaml", show_default=True)
+def ensure_indexes_cmd(config):
+    log = setup_logging()
+    s = load_settings(config)
+    db = get_db(s)
+    ensure_indexes(db)
+    log.info("indexes ensured", extra={"stage": "ensure-indexes"})
 def _parse_availability_value(val: str) -> Optional[Union[bool, int]]:
     v = val.strip()
     if not v:
@@ -279,7 +289,6 @@ def run_pipeline(settings, log):
     )
 
     db = get_db(s)
-    ensure_indexes(db)
 
     # Load roster map from Sheets (alt -> main)
     roster_map: Dict[str, str] = {}

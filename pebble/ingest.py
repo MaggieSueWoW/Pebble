@@ -8,7 +8,7 @@ import string
 import logging
 from .sheets_client import SheetsClient
 from .config_loader import Settings, load_settings
-from .mongo_client import get_db, ensure_indexes
+from .mongo_client import get_db
 from .wcl_client import WCLClient
 from .utils.time import (
     night_id_from_ms,
@@ -137,7 +137,6 @@ def ingest_roster(
 
     s = s or load_settings()
     db = get_db(s)
-    ensure_indexes(db)
 
     sheet_rows = list(rows) if rows is not None else []
     if not sheet_rows:
@@ -351,7 +350,6 @@ def ingest_reports(
 ) -> dict:
     s = s or load_settings()
     db = get_db(s)
-    ensure_indexes(db)
 
     start = s.sheets.starts.reports
     sheet_client = client
