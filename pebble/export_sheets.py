@@ -1,7 +1,7 @@
 from __future__ import annotations
 import logging
 import re
-from typing import List
+from typing import Dict, List
 
 from googleapiclient.errors import HttpError
 
@@ -44,18 +44,27 @@ def _split_cell(cell: str) -> tuple[int, int]:
     return _col_to_index(col), int(row)
 
 
+_SHEET_PROPERTIES_CACHE: Dict[tuple[int, str], Dict[str, dict]] = {}
+
+
 def _get_sheet_properties(client: SheetsClient, spreadsheet_id: str, tab: str) -> dict | None:
-    meta = client.execute(
-        client.svc.spreadsheets().get(
-            spreadsheetId=spreadsheet_id,
-            fields="sheets.properties.sheetId,sheets.properties.title",
+    cache_key = (id(client), spreadsheet_id)
+    cached_props = _SHEET_PROPERTIES_CACHE.get(cache_key)
+    if cached_props is None:
+        meta = client.execute(
+            client.svc.spreadsheets().get(
+                spreadsheetId=spreadsheet_id,
+                fields="sheets.properties.sheetId,sheets.properties.title",
+            )
         )
-    )
-    for sheet in meta.get("sheets", []):
-        props = sheet.get("properties", {})
-        if props.get("title") == tab:
-            return props
-    return None
+        cached_props = {}
+        for sheet in meta.get("sheets", []):
+            props = sheet.get("properties", {})
+            title = props.get("title")
+            if title:
+                cached_props[title] = props
+        _SHEET_PROPERTIES_CACHE[cache_key] = cached_props
+    return cached_props.get(tab)
 
 
 def _get_header_row(
