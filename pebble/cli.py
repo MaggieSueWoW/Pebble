@@ -610,8 +610,8 @@ def run_pipeline(settings, log):
     # Refresh weekly aggregates so Mongo mirrors the latest nightly totals
     from .week_agg import materialize_rankings, materialize_week_totals
 
-    weeks_written = materialize_week_totals(db)
-    ranks_written = materialize_rankings(db)
+    weeks_written, week_total_docs = materialize_week_totals(db, include_docs=True)
+    ranks_written, ranking_docs = materialize_rankings(db, include_docs=True)
 
     log.info(
         "weekly aggregates refreshed",
@@ -662,9 +662,6 @@ def run_pipeline(settings, log):
 
     log.info("compute complete", extra={"stage": "compute", "nights": len(nights)})
 
-    totals = materialize_week_totals(db)
-    rankings = materialize_rankings(db)
-
     rows = [
         [
             "Game Week",
@@ -675,7 +672,7 @@ def run_pipeline(settings, log):
             "Bench Post (min)",
         ]
     ]
-    for rec in db["bench_week_totals"].find({}, {"_id": 0}).sort([("game_week", 1), ("main", 1)]):
+    for rec in sorted(week_total_docs, key=lambda r: (r["game_week"], r["main"])):
         rows.append(
             [
                 rec["game_week"],
@@ -716,7 +713,7 @@ def run_pipeline(settings, log):
             "Bench:Played Ratio",
         ]
     ]
-    for rec in db["bench_rankings"].find({}, {"_id": 0}).sort([("rank", 1)]):
+    for rec in sorted(ranking_docs, key=lambda r: r["rank"]):
         ratio = rec.get("bench_to_played_ratio")
         ratio_display = "" if ratio is None else f"{ratio:.2f}"
         rank_rows.append(
@@ -768,8 +765,8 @@ def run_pipeline(settings, log):
         "week export complete",
         extra={
             "stage": "week",
-            "totals_updated": totals,
-            "rankings_updated": rankings,
+            "totals_updated": weeks_written,
+            "rankings_updated": ranks_written,
         },
     )
 

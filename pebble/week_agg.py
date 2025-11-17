@@ -22,7 +22,7 @@ def week_id_from_night_id(night_id: str) -> str:
     return tuesday.strftime("%Y-%m-%d")
 
 
-def materialize_week_totals(db) -> int:
+def materialize_week_totals(db, *, include_docs: bool = False) -> int | tuple[int, list[dict]]:
     nights = list(db["bench_night_totals"].find({}, {"_id": 0}))
     # group by (game_week, main)
     from collections import defaultdict
@@ -89,7 +89,10 @@ def materialize_week_totals(db) -> int:
     if docs:
         db["bench_week_totals"].insert_many(docs)
 
-    return len(docs)
+    count = len(docs)
+    if include_docs:
+        return count, docs
+    return count
 
 
 def _latest_night_id(db) -> str | None:
@@ -101,7 +104,7 @@ def _latest_night_id(db) -> str | None:
     return latest.get("night_id")
 
 
-def materialize_rankings(db) -> int:
+def materialize_rankings(db, *, include_docs: bool = False) -> int | tuple[int, list[dict]]:
     """Materialize season-to-date bench rankings ordered by bench minutes."""
 
     latest_night = _latest_night_id(db)
@@ -122,6 +125,8 @@ def materialize_rankings(db) -> int:
 
     if not roster_mains:
         db["bench_rankings"].delete_many({})
+        if include_docs:
+            return 0, []
         return 0
 
     pipeline = [
@@ -161,4 +166,7 @@ def materialize_rankings(db) -> int:
     if docs:
         db["bench_rankings"].insert_many(docs)
 
-    return len(docs)
+    count = len(docs)
+    if include_docs:
+        return count, docs
+    return count
