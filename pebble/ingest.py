@@ -87,7 +87,7 @@ def _sheet_values(s: Settings, tab: str, start: str = "A5", last_processed: str 
 
 def _sheet_values_batch(
     s: Settings,
-    requests: Sequence[Tuple[str, str, str, str]],
+    requests: Sequence[Tuple[str, str, str]],
     client: SheetsClient | None = None,
 ) -> Dict[str, List[List[Any]]]:
     """Fetch multiple sheet ranges in a single request.
@@ -106,7 +106,7 @@ def _sheet_values_batch(
     client = client or SheetsClient(s.service_account_json)
     svc = client.svc
 
-    ranges = [f"{tab}!{start}:Z" for _, tab, start, _ in requests]
+    ranges = [f"{tab}!{start}:Z" for _, tab, start in requests]
     resp = client.execute(
         svc.spreadsheets()
         .values()
@@ -115,18 +115,11 @@ def _sheet_values_batch(
     value_ranges = resp.get("valueRanges", [])
 
     values_by_key: Dict[str, List[List[Any]]] = {}
-    for idx, (key, tab, _start, last_processed) in enumerate(requests):
+    for idx, (key, tab, _start) in enumerate(requests):
         values = []
         if idx < len(value_ranges):
             values = value_ranges[idx].get("values", [])
         values_by_key[key] = values
-        update_last_processed(
-            s.sheets.spreadsheet_id,
-            tab,
-            s.service_account_json,
-            last_processed,
-            client,
-        )
 
     return values_by_key
 
