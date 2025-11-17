@@ -117,7 +117,7 @@ def _ensure_headers(
     headers: list[str],
     start: str,
     creds_path: str,
-    last_processed: str,
+    last_processed: str | None = None,
 ):
     rng = f"'{name}'!{start}"
     client.execute(
@@ -130,7 +130,8 @@ def _ensure_headers(
             body={"values": [headers]},
         )
     )
-    update_last_processed(sheet_id, name, creds_path, last_processed, client)
+    if last_processed:
+        update_last_processed(sheet_id, name, creds_path, last_processed, client)
 
 
 def bootstrap_sheets(settings: Settings) -> Dict[str, Any]:
@@ -140,37 +141,37 @@ def bootstrap_sheets(settings: Settings) -> Dict[str, Any]:
         settings.sheets.tabs.reports: (
             "Reports",
             settings.sheets.starts.reports,
-            settings.sheets.last_processed.reports,
+            None,
         ),
         settings.sheets.tabs.roster_map: (
             "Roster Map",
             settings.sheets.starts.roster_map,
-            settings.sheets.last_processed.roster_map,
+            None,
         ),
         settings.sheets.tabs.team_roster: (
             "Team Roster",
             settings.sheets.starts.team_roster,
-            settings.sheets.last_processed.team_roster,
+            None,
         ),
         settings.sheets.tabs.availability_overrides: (
             "Availability Overrides",
             settings.sheets.starts.availability_overrides,
-            settings.sheets.last_processed.availability_overrides,
+            None,
         ),
         settings.sheets.tabs.night_qa: (
             "Night QA",
             settings.sheets.starts.night_qa,
-            settings.sheets.last_processed.night_qa,
+            None,
         ),
         settings.sheets.tabs.bench_night_totals: (
             "Bench Night Totals",
             settings.sheets.starts.bench_night_totals,
-            settings.sheets.last_processed.bench_night_totals,
+            None,
         ),
         settings.sheets.tabs.bench_week_totals: (
             "Bench Week Totals",
             settings.sheets.starts.bench_week_totals,
-            settings.sheets.last_processed.bench_week_totals,
+            None,
         ),
         settings.sheets.tabs.bench_rankings: (
             "Bench Rankings",
@@ -180,7 +181,7 @@ def bootstrap_sheets(settings: Settings) -> Dict[str, Any]:
         settings.sheets.tabs.attendance: (
             "Attendance",
             settings.sheets.starts.attendance,
-            settings.sheets.last_processed.attendance,
+            None,
         ),
     }
     tabs = []

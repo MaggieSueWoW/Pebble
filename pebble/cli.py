@@ -620,7 +620,6 @@ def run_pipeline(settings, log):
         night_qa_rows,
         s.service_account_json,
         start_cell=s.sheets.starts.night_qa,
-        last_processed_cell=s.sheets.last_processed.night_qa,
     )
     replace_values(
         s.sheets.spreadsheet_id,
@@ -628,7 +627,6 @@ def run_pipeline(settings, log):
         bench_rows,
         s.service_account_json,
         start_cell=s.sheets.starts.bench_night_totals,
-        last_processed_cell=s.sheets.last_processed.bench_night_totals,
     )
 
     log.info("compute complete", extra={"stage": "compute", "nights": len(nights)})
@@ -663,7 +661,16 @@ def run_pipeline(settings, log):
         rows,
         settings.service_account_json,
         start_cell=settings.sheets.starts.bench_week_totals,
-        last_processed_cell=settings.sheets.last_processed.bench_week_totals,
+    )
+
+    attendance_rows = build_attendance_rows(db)
+    replace_values(
+        settings.sheets.spreadsheet_id,
+        settings.sheets.tabs.attendance,
+        attendance_rows,
+        settings.service_account_json,
+        start_cell=settings.sheets.starts.attendance,
+        ensure_tail_space=True,
     )
 
     rank_rows = [
@@ -694,17 +701,6 @@ def run_pipeline(settings, log):
         settings.service_account_json,
         start_cell=settings.sheets.starts.bench_rankings,
         last_processed_cell=settings.sheets.last_processed.bench_rankings,
-    )
-
-    attendance_rows = build_attendance_rows(db)
-    replace_values(
-        settings.sheets.spreadsheet_id,
-        settings.sheets.tabs.attendance,
-        attendance_rows,
-        settings.service_account_json,
-        start_cell=settings.sheets.starts.attendance,
-        last_processed_cell=settings.sheets.last_processed.attendance,
-        ensure_tail_space=True,
     )
 
     # probability_rows = build_attendance_probability_rows(db, min_players=18)

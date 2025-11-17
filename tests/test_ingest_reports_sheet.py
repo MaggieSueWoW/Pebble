@@ -92,7 +92,6 @@ def test_ingest_reports_updates_sheet(monkeypatch):
     monkeypatch.setattr("pebble.ingest.WCLClient", DummyWCLClient)
     monkeypatch.setattr("pebble.ingest.get_db", lambda s: mongomock.MongoClient().db)
     monkeypatch.setattr("pebble.ingest.ensure_indexes", lambda db: None)
-    monkeypatch.setattr("pebble.ingest.update_last_processed", lambda *a, **k: None)
 
     fixed_now = datetime(2025, 4, 2, 18, 50, 49, tzinfo=PT)
 
@@ -184,7 +183,6 @@ def test_ingest_reports_rejects_non_wcl_links(monkeypatch, caplog):
     monkeypatch.setattr("pebble.ingest.SheetsClient", DummySheetsClient)
     monkeypatch.setattr("pebble.ingest.get_db", lambda s: mongomock.MongoClient().db)
     monkeypatch.setattr("pebble.ingest.ensure_indexes", lambda db: None)
-    monkeypatch.setattr("pebble.ingest.update_last_processed", lambda *a, **k: None)
 
     settings = Settings(
         sheets=SheetsConfig(
@@ -266,7 +264,6 @@ def test_ingest_reports_marks_bad_links_on_fetch_error(monkeypatch, caplog):
     monkeypatch.setattr("pebble.ingest.SheetsClient", DummySheetsClient)
     monkeypatch.setattr("pebble.ingest.get_db", lambda s: mongomock.MongoClient().db)
     monkeypatch.setattr("pebble.ingest.ensure_indexes", lambda db: None)
-    monkeypatch.setattr("pebble.ingest.update_last_processed", lambda *a, **k: None)
 
     class DummyWCLClient:
         def __init__(self, *args, **kwargs):

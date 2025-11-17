@@ -18,7 +18,6 @@ from .utils.time import (
     pt_time_to_ms,
     sheets_date_str,
 )
-from .utils.sheets import update_last_processed
 
 logger = logging.getLogger(__name__)
 
@@ -74,17 +73,6 @@ def _extract_code_from_url(url: str | None) -> Optional[str]:
         return None
 
 
-def _sheet_values(s: Settings, tab: str, start: str = "A5", last_processed: str = "B3") -> List[List[Any]]:
-    client = SheetsClient(s.service_account_json)
-    svc = client.svc
-    rng = f"{tab}!{start}:Z"
-    values = client.execute(svc.spreadsheets().values().get(spreadsheetId=s.sheets.spreadsheet_id, range=rng)).get(
-        "values", []
-    )
-    update_last_processed(s.sheets.spreadsheet_id, tab, s.service_account_json, last_processed, client)
-    return values
-
-
 def _sheet_values_batch(
     s: Settings,
     requests: Sequence[Tuple[str, str, str]],
@@ -94,7 +82,7 @@ def _sheet_values_batch(
 
     Args:
         s: Application settings.
-        requests: Sequence of tuples (key, tab, start_cell, last_processed_cell).
+        requests: Sequence of tuples (key, tab, start_cell).
 
     Returns:
         Mapping from ``key`` to the 2D list of values retrieved for that range.
@@ -365,13 +353,6 @@ def ingest_reports(
     start = s.sheets.starts.reports
     sheet_client = client or SheetsClient(s.service_account_json)
     svc = sheet_client.svc
-    update_last_processed(
-        s.sheets.spreadsheet_id,
-        s.sheets.tabs.reports,
-        s.service_account_json,
-        s.sheets.last_processed.reports,
-        sheet_client,
-    )
 
     sheet_rows = list(rows) if rows is not None else []
     if not sheet_rows:
