@@ -2,7 +2,7 @@ import click
 import json
 import time
 from collections import defaultdict
-from typing import Dict, List, Optional, Union
+from typing import Dict, List, Optional, Sequence, Union
 
 from .config_loader import load_settings
 from .logging_setup import setup_logging
@@ -254,6 +254,11 @@ def run_pipeline(settings, log):
                 "availability_overrides",
                 s.sheets.tabs.availability_overrides,
                 s.sheets.starts.availability_overrides,
+            ),
+            (
+                "attendance_header",
+                s.sheets.tabs.attendance,
+                s.sheets.starts.attendance,
             ),
         ],
         client=sheet_client,
@@ -627,6 +632,7 @@ def run_pipeline(settings, log):
         last_processed_cell: str | None = None,
         ensure_tail_space: bool = False,
         include_last_processed: bool = False,
+        existing_header_row: Sequence[str] | None = None,
     ) -> None:
         sheet_requests.extend(
             build_replace_values_requests(
@@ -638,6 +644,7 @@ def run_pipeline(settings, log):
                 last_processed_cell=last_processed_cell,
                 ensure_tail_space=ensure_tail_space,
                 include_last_processed=include_last_processed,
+                existing_header_row=existing_header_row,
             )
         )
 
@@ -686,11 +693,18 @@ def run_pipeline(settings, log):
     )
 
     attendance_rows = build_attendance_rows(db)
+    attendance_existing_header_rows = sheet_values.get("attendance_header", [])
+    attendance_existing_header = (
+        attendance_existing_header_rows[0]
+        if attendance_existing_header_rows
+        else None
+    )
     queue_sheet_write(
         settings.sheets.tabs.attendance,
         attendance_rows,
         start_cell=settings.sheets.starts.attendance,
         ensure_tail_space=True,
+        existing_header_row=attendance_existing_header,
     )
 
     rank_rows = [

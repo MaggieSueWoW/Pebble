@@ -62,10 +62,21 @@ def _fake_log():
     return SimpleNamespace(info=lambda *a, **k: None, warning=lambda *a, **k: None)
 
 
-def _sheet_map(settings, roster=None, overrides=None):
+def _sheet_map(settings, roster=None, overrides=None, attendance=None):
     return {
         settings.sheets.tabs.roster_map: roster or [],
         settings.sheets.tabs.availability_overrides: overrides or [],
+        settings.sheets.tabs.attendance:
+            attendance
+            or [
+                [
+                    "Player",
+                    "Attendance",
+                    "Played",
+                    "Bench",
+                    "Possible",
+                ]
+            ],
     }
 
 

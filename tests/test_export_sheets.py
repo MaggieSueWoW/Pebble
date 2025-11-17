@@ -92,6 +92,7 @@ def test_replace_values_inserts_columns_before_trailing_cells(monkeypatch):
         values,
         client=client,
         ensure_tail_space=True,
+        existing_header_row=existing_header,
     )
 
     requests = recorded.get("batch")
@@ -129,6 +130,7 @@ def test_replace_values_does_not_insert_when_space_exists(monkeypatch):
         values,
         client=client,
         ensure_tail_space=True,
+        existing_header_row=existing_header,
     )
 
     requests = recorded.get("batch", [])

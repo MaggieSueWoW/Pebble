@@ -120,21 +120,16 @@ def _ensure_table_capacity(
     tab: str,
     start_cell: str,
     values: List[List],
+    existing_header_row: Sequence[str],
 ) -> None:
     if not values or not values[0]:
         return
 
     header = values[0]
-    existing_header = _get_header_row(
-        client,
-        spreadsheet_id,
-        tab,
-        start_cell,
-    )
-    if not existing_header:
+    if not existing_header_row:
         return
 
-    additional_columns = len(header) - len(existing_header)
+    additional_columns = len(header) - len(existing_header_row)
     if additional_columns <= 0:
         return
 
@@ -151,7 +146,7 @@ def _ensure_table_capacity(
     if sheet_id is None:
         return
 
-    insert_start = start_col_idx + max(len(existing_header) - 1, 0)
+    insert_start = start_col_idx + max(len(existing_header_row) - 1, 0)
     body = {
         "requests": [
             {
@@ -191,12 +186,24 @@ def build_replace_values_requests(
     ensure_tail_space: bool = False,
     clear_range: bool = True,
     include_last_processed: bool = False,
+    existing_header_row: Sequence[str] | None = None,
 ) -> List[dict]:
     """Build the batchUpdate requests necessary to replace table contents."""
 
     if ensure_tail_space:
+        if existing_header_row is None:
+            raise ValueError(
+                "existing_header_row is required when ensure_tail_space is True"
+            )
         try:
-            _ensure_table_capacity(client, spreadsheet_id, tab, start_cell, values)
+            _ensure_table_capacity(
+                client,
+                spreadsheet_id,
+                tab,
+                start_cell,
+                values,
+                existing_header_row,
+            )
         except HttpError:
             raise
         except Exception:
@@ -351,6 +358,7 @@ def replace_values(
     last_processed_cell: str | None = None,
     ensure_tail_space: bool = False,
     clear_range: bool = True,
+    existing_header_row: Sequence[str] | None = None,
 ) -> None:
     """Replace all values in ``tab`` with ``values``."""
 
@@ -364,6 +372,7 @@ def replace_values(
         last_processed_cell=last_processed_cell,
         ensure_tail_space=ensure_tail_space,
         clear_range=clear_range,
+        existing_header_row=existing_header_row,
     )
 
     if requests:
