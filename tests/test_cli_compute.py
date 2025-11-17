@@ -8,6 +8,8 @@ from pebble.utils.time import PT
 
 def _base_settings():
     tabs = SimpleNamespace(
+        team_roster="Team Roster",
+        reports="Reports",
         roster_map="Roster Map",
         availability_overrides="Availability Overrides",
         night_qa="Night QA",
@@ -17,6 +19,8 @@ def _base_settings():
         attendance="Attendance",
     )
     starts = SimpleNamespace(
+        team_roster="A5",
+        reports="A5",
         roster_map="A2",
         availability_overrides="A2",
         night_qa="A1",
@@ -26,6 +30,8 @@ def _base_settings():
         attendance="A1",
     )
     last_processed = SimpleNamespace(
+        team_roster="B3",
+        reports="B3",
         roster_map="B2",
         availability_overrides="B2",
         night_qa="B1",
@@ -66,16 +72,29 @@ def _sheet_map(settings, roster=None, overrides=None):
 def _setup_pipeline(monkeypatch, db, settings, sheet_values_map):
     monkeypatch.setattr("pebble.cli.get_db", lambda s: db)
     monkeypatch.setattr("pebble.cli.ensure_indexes", lambda db: None)
-    monkeypatch.setattr("pebble.cli.ingest_reports", lambda s: {"reports": 0, "fights": 0})
-    monkeypatch.setattr("pebble.cli.ingest_roster", lambda s: db["team_roster"].count_documents({}))
 
-    def fake_batch(_settings, requests):
+    def fake_ingest_reports(_settings, *, rows=None, client=None):
+        return {"reports": 0, "fights": 0}
+
+    def fake_ingest_roster(_settings, *, rows=None):
+        return db["team_roster"].count_documents({})
+
+    monkeypatch.setattr("pebble.cli.ingest_reports", fake_ingest_reports)
+    monkeypatch.setattr("pebble.cli.ingest_roster", fake_ingest_roster)
+
+    def fake_batch(_settings, requests, client=None):
         values = {}
         for key, tab, *_ in requests:
             values[key] = sheet_values_map.get(tab, [])
         return values
 
     monkeypatch.setattr("pebble.cli._sheet_values_batch", fake_batch)
+
+    class DummySheetsClient:
+        def __init__(self, *_args, **_kwargs):
+            self.svc = None
+
+    monkeypatch.setattr("pebble.cli.SheetsClient", DummySheetsClient)
 
 
 def test_run_pipeline_includes_not_on_roster(monkeypatch):

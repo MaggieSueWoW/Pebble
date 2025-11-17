@@ -88,6 +88,7 @@ def _sheet_values(s: Settings, tab: str, start: str = "A5", last_processed: str 
 def _sheet_values_batch(
     s: Settings,
     requests: Sequence[Tuple[str, str, str, str]],
+    client: SheetsClient | None = None,
 ) -> Dict[str, List[List[Any]]]:
     """Fetch multiple sheet ranges in a single request.
 
@@ -102,7 +103,7 @@ def _sheet_values_batch(
     if not requests:
         return {}
 
-    client = SheetsClient(s.service_account_json)
+    client = client or SheetsClient(s.service_account_json)
     svc = client.svc
 
     ranges = [f"{tab}!{start}:Z" for _, tab, start, _ in requests]
@@ -145,24 +146,23 @@ def _normalize_fight_times(report_start_ms: int, fight_start: int, fight_end: in
     return rel_start, rel_end, abs_start, abs_end
 
 
-def ingest_roster(s: Settings | None = None) -> int:
+def ingest_roster(
+    s: Settings | None = None,
+    *,
+    rows: Sequence[Sequence[Any]] | None = None,
+) -> int:
     """Ingest the Team Roster sheet into the ``team_roster`` collection."""
 
     s = s or load_settings()
     db = get_db(s)
     ensure_indexes(db)
 
-    rows = _sheet_values(
-        s,
-        s.sheets.tabs.team_roster,
-        s.sheets.starts.team_roster,
-        s.sheets.last_processed.team_roster,
-    )
-    if not rows:
+    sheet_rows = list(rows) if rows is not None else []
+    if not sheet_rows:
         db["team_roster"].delete_many({})
         return 0
 
-    header = rows[0]
+    header = sheet_rows[0]
     try:
         m_idx = header.index("Main")
         j_idx = header.index("Join Date")
@@ -202,7 +202,7 @@ def ingest_roster(s: Settings | None = None) -> int:
 
     class_updates: list[tuple[int, str]] = []
     docs = []
-    for offset, r in enumerate(rows[1:]):
+    for offset, r in enumerate(sheet_rows[1:]):
         main = r[m_idx].strip() if m_idx < len(r) else ""
         if not main:
             continue
@@ -359,29 +359,32 @@ def _ensure_class_colors(
     client.execute(svc.spreadsheets().values().batchUpdate(spreadsheetId=s.sheets.spreadsheet_id, body=body))
 
 
-def ingest_reports(s: Settings | None = None) -> dict:
+def ingest_reports(
+    s: Settings | None = None,
+    *,
+    rows: Sequence[Sequence[Any]] | None = None,
+    client: SheetsClient | None = None,
+) -> dict:
     s = s or load_settings()
     db = get_db(s)
     ensure_indexes(db)
 
-    client = SheetsClient(s.service_account_json)
-    svc = client.svc
     start = s.sheets.starts.reports
-    rng = f"{s.sheets.tabs.reports}!{start}:Z"
-    rows = client.execute(svc.spreadsheets().values().get(spreadsheetId=s.sheets.spreadsheet_id, range=rng)).get(
-        "values", []
-    )
+    sheet_client = client or SheetsClient(s.service_account_json)
+    svc = sheet_client.svc
     update_last_processed(
         s.sheets.spreadsheet_id,
         s.sheets.tabs.reports,
         s.service_account_json,
         s.sheets.last_processed.reports,
-        client,
+        sheet_client,
     )
-    if not rows:
+
+    sheet_rows = list(rows) if rows is not None else []
+    if not sheet_rows:
         return {"reports": 0, "fights": 0}
 
-    header = rows[0]
+    header = sheet_rows[0]
     colmap = {name: header.index(name) for name in REPORT_HEADERS if name in header}
     last_checked_idx = colmap.get("Last Checked (PT)")
     report_name_idx = colmap.get("Report Name")
@@ -402,7 +405,7 @@ def ingest_reports(s: Settings | None = None) -> dict:
     # Collect targets
     updates: List[dict] = []
     targets: List[dict] = []
-    for r_index, row in enumerate(rows[1:], start=start_row + 1):
+    for r_index, row in enumerate(sheet_rows[1:], start=start_row + 1):
 
         def val(col: str) -> str:
             idx = colmap.get(col)
@@ -433,7 +436,7 @@ def ingest_reports(s: Settings | None = None) -> dict:
 
     if not targets:
         if updates:
-            client.execute(
+            sheet_client.execute(
                 svc.spreadsheets()
                 .values()
                 .batchUpdate(
@@ -589,7 +592,7 @@ def ingest_reports(s: Settings | None = None) -> dict:
         total_fights += len(fights)
 
     if updates:
-        client.execute(
+        sheet_client.execute(
             svc.spreadsheets()
             .values()
             .batchUpdate(

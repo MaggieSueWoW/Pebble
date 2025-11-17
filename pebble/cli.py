@@ -233,20 +233,23 @@ def parse_availability_overrides(
 def run_pipeline(settings, log):
     """Ingest reports, compute nightly tables, and refresh weekly exports."""
 
-    report_res = ingest_reports(settings)
-    roster_count = ingest_roster(settings)
-    log.info(
-        "ingest complete",
-        extra={"stage": "ingest", **report_res, "team_roster": roster_count},
-    )
-
     s = settings
-    db = get_db(s)
-    ensure_indexes(db)
-
+    sheet_client = SheetsClient(s.service_account_json)
     sheet_values = _sheet_values_batch(
         s,
         [
+            (
+                "reports",
+                s.sheets.tabs.reports,
+                s.sheets.starts.reports,
+                s.sheets.last_processed.reports,
+            ),
+            (
+                "team_roster",
+                s.sheets.tabs.team_roster,
+                s.sheets.starts.team_roster,
+                s.sheets.last_processed.team_roster,
+            ),
             (
                 "roster_map",
                 s.sheets.tabs.roster_map,
@@ -260,7 +263,18 @@ def run_pipeline(settings, log):
                 s.sheets.last_processed.availability_overrides,
             ),
         ],
+        client=sheet_client,
     )
+
+    report_res = ingest_reports(settings, rows=sheet_values.get("reports", []), client=sheet_client)
+    roster_count = ingest_roster(settings, rows=sheet_values.get("team_roster", []))
+    log.info(
+        "ingest complete",
+        extra={"stage": "ingest", **report_res, "team_roster": roster_count},
+    )
+
+    db = get_db(s)
+    ensure_indexes(db)
 
     # Load roster map from Sheets (alt -> main)
     roster_map: Dict[str, str] = {}

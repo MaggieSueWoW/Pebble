@@ -3,7 +3,7 @@ from types import SimpleNamespace
 from pebble.ingest import ingest_roster
 
 
-def _setup_monkeypatch(monkeypatch, rows, db, updates):
+def _setup_monkeypatch(monkeypatch, db, updates):
     class FakeValues:
         def __init__(self, bucket):
             self._bucket = bucket
@@ -42,10 +42,6 @@ def _setup_monkeypatch(monkeypatch, rows, db, updates):
         def execute(self, req):
             return req.execute()
 
-    monkeypatch.setattr(
-        "pebble.ingest._sheet_values",
-        lambda s, tab, start="A5", last_processed="B3": rows,
-    )
     monkeypatch.setattr("pebble.ingest.get_db", lambda s: db)
     monkeypatch.setattr("pebble.ingest.ensure_indexes", lambda db: None)
     monkeypatch.setattr("pebble.ingest.SheetsClient", FakeSheetsClient)
@@ -79,9 +75,9 @@ def test_ingest_roster_parses_sheet(monkeypatch):
         ]
     )
 
-    s, db = _setup_monkeypatch(monkeypatch, rows, db, updates)
+    s, db = _setup_monkeypatch(monkeypatch, db, updates)
 
-    count = ingest_roster(s)
+    count = ingest_roster(s, rows=rows)
     docs = list(db["team_roster"].find({}, {"_id": 0}))
     assert count == 3
     assert sorted(docs, key=lambda r: r["main"]) == [
@@ -129,9 +125,9 @@ def test_ingest_roster_handles_names_without_realm(monkeypatch):
         ]
     )
 
-    s, db = _setup_monkeypatch(monkeypatch, rows, db, updates)
+    s, db = _setup_monkeypatch(monkeypatch, db, updates)
 
-    count = ingest_roster(s)
+    count = ingest_roster(s, rows=rows)
     docs = list(db["team_roster"].find({}, {"_id": 0}))
     assert count == 2
     assert sorted(docs, key=lambda r: r["main"]) == [

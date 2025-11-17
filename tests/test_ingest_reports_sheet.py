@@ -112,7 +112,7 @@ def test_ingest_reports_updates_sheet(monkeypatch):
         wcl=WCLConfig(client_id="id", client_secret="secret"),
     )
 
-    res = ingest_reports(settings)
+    res = ingest_reports(settings, rows=rows)
     assert res["reports"] == 1
     update_map = {u["range"].split("!")[1]: u["values"][0][0] for u in updates}
     assert update_map["G6"] == "Report One"
@@ -196,7 +196,7 @@ def test_ingest_reports_rejects_non_wcl_links(monkeypatch, caplog):
     )
 
     with caplog.at_level(logging.WARNING):
-        res = ingest_reports(settings)
+        res = ingest_reports(settings, rows=rows)
 
     assert res["reports"] == 0
     update_map = {u["range"].split("!")[1]: u["values"][0][0] for u in updates}
@@ -287,7 +287,7 @@ def test_ingest_reports_marks_bad_links_on_fetch_error(monkeypatch, caplog):
     )
 
     with caplog.at_level(logging.WARNING):
-        res = ingest_reports(settings)
+        res = ingest_reports(settings, rows=rows)
 
     assert res["reports"] == 0
     update_map = {u["range"].split("!")[1]: u["values"][0][0] for u in updates}
