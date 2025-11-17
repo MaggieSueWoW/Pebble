@@ -237,7 +237,7 @@ def parse_availability_overrides(
     return overrides_by_night, {night: set(names) for night, names in unmatched.items()}
 
 
-def run_pipeline(settings, log):
+def run_pipeline(settings, log, force_full_reingest: bool = False):
     """Ingest reports, compute nightly tables, and refresh weekly exports."""
 
     s = settings
@@ -275,7 +275,10 @@ def run_pipeline(settings, log):
     )
 
     report_res = ingest_reports(
-        settings, rows=sheet_values.get("reports", []), client=sheet_client
+        settings,
+        rows=sheet_values.get("reports", []),
+        client=sheet_client,
+        force_full_reingest=force_full_reingest,
     )
     sheet_value_updates = list(report_res.pop("sheet_updates", []))
     roster_count = ingest_roster(
@@ -811,16 +814,29 @@ def run_pipeline(settings, log):
         "checked."
     ),
 )
+@click.option(
+    "--force-full-reingest",
+    is_flag=True,
+    default=False,
+    show_default=True,
+    help="Force ingest of all reports even if they were previously ingested.",
+)
 def loop(
     config,
     max_errors,
     trigger_timeout,
     max_iterations,
     ignore_trigger_state,
+    force_full_reingest,
 ):
     """Continuously ingest and compute outputs for the configured spreadsheet."""
 
     log = setup_logging()
+    if force_full_reingest:
+        log.info(
+            "forcing full report reingest for each loop iteration",
+            extra={"stage": "loop"},
+        )
     iteration = 0
     consecutive_errors = 0
 
@@ -873,7 +889,7 @@ def loop(
                         },
                     )
                 else:
-                    run_pipeline(settings, log)
+                    run_pipeline(settings, log, force_full_reingest=force_full_reingest)
                     consecutive_errors = 0
             except click.ClickException:
                 raise

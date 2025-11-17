@@ -3,6 +3,7 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 from collections import defaultdict
 from datetime import datetime
 from pymongo import UpdateOne
+import hashlib
 import re
 import string
 import logging
@@ -54,6 +55,19 @@ REPORT_HEADERS = {
 
 
 ABS_MS_THRESHOLD = 10**12  # heuristic: anything below this is treated as relative ms
+
+
+def _report_inputs_hash(notes: str, break_start: str, break_end: str) -> str:
+    """Return a stable hash for report-related sheet inputs."""
+
+    normalized = "\x1e".join(
+        [
+            (notes or "").strip(),
+            (break_start or "").strip(),
+            (break_end or "").strip(),
+        ]
+    )
+    return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
 
 
 def _extract_code_from_url(url: str | None) -> Optional[str]:
@@ -347,6 +361,7 @@ def ingest_reports(
     *,
     rows: Sequence[Sequence[Any]] | None = None,
     client: SheetsClient,
+    force_full_reingest: bool = False,
 ) -> dict:
     s = s or load_settings()
     db = get_db(s)
@@ -384,7 +399,14 @@ def ingest_reports(
 
         def val(col: str) -> str:
             idx = colmap.get(col)
-            return row[idx] if idx is not None and idx < len(row) else ""
+            if idx is None or idx >= len(row):
+                return ""
+            raw = row[idx]
+            if isinstance(raw, str):
+                return raw.strip()
+            if raw is None:
+                return ""
+            return str(raw).strip()
 
         status = val("Status").strip().lower()
         if status not in ("", "in-progress", "in progress"):
@@ -399,18 +421,31 @@ def ingest_reports(
                     rng = f"{s.sheets.tabs.reports}!{col_letter}{r_index}"
                     updates.append({"range": rng, "values": [["Bad report link"]]})
             continue
+        notes = val("Notes")
+        break_start = val("Break Override Start (PT)")
+        break_end = val("Break Override End (PT)")
         targets.append(
             {
                 "row": r_index,
                 "code": code,
-                "notes": val("Notes"),
-                "break_override_start": val("Break Override Start (PT)"),
-                "break_override_end": val("Break Override End (PT)"),
+                "notes": notes,
+                "break_override_start": break_start,
+                "break_override_end": break_end,
+                "inputs_hash": _report_inputs_hash(notes, break_start, break_end),
             }
         )
 
     if not targets:
         return {"reports": 0, "fights": 0, "sheet_updates": updates}
+
+    existing_reports: dict[str, dict] = {}
+    code_set = {t["code"] for t in targets}
+    if code_set:
+        cursor = db["reports"].find(
+            {"code": {"$in": list(code_set)}},
+            {"code": 1, "inputs_hash": 1, "ingested_at": 1},
+        )
+        existing_reports = {doc["code"]: doc for doc in cursor}
 
     wcl = WCLClient(
         s.wcl.client_id,
@@ -423,8 +458,19 @@ def ingest_reports(
 
     total_fights = 0
     processed_reports = 0
+    skipped_reports = 0
     for rep in targets:
         code = rep["code"]
+        existing = existing_reports.get(code)
+        if (
+            not force_full_reingest
+            and existing
+            and existing.get("ingested_at")
+            and existing.get("inputs_hash")
+            and existing.get("inputs_hash") == rep.get("inputs_hash")
+        ):
+            skipped_reports += 1
+            continue
         try:
             bundle = wcl.fetch_report_bundle(code)
         except Exception:
@@ -464,8 +510,14 @@ def ingest_reports(
             "break_override_end_pt": ms_to_pt_iso(boe_ms) if boe_ms is not None else "",
             "ingested_at": now_dt,
             "last_checked_pt": now_iso,
+            "inputs_hash": rep.get("inputs_hash"),
         }
         db["reports"].update_one({"code": code}, {"$set": rep_doc}, upsert=True)
+        existing_reports[code] = {
+            "code": code,
+            "ingested_at": now_dt,
+            "inputs_hash": rep.get("inputs_hash"),
+        }
 
         def _update(idx: int | None, value: str):
             if idx is None:
@@ -559,6 +611,7 @@ def ingest_reports(
 
     return {
         "reports": processed_reports,
+        "skipped_reports": skipped_reports,
         "fights": total_fights,
         "sheet_updates": updates,
     }
