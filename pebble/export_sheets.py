@@ -1,12 +1,15 @@
 from __future__ import annotations
 import logging
+import logging
 import re
+from datetime import datetime
 from typing import Dict, List
 
 from googleapiclient.errors import HttpError
 
 from .sheets_client import SheetsClient
 from .utils.sheets import update_last_processed
+from .utils.time import PT, ms_to_pt_sheets
 
 
 logger = logging.getLogger(__name__)
@@ -152,7 +155,12 @@ def _ensure_table_capacity(
     )
 
 
-def replace_values(
+def _timestamp_for_sheets() -> str:
+    now_ms = int(datetime.now(tz=PT).timestamp() * 1000)
+    return ms_to_pt_sheets(now_ms)
+
+
+def build_replace_values_requests(
     spreadsheet_id: str,
     tab: str,
     values: List[List],
@@ -162,17 +170,9 @@ def replace_values(
     last_processed_cell: str | None = None,
     ensure_tail_space: bool = False,
     clear_range: bool = True,
-) -> None:
-    """Replace all values in ``tab`` with ``values``.
-
-    ``USER_ENTERED`` is used so that any date/time strings are parsed by
-    Google Sheets and treated as proper datetimes rather than plain text.
-
-    By default the existing table data is cleared prior to writing the new
-    values and the "last processed" timestamp is updated (if a cell is
-    provided). Clearing can be disabled via ``clear_range``.
-    """
-    svc = client.svc
+    include_last_processed: bool = False,
+) -> List[dict]:
+    """Build the batchUpdate requests necessary to replace table contents."""
 
     if ensure_tail_space:
         try:
@@ -183,6 +183,7 @@ def replace_values(
             logger.warning(
                 "failed to ensure table capacity", extra={"tab": tab}, exc_info=True
             )
+
     try:
         start_col_idx, start_row = _split_cell(start_cell)
     except ValueError as exc:
@@ -236,6 +237,51 @@ def replace_values(
                 }
             )
 
+    if include_last_processed and last_processed_cell:
+        last_col_idx, last_row = _split_cell(last_processed_cell)
+        requests.append(
+            {
+                "pasteData": {
+                    "coordinate": {
+                        "sheetId": sheet_id,
+                        "rowIndex": last_row - 1,
+                        "columnIndex": last_col_idx,
+                    },
+                    "data": _timestamp_for_sheets(),
+                    "delimiter": "\t",
+                    "type": "PASTE_NORMAL",
+                }
+            }
+        )
+
+    return requests
+
+
+def replace_values(
+    spreadsheet_id: str,
+    tab: str,
+    values: List[List],
+    *,
+    client: SheetsClient,
+    start_cell: str = "A5",
+    last_processed_cell: str | None = None,
+    ensure_tail_space: bool = False,
+    clear_range: bool = True,
+) -> None:
+    """Replace all values in ``tab`` with ``values``."""
+
+    svc = client.svc
+    requests = build_replace_values_requests(
+        spreadsheet_id,
+        tab,
+        values,
+        client=client,
+        start_cell=start_cell,
+        last_processed_cell=last_processed_cell,
+        ensure_tail_space=ensure_tail_space,
+        clear_range=clear_range,
+    )
+
     if requests:
         client.execute(
             svc.spreadsheets()
@@ -244,6 +290,7 @@ def replace_values(
                 body={"requests": requests},
             )
         )
+
     if last_processed_cell:
         update_last_processed(
             spreadsheet_id,

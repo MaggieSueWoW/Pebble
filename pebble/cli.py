@@ -13,7 +13,7 @@ from .breaks import detect_break
 from .blocks import build_blocks
 from .bench_calc import bench_minutes_for_night, last_non_mythic_boss_mains
 from .participation import build_mythic_participation
-from .export_sheets import replace_values
+from .export_sheets import build_replace_values_requests
 from .sheets_client import SheetsClient
 from .week_agg import materialize_rankings, materialize_week_totals
 from .attendance import build_attendance_probability_rows, build_attendance_rows
@@ -614,19 +614,39 @@ def run_pipeline(settings, log):
         },
     )
 
-    # Write to Sheets
-    replace_values(
-        s.sheets.spreadsheet_id,
+    sheet_requests: list[dict] = []
+
+    def queue_sheet_write(
+        tab: str,
+        values: list[list],
+        *,
+        start_cell: str,
+        last_processed_cell: str | None = None,
+        ensure_tail_space: bool = False,
+        include_last_processed: bool = False,
+    ) -> None:
+        sheet_requests.extend(
+            build_replace_values_requests(
+                s.sheets.spreadsheet_id,
+                tab,
+                values,
+                client=sheet_client,
+                start_cell=start_cell,
+                last_processed_cell=last_processed_cell,
+                ensure_tail_space=ensure_tail_space,
+                include_last_processed=include_last_processed,
+            )
+        )
+
+    # Queue Sheet writes
+    queue_sheet_write(
         s.sheets.tabs.night_qa,
         night_qa_rows,
-        client=sheet_client,
         start_cell=s.sheets.starts.night_qa,
     )
-    replace_values(
-        s.sheets.spreadsheet_id,
+    queue_sheet_write(
         s.sheets.tabs.bench_night_totals,
         bench_rows,
-        client=sheet_client,
         start_cell=s.sheets.starts.bench_night_totals,
     )
 
@@ -656,20 +676,16 @@ def run_pipeline(settings, log):
                 rec.get("bench_post_min", 0),
             ]
         )
-    replace_values(
-        settings.sheets.spreadsheet_id,
+    queue_sheet_write(
         settings.sheets.tabs.bench_week_totals,
         rows,
-        client=sheet_client,
         start_cell=settings.sheets.starts.bench_week_totals,
     )
 
     attendance_rows = build_attendance_rows(db)
-    replace_values(
-        settings.sheets.spreadsheet_id,
+    queue_sheet_write(
         settings.sheets.tabs.attendance,
         attendance_rows,
-        client=sheet_client,
         start_cell=settings.sheets.starts.attendance,
         ensure_tail_space=True,
     )
@@ -695,14 +711,22 @@ def run_pipeline(settings, log):
                 ratio_display,
             ]
         )
-    replace_values(
-        settings.sheets.spreadsheet_id,
+    queue_sheet_write(
         settings.sheets.tabs.bench_rankings,
         rank_rows,
-        client=sheet_client,
         start_cell=settings.sheets.starts.bench_rankings,
         last_processed_cell=settings.sheets.last_processed.bench_rankings,
+        include_last_processed=True,
     )
+
+    if sheet_requests:
+        sheet_client.execute(
+            sheet_client.svc.spreadsheets()
+            .batchUpdate(
+                spreadsheetId=settings.sheets.spreadsheet_id,
+                body={"requests": sheet_requests},
+            )
+        )
 
     # probability_rows = build_attendance_probability_rows(db, min_players=18)
     # replace_values(

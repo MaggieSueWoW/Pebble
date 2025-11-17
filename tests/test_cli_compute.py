@@ -135,13 +135,16 @@ def test_run_pipeline_includes_not_on_roster(monkeypatch):
 
     captured = {}
 
-    def fake_replace_values(spreadsheet_id, tab, values, *, client=None, **kwargs):
+    def fake_build_requests(spreadsheet_id, tab, values, *, client=None, **kwargs):
         captured[tab] = values
+        return []
 
     settings = _base_settings()
     roster_rows = [["Alt", "Main"], ["Bobalt-Illidan", "Bob-Illidan"]]
 
-    monkeypatch.setattr("pebble.cli.replace_values", fake_replace_values)
+    monkeypatch.setattr(
+        "pebble.cli.build_replace_values_requests", fake_build_requests
+    )
     _setup_pipeline(monkeypatch, db, settings, _sheet_map(settings, roster_rows, []))
 
     cli.run_pipeline(settings, _fake_log())
@@ -223,12 +226,15 @@ def test_run_pipeline_extends_last_mythic_players(monkeypatch):
 
     captured = {}
 
-    def fake_replace_values(spreadsheet_id, tab, values, *, client=None, **kwargs):
+    def fake_build_requests(spreadsheet_id, tab, values, *, client=None, **kwargs):
         captured[tab] = values
+        return []
 
     settings = _base_settings()
 
-    monkeypatch.setattr("pebble.cli.replace_values", fake_replace_values)
+    monkeypatch.setattr(
+        "pebble.cli.build_replace_values_requests", fake_build_requests
+    )
     _setup_pipeline(monkeypatch, db, settings, _sheet_map(settings))
 
     cli.run_pipeline(settings, _fake_log())
@@ -325,12 +331,15 @@ def test_run_pipeline_removes_stale_bench_entries(monkeypatch):
 
     captured = {}
 
-    def fake_replace_values(spreadsheet_id, tab, values, *, client=None, **kwargs):
+    def fake_build_requests(spreadsheet_id, tab, values, *, client=None, **kwargs):
         captured.setdefault(tab, []).append(values)
+        return []
 
     settings = _base_settings()
 
-    monkeypatch.setattr("pebble.cli.replace_values", fake_replace_values)
+    monkeypatch.setattr(
+        "pebble.cli.build_replace_values_requests", fake_build_requests
+    )
     monkeypatch.setattr("pebble.cli.bench_minutes_for_night", fake_bench_minutes)
     _setup_pipeline(monkeypatch, db, settings, _sheet_map(settings))
 
@@ -433,12 +442,15 @@ def test_run_pipeline_refreshes_weekly_rankings(monkeypatch):
 
     captured = {}
 
-    def fake_replace_values(spreadsheet_id, tab, values, *, client=None, **kwargs):
+    def fake_build_requests(spreadsheet_id, tab, values, *, client=None, **kwargs):
         captured.setdefault(tab, []).append(values)
+        return []
 
     settings = _base_settings()
 
-    monkeypatch.setattr("pebble.cli.replace_values", fake_replace_values)
+    monkeypatch.setattr(
+        "pebble.cli.build_replace_values_requests", fake_build_requests
+    )
     monkeypatch.setattr("pebble.cli.bench_minutes_for_night", fake_bench_minutes)
     _setup_pipeline(monkeypatch, db, settings, _sheet_map(settings))
 
