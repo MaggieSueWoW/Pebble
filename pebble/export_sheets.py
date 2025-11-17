@@ -12,6 +12,14 @@ from .utils.sheets import update_last_processed
 logger = logging.getLogger(__name__)
 
 
+def _format_paste_value(value) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, bool):
+        return "TRUE" if value else "FALSE"
+    return str(value)
+
+
 def _col_to_index(col: str) -> int:
     idx = 0
     for char in col.upper():
@@ -166,24 +174,67 @@ def replace_values(
             logger.warning(
                 "failed to ensure table capacity", extra={"tab": tab}, exc_info=True
             )
-    rng = f"{tab}!{start_cell}"
-    body = {"values": values, "majorDimension": "ROWS"}
+    try:
+        start_col_idx, start_row = _split_cell(start_cell)
+    except ValueError as exc:
+        raise ValueError(f"Invalid start cell for replace_values: {start_cell}") from exc
+
+    props = _get_sheet_properties(client, spreadsheet_id, tab)
+    if not props or props.get("sheetId") is None:
+        raise ValueError(
+            f"Unable to locate sheet '{tab}' in spreadsheet '{spreadsheet_id}'"
+        )
+
+    sheet_id = props["sheetId"]
+    requests: List[dict] = []
+
     if clear_range:
+        clear_end_col_idx = _col_to_index("Z") + 1
+        if start_col_idx >= clear_end_col_idx:
+            clear_end_col_idx = start_col_idx + 1
+        requests.append(
+            {
+                "updateCells": {
+                    "range": {
+                        "sheetId": sheet_id,
+                        "startRowIndex": start_row - 1,
+                        "startColumnIndex": start_col_idx,
+                        "endColumnIndex": clear_end_col_idx,
+                    },
+                    "fields": "userEnteredValue",
+                }
+            }
+        )
+
+    if values:
+        paste_data = "\n".join(
+            "\t".join(_format_paste_value(cell) for cell in row)
+            for row in values
+        )
+        if paste_data:
+            requests.append(
+                {
+                    "pasteData": {
+                        "coordinate": {
+                            "sheetId": sheet_id,
+                            "rowIndex": start_row - 1,
+                            "columnIndex": start_col_idx,
+                        },
+                        "data": paste_data,
+                        "delimiter": "\t",
+                        "type": "PASTE_NORMAL",
+                    }
+                }
+            )
+
+    if requests:
         client.execute(
             svc.spreadsheets()
-            .values()
-            .clear(spreadsheetId=spreadsheet_id, range=f"{tab}!{start_cell}:Z")
+            .batchUpdate(
+                spreadsheetId=spreadsheet_id,
+                body={"requests": requests},
+            )
         )
-    client.execute(
-        svc.spreadsheets()
-        .values()
-        .update(
-            spreadsheetId=spreadsheet_id,
-            range=rng,
-            valueInputOption="USER_ENTERED",
-            body=body,
-        )
-    )
     if last_processed_cell:
         update_last_processed(
             spreadsheet_id,
