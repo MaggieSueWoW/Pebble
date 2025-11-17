@@ -38,12 +38,11 @@ def _require_ingest_trigger_range(settings) -> str:
 
 def _read_ingest_trigger_checkbox(
     settings,
-    client: SheetsClient | None = None,
     *,
+    client: SheetsClient,
     trigger_range: str | None = None,
 ) -> bool:
     rng = trigger_range or _require_ingest_trigger_range(settings)
-    client = client or SheetsClient(settings.service_account_json)
     svc = client.svc
     resp = client.execute(svc.spreadsheets().values().get(spreadsheetId=settings.sheets.spreadsheet_id, range=rng))
     values = resp.get("values", [])
@@ -65,12 +64,11 @@ def _read_ingest_trigger_checkbox(
 def _set_ingest_trigger_checkbox(
     settings,
     value: bool,
-    client: SheetsClient | None = None,
     *,
+    client: SheetsClient,
     trigger_range: str | None = None,
 ) -> None:
     rng = trigger_range or _require_ingest_trigger_range(settings)
-    client = client or SheetsClient(settings.service_account_json)
     svc = client.svc
     body = {
         "values": [["TRUE" if value else "FALSE"]],
@@ -93,12 +91,11 @@ def _wait_for_ingest_trigger(
     log,
     timeout: int,
     iteration: int,
-    client: SheetsClient | None = None,
     *,
+    client: SheetsClient,
     trigger_range: str | None = None,
-) -> tuple[bool, SheetsClient | None]:
+) -> bool:
     rng = trigger_range or _require_ingest_trigger_range(settings)
-    client = client or SheetsClient(settings.service_account_json)
     log.info(
         "checking ingest-compute-week trigger",
         extra={
@@ -115,7 +112,7 @@ def _wait_for_ingest_trigger(
             "ingest-compute-week trigger detected",
             extra={"stage": "loop", "iteration": iteration},
         )
-        return True, client
+        return True
 
     now = time.monotonic()
     remaining = max(0.0, deadline - now)
@@ -124,7 +121,7 @@ def _wait_for_ingest_trigger(
         extra={"stage": "loop", "iteration": iteration, "delay": remaining},
     )
     time.sleep(remaining)
-    return False, None
+    return False
 
 
 @click.group()
@@ -263,7 +260,11 @@ def run_pipeline(settings, log):
     )
 
     report_res = ingest_reports(settings, rows=sheet_values.get("reports", []), client=sheet_client)
-    roster_count = ingest_roster(settings, rows=sheet_values.get("team_roster", []))
+    roster_count = ingest_roster(
+        settings,
+        rows=sheet_values.get("team_roster", []),
+        client=sheet_client,
+    )
     log.info(
         "ingest complete",
         extra={"stage": "ingest", **report_res, "team_roster": roster_count},
@@ -618,14 +619,14 @@ def run_pipeline(settings, log):
         s.sheets.spreadsheet_id,
         s.sheets.tabs.night_qa,
         night_qa_rows,
-        s.service_account_json,
+        client=sheet_client,
         start_cell=s.sheets.starts.night_qa,
     )
     replace_values(
         s.sheets.spreadsheet_id,
         s.sheets.tabs.bench_night_totals,
         bench_rows,
-        s.service_account_json,
+        client=sheet_client,
         start_cell=s.sheets.starts.bench_night_totals,
     )
 
@@ -659,7 +660,7 @@ def run_pipeline(settings, log):
         settings.sheets.spreadsheet_id,
         settings.sheets.tabs.bench_week_totals,
         rows,
-        settings.service_account_json,
+        client=sheet_client,
         start_cell=settings.sheets.starts.bench_week_totals,
     )
 
@@ -668,7 +669,7 @@ def run_pipeline(settings, log):
         settings.sheets.spreadsheet_id,
         settings.sheets.tabs.attendance,
         attendance_rows,
-        settings.service_account_json,
+        client=sheet_client,
         start_cell=settings.sheets.starts.attendance,
         ensure_tail_space=True,
     )
@@ -698,7 +699,7 @@ def run_pipeline(settings, log):
         settings.sheets.spreadsheet_id,
         settings.sheets.tabs.bench_rankings,
         rank_rows,
-        settings.service_account_json,
+        client=sheet_client,
         start_cell=settings.sheets.starts.bench_rankings,
         last_processed_cell=settings.sheets.last_processed.bench_rankings,
     )
@@ -793,6 +794,7 @@ def loop(
                 settings = load_settings(config)
                 trigger_range = _require_ingest_trigger_range(settings)
 
+                trigger_client = SheetsClient(settings.service_account_json)
                 if ignore_trigger_state:
                     should_run = True
                     log.info(
@@ -800,11 +802,12 @@ def loop(
                         extra={"stage": "loop", "iteration": iteration},
                     )
                 else:
-                    should_run, trigger_client = _wait_for_ingest_trigger(
+                    should_run = _wait_for_ingest_trigger(
                         settings,
                         log,
                         trigger_timeout,
                         iteration,
+                        client=trigger_client,
                         trigger_range=trigger_range,
                     )
                 if not should_run:
@@ -844,7 +847,12 @@ def loop(
                     )
                     break
             finally:
-                if should_run and settings is not None and trigger_range is not None:
+                if (
+                    should_run
+                    and settings is not None
+                    and trigger_range is not None
+                    and trigger_client is not None
+                ):
                     try:
                         _set_ingest_trigger_checkbox(
                             settings,

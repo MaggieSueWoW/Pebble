@@ -156,7 +156,8 @@ def replace_values(
     spreadsheet_id: str,
     tab: str,
     values: List[List],
-    creds_path: str,
+    *,
+    client: SheetsClient,
     start_cell: str = "A5",
     last_processed_cell: str | None = None,
     ensure_tail_space: bool = False,
@@ -171,7 +172,6 @@ def replace_values(
     values and the "last processed" timestamp is updated (if a cell is
     provided). Clearing can be disabled via ``clear_range``.
     """
-    client = SheetsClient(creds_path)
     svc = client.svc
 
     if ensure_tail_space:
@@ -248,7 +248,6 @@ def replace_values(
         update_last_processed(
             spreadsheet_id,
             tab,
-            creds_path,
             last_processed_cell,
-            client,
+            client=client,
         )

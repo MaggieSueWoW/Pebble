@@ -84,22 +84,26 @@ def test_replace_values_inserts_columns_before_trailing_cells(monkeypatch):
     values = [header_prefix + ["2024-07-09", "2024-07-16", "Legend"]]
     recorded = {}
 
-    def _client_factory(_creds_path):
-        return _FakeClient(existing_header, recorded)
-
-    monkeypatch.setattr(export_sheets, "SheetsClient", _client_factory)
+    client = _FakeClient(existing_header, recorded)
 
     export_sheets.replace_values(
         "sheet",
         "Attendance",
         values,
-        "creds.json",
+        client=client,
         ensure_tail_space=True,
     )
 
     requests = recorded.get("batch")
     assert requests is not None
-    insert = requests[0][0]["insertDimension"]
+    insert_requests = [
+        req["insertDimension"]
+        for batch in requests
+        for req in batch
+        if "insertDimension" in req
+    ]
+    assert insert_requests, "expected insert dimension requests"
+    insert = insert_requests[0]
     assert insert["range"]["startIndex"] == 6
     assert insert["range"]["endIndex"] == 7
     assert insert["inheritFromBefore"] is True
@@ -117,30 +121,30 @@ def test_replace_values_does_not_insert_when_space_exists(monkeypatch):
     values = [header_prefix + ["2024-07-09", "2024-07-16", "Legend"]]
     recorded = {}
 
-    def _client_factory(_creds_path):
-        return _FakeClient(existing_header, recorded)
-
-    monkeypatch.setattr(export_sheets, "SheetsClient", _client_factory)
+    client = _FakeClient(existing_header, recorded)
 
     export_sheets.replace_values(
         "sheet",
         "Attendance",
         values,
-        "creds.json",
+        client=client,
         ensure_tail_space=True,
     )
 
-    assert "batch" not in recorded
+    requests = recorded.get("batch", [])
+    insert_requests = [
+        req
+        for batch in requests
+        for req in batch
+        if "insertDimension" in req
+    ]
+    assert insert_requests == []
 
 
 def test_replace_values_skips_timestamp_when_cell_missing(monkeypatch):
     recorded = {}
 
-    def _client_factory(_creds_path):
-        return _FakeClient(["Player"], recorded)
-
-    monkeypatch.setattr(export_sheets, "SheetsClient", _client_factory)
-
+    client = _FakeClient(["Player"], recorded)
     called = False
 
     def _fake_update_last_processed(*args, **kwargs):
@@ -153,7 +157,7 @@ def test_replace_values_skips_timestamp_when_cell_missing(monkeypatch):
         "sheet",
         "Attendance",
         [["Player"]],
-        "creds.json",
+        client=client,
     )
 
     assert called is False
@@ -162,15 +166,11 @@ def test_replace_values_skips_timestamp_when_cell_missing(monkeypatch):
 def test_replace_values_updates_timestamp_when_cell_provided(monkeypatch):
     recorded = {}
 
-    def _client_factory(_creds_path):
-        return _FakeClient(["Player"], recorded)
-
-    monkeypatch.setattr(export_sheets, "SheetsClient", _client_factory)
-
+    client = _FakeClient(["Player"], recorded)
     captured = {}
 
-    def _fake_update_last_processed(spreadsheet_id, tab, creds_path, cell, client):
-        captured["args"] = (spreadsheet_id, tab, creds_path, cell, client)
+    def _fake_update_last_processed(spreadsheet_id, tab, cell, *, client):
+        captured["args"] = (spreadsheet_id, tab, cell, client)
 
     monkeypatch.setattr(export_sheets, "update_last_processed", _fake_update_last_processed)
 
@@ -178,9 +178,9 @@ def test_replace_values_updates_timestamp_when_cell_provided(monkeypatch):
         "sheet",
         "Attendance",
         [["Player"]],
-        "creds.json",
+        client=client,
         last_processed_cell="B9",
     )
 
-    assert captured["args"][3] == "B9"
-    assert captured["args"][4] is not None
+    assert captured["args"][2] == "B9"
+    assert captured["args"][3] is not None

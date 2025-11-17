@@ -71,8 +71,6 @@ def test_ingest_reports_updates_sheet(monkeypatch):
         def execute(self, req):
             return req.execute()
 
-    monkeypatch.setattr("pebble.ingest.SheetsClient", DummySheetsClient)
-
     sample_bundle = {
         "title": "Report One",
         "startTime": 1000,
@@ -111,7 +109,9 @@ def test_ingest_reports_updates_sheet(monkeypatch):
         wcl=WCLConfig(client_id="id", client_secret="secret"),
     )
 
-    res = ingest_reports(settings, rows=rows)
+    client = DummySheetsClient()
+
+    res = ingest_reports(settings, rows=rows, client=client)
     assert res["reports"] == 1
     update_map = {u["range"].split("!")[1]: u["values"][0][0] for u in updates}
     assert update_map["G6"] == "Report One"
@@ -179,8 +179,6 @@ def test_ingest_reports_rejects_non_wcl_links(monkeypatch, caplog):
 
         def execute(self, req):
             return req.execute()
-
-    monkeypatch.setattr("pebble.ingest.SheetsClient", DummySheetsClient)
     monkeypatch.setattr("pebble.ingest.get_db", lambda s: mongomock.MongoClient().db)
     monkeypatch.setattr("pebble.ingest.ensure_indexes", lambda db: None)
 
@@ -193,8 +191,10 @@ def test_ingest_reports_rejects_non_wcl_links(monkeypatch, caplog):
         wcl=WCLConfig(client_id="id", client_secret="secret"),
     )
 
+    client = DummySheetsClient()
+
     with caplog.at_level(logging.WARNING):
-        res = ingest_reports(settings, rows=rows)
+        res = ingest_reports(settings, rows=rows, client=client)
 
     assert res["reports"] == 0
     update_map = {u["range"].split("!")[1]: u["values"][0][0] for u in updates}
@@ -260,8 +260,6 @@ def test_ingest_reports_marks_bad_links_on_fetch_error(monkeypatch, caplog):
 
         def execute(self, req):
             return req.execute()
-
-    monkeypatch.setattr("pebble.ingest.SheetsClient", DummySheetsClient)
     monkeypatch.setattr("pebble.ingest.get_db", lambda s: mongomock.MongoClient().db)
     monkeypatch.setattr("pebble.ingest.ensure_indexes", lambda db: None)
 
@@ -283,8 +281,10 @@ def test_ingest_reports_marks_bad_links_on_fetch_error(monkeypatch, caplog):
         wcl=WCLConfig(client_id="id", client_secret="secret"),
     )
 
+    client = DummySheetsClient()
+
     with caplog.at_level(logging.WARNING):
-        res = ingest_reports(settings, rows=rows)
+        res = ingest_reports(settings, rows=rows, client=client)
 
     assert res["reports"] == 0
     update_map = {u["range"].split("!")[1]: u["values"][0][0] for u in updates}

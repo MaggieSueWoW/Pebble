@@ -76,7 +76,7 @@ def _setup_pipeline(monkeypatch, db, settings, sheet_values_map):
     def fake_ingest_reports(_settings, *, rows=None, client=None):
         return {"reports": 0, "fights": 0}
 
-    def fake_ingest_roster(_settings, *, rows=None):
+    def fake_ingest_roster(_settings, *, rows=None, client=None):
         return db["team_roster"].count_documents({})
 
     monkeypatch.setattr("pebble.cli.ingest_reports", fake_ingest_reports)
@@ -135,7 +135,7 @@ def test_run_pipeline_includes_not_on_roster(monkeypatch):
 
     captured = {}
 
-    def fake_replace_values(spreadsheet_id, tab, values, creds_path, **kwargs):
+    def fake_replace_values(spreadsheet_id, tab, values, *, client=None, **kwargs):
         captured[tab] = values
 
     settings = _base_settings()
@@ -223,7 +223,7 @@ def test_run_pipeline_extends_last_mythic_players(monkeypatch):
 
     captured = {}
 
-    def fake_replace_values(spreadsheet_id, tab, values, creds_path, **kwargs):
+    def fake_replace_values(spreadsheet_id, tab, values, *, client=None, **kwargs):
         captured[tab] = values
 
     settings = _base_settings()
@@ -325,7 +325,7 @@ def test_run_pipeline_removes_stale_bench_entries(monkeypatch):
 
     captured = {}
 
-    def fake_replace_values(spreadsheet_id, tab, values, creds_path, **kwargs):
+    def fake_replace_values(spreadsheet_id, tab, values, *, client=None, **kwargs):
         captured.setdefault(tab, []).append(values)
 
     settings = _base_settings()
@@ -433,7 +433,7 @@ def test_run_pipeline_refreshes_weekly_rankings(monkeypatch):
 
     captured = {}
 
-    def fake_replace_values(spreadsheet_id, tab, values, creds_path, **kwargs):
+    def fake_replace_values(spreadsheet_id, tab, values, *, client=None, **kwargs):
         captured.setdefault(tab, []).append(values)
 
     settings = _base_settings()

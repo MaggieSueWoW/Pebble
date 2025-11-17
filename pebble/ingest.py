@@ -76,7 +76,8 @@ def _extract_code_from_url(url: str | None) -> Optional[str]:
 def _sheet_values_batch(
     s: Settings,
     requests: Sequence[Tuple[str, str, str]],
-    client: SheetsClient | None = None,
+    *,
+    client: SheetsClient,
 ) -> Dict[str, List[List[Any]]]:
     """Fetch multiple sheet ranges in a single request.
 
@@ -91,7 +92,6 @@ def _sheet_values_batch(
     if not requests:
         return {}
 
-    client = client or SheetsClient(s.service_account_json)
     svc = client.svc
 
     ranges = [f"{tab}!{start}:Z" for _, tab, start in requests]
@@ -131,6 +131,7 @@ def ingest_roster(
     s: Settings | None = None,
     *,
     rows: Sequence[Sequence[Any]] | None = None,
+    client: SheetsClient,
 ) -> int:
     """Ingest the Team Roster sheet into the ``team_roster`` collection."""
 
@@ -213,6 +214,7 @@ def ingest_roster(
         s.sheets.starts.team_roster,
         class_color_idx,
         class_updates,
+        client=client,
     )
 
     db["team_roster"].delete_many({})
@@ -313,6 +315,8 @@ def _ensure_class_colors(
     start_cell: str,
     class_col_idx: Optional[int],
     updates: list[tuple[int, str]],
+    *,
+    client: SheetsClient,
 ) -> None:
     if not updates or class_col_idx is None:
         return
@@ -334,7 +338,6 @@ def _ensure_class_colors(
     ]
     if not data:
         return
-    client = SheetsClient(s.service_account_json)
     svc = client.svc
     body = {"valueInputOption": "RAW", "data": data}
     client.execute(svc.spreadsheets().values().batchUpdate(spreadsheetId=s.sheets.spreadsheet_id, body=body))
@@ -344,14 +347,14 @@ def ingest_reports(
     s: Settings | None = None,
     *,
     rows: Sequence[Sequence[Any]] | None = None,
-    client: SheetsClient | None = None,
+    client: SheetsClient,
 ) -> dict:
     s = s or load_settings()
     db = get_db(s)
     ensure_indexes(db)
 
     start = s.sheets.starts.reports
-    sheet_client = client or SheetsClient(s.service_account_json)
+    sheet_client = client
     svc = sheet_client.svc
 
     sheet_rows = list(rows) if rows is not None else []

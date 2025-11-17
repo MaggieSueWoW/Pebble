@@ -122,7 +122,7 @@ def test_wait_for_ingest_trigger_returns_when_checkbox_set(monkeypatch):
     monkeypatch.setattr(cli, "_read_ingest_trigger_checkbox", lambda *_args, **_kwargs: True)
     monkeypatch.setattr(cli, "time", clock)
 
-    should_run, client = cli._wait_for_ingest_trigger(
+    should_run = cli._wait_for_ingest_trigger(
         settings,
         log,
         timeout=5,
@@ -131,7 +131,6 @@ def test_wait_for_ingest_trigger_returns_when_checkbox_set(monkeypatch):
     )
 
     assert should_run is True
-    assert client is fake_client
     assert clock.sleeps == []
     assert clock.monotonic() == pytest.approx(100.0)
 
@@ -145,7 +144,7 @@ def test_wait_for_ingest_trigger_times_out(monkeypatch):
     monkeypatch.setattr(cli, "_read_ingest_trigger_checkbox", lambda *_args, **_kwargs: False)
     monkeypatch.setattr(cli, "time", clock)
 
-    should_run, client = cli._wait_for_ingest_trigger(
+    should_run = cli._wait_for_ingest_trigger(
         settings,
         log,
         timeout=3,
@@ -154,7 +153,6 @@ def test_wait_for_ingest_trigger_times_out(monkeypatch):
     )
 
     assert should_run is False
-    assert client is None
     assert clock.sleeps == [3.0]
     assert clock.monotonic() == pytest.approx(103.0)
 
@@ -168,7 +166,7 @@ def test_wait_for_ingest_trigger_zero_timeout(monkeypatch):
     monkeypatch.setattr(cli, "_read_ingest_trigger_checkbox", lambda *_args, **_kwargs: False)
     monkeypatch.setattr(cli, "time", clock)
 
-    should_run, client = cli._wait_for_ingest_trigger(
+    should_run = cli._wait_for_ingest_trigger(
         settings,
         log,
         timeout=0,
@@ -177,7 +175,6 @@ def test_wait_for_ingest_trigger_zero_timeout(monkeypatch):
     )
 
     assert should_run is False
-    assert client is None
     assert clock.sleeps == [0.0]
     assert clock.monotonic() == pytest.approx(100.0)
 

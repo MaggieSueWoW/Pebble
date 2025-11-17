@@ -116,7 +116,6 @@ def _ensure_headers(
     name: str,
     headers: list[str],
     start: str,
-    creds_path: str,
     last_processed: str | None = None,
 ):
     rng = f"'{name}'!{start}"
@@ -131,7 +130,7 @@ def _ensure_headers(
         )
     )
     if last_processed:
-        update_last_processed(sheet_id, name, creds_path, last_processed, client)
+        update_last_processed(sheet_id, name, last_processed, client=client)
 
 
 def bootstrap_sheets(settings: Settings) -> Dict[str, Any]:
@@ -193,7 +192,6 @@ def bootstrap_sheets(settings: Settings) -> Dict[str, Any]:
             name,
             HEADERS[canonical],
             start,
-            settings.service_account_json,
             last_processed,
         )
         tabs.append(name)
