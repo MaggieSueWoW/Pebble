@@ -538,8 +538,6 @@ def run_pipeline(settings, log):
         if part_rows:
             db["participation_m"].insert_many(part_rows)
 
-        part_rows = list(db["participation_m"].find({"night_id": night}, {"_id": 0}))
-
         # Blocks stage
         blocks = build_blocks(part_rows, break_range=br_range, fights_all=fights_all)
 
@@ -553,8 +551,6 @@ def run_pipeline(settings, log):
         db["blocks"].delete_many({"night_id": night})
         if block_docs:
             db["blocks"].insert_many(block_docs)
-
-        blocks = list(db["blocks"].find({"night_id": night}, {"_id": 0}))
 
         # Determine participants from the last non-Mythic boss fight before Mythic start
         last_nm_mains = last_non_mythic_boss_mains(fights_all, env[0], resolver=resolver)
