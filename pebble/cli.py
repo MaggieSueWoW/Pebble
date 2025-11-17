@@ -13,7 +13,7 @@ from .breaks import detect_break
 from .blocks import build_blocks
 from .bench_calc import bench_minutes_for_night, last_non_mythic_boss_mains
 from .participation import build_mythic_participation
-from .export_sheets import build_replace_values_requests
+from .export_sheets import build_replace_values_requests, build_value_update_requests
 from .sheets_client import SheetsClient
 from .week_agg import materialize_rankings, materialize_week_totals
 from .attendance import build_attendance_probability_rows, build_attendance_rows
@@ -259,7 +259,10 @@ def run_pipeline(settings, log):
         client=sheet_client,
     )
 
-    report_res = ingest_reports(settings, rows=sheet_values.get("reports", []), client=sheet_client)
+    report_res = ingest_reports(
+        settings, rows=sheet_values.get("reports", []), client=sheet_client
+    )
+    sheet_value_updates = list(report_res.pop("sheet_updates", []))
     roster_count = ingest_roster(
         settings,
         rows=sheet_values.get("team_roster", []),
@@ -718,6 +721,15 @@ def run_pipeline(settings, log):
         last_processed_cell=settings.sheets.last_processed.bench_rankings,
         include_last_processed=True,
     )
+
+    if sheet_value_updates:
+        sheet_requests.extend(
+            build_value_update_requests(
+                settings.sheets.spreadsheet_id,
+                sheet_value_updates,
+                client=sheet_client,
+            )
+        )
 
     if sheet_requests:
         sheet_client.execute(

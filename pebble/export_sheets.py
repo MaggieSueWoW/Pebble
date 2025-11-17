@@ -3,7 +3,7 @@ import logging
 import logging
 import re
 from datetime import datetime
-from typing import Dict, List
+from typing import Dict, List, Sequence
 
 from googleapiclient.errors import HttpError
 
@@ -45,6 +45,26 @@ def _split_cell(cell: str) -> tuple[int, int]:
         raise ValueError(f"Invalid cell reference: {cell}")
     col, row = match.groups()
     return _col_to_index(col), int(row)
+
+
+def _values_by_rows(values: Sequence[Sequence], major_dimension: str | None) -> List[List]:
+    """Return the rows implied by ``major_dimension``."""
+
+    if not values:
+        return []
+
+    major = (major_dimension or "ROWS").upper()
+    if major != "COLUMNS":
+        return [list(row) for row in values]
+
+    max_len = max(len(col) for col in values)
+    rows: List[List] = []
+    for row_idx in range(max_len):
+        row: List = []
+        for col in values:
+            row.append(col[row_idx] if row_idx < len(col) else "")
+        rows.append(row)
+    return rows
 
 
 _SHEET_PROPERTIES_CACHE: Dict[tuple[int, str], Dict[str, dict]] = {}
@@ -248,6 +268,70 @@ def build_replace_values_requests(
                         "columnIndex": last_col_idx,
                     },
                     "data": _timestamp_for_sheets(),
+                    "delimiter": "\t",
+                    "type": "PASTE_NORMAL",
+                }
+            }
+        )
+
+    return requests
+
+
+def build_value_update_requests(
+    spreadsheet_id: str,
+    updates: Sequence[dict],
+    *,
+    client: SheetsClient,
+) -> List[dict]:
+    """Translate value batch updates into ``spreadsheets().batchUpdate`` requests."""
+
+    requests: List[dict] = []
+    if not updates:
+        return requests
+
+    for update in updates:
+        rng = update.get("range")
+        values = update.get("values") or []
+        if not rng or not values:
+            continue
+
+        if "!" not in rng:
+            continue
+        tab, coord = rng.split("!", 1)
+        if not tab:
+            continue
+
+        props = _get_sheet_properties(client, spreadsheet_id, tab)
+        if not props or props.get("sheetId") is None:
+            continue
+        sheet_id = props["sheetId"]
+
+        start_cell = coord.split(":", 1)[0]
+        try:
+            start_col_idx, start_row = _split_cell(start_cell)
+        except ValueError:
+            continue
+
+        rows = _values_by_rows(values, update.get("majorDimension"))
+        if not rows:
+            continue
+
+        paste_data = "\n".join(
+            "\t".join(_format_paste_value(cell) for cell in row)
+            for row in rows
+        )
+        if not paste_data:
+            continue
+
+        requests.append(
+            {
+                "pasteData": {
+                    "coordinate": {
+                        "sheetId": sheet_id,
+                        "rowIndex": start_row - 1,
+                        "columnIndex": start_col_idx,
+                    },
+                    "data": paste_data,
                     "delimiter": "\t",
                     "type": "PASTE_NORMAL",
                 }

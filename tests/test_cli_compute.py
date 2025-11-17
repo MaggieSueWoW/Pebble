@@ -69,7 +69,7 @@ def _sheet_map(settings, roster=None, overrides=None):
     }
 
 
-def _setup_pipeline(monkeypatch, db, settings, sheet_values_map):
+def _setup_pipeline(monkeypatch, db, settings, sheet_values_map, *, sheets_client_cls=None):
     monkeypatch.setattr("pebble.cli.get_db", lambda s: db)
     monkeypatch.setattr("pebble.cli.ensure_indexes", lambda db: None)
 
@@ -94,7 +94,12 @@ def _setup_pipeline(monkeypatch, db, settings, sheet_values_map):
         def __init__(self, *_args, **_kwargs):
             self.svc = None
 
-    monkeypatch.setattr("pebble.cli.SheetsClient", DummySheetsClient)
+        def execute(self, req):
+            return req
+
+    monkeypatch.setattr(
+        "pebble.cli.SheetsClient", sheets_client_cls or DummySheetsClient
+    )
 
 
 def test_run_pipeline_includes_not_on_roster(monkeypatch):
@@ -507,3 +512,90 @@ def test_run_pipeline_refreshes_weekly_rankings(monkeypatch):
             "bench_min": 10,
         }
     ]
+
+
+def test_run_pipeline_batches_ingest_sheet_updates(monkeypatch):
+    db = mongomock.MongoClient().db
+    settings = _base_settings()
+
+    captured_values = []
+    captured_requests = []
+    captured_ingest_updates = []
+
+    class RecordingSheetsClient:
+        def __init__(self, *_args, **_kwargs):
+            class DummyRequest:
+                def __init__(self, body, kind):
+                    self.body = body
+                    self.kind = kind
+
+                def execute(self):
+                    if self.kind == "values":
+                        captured_values.append(self.body)
+                    elif self.kind == "requests":
+                        captured_requests.append(self.body)
+                    return {}
+
+            class DummyValues:
+                def batchUpdate(self_inner, spreadsheetId, body):
+                    return DummyRequest(body, "values")
+
+            class DummySpreadsheets:
+                def values(self_inner):
+                    return DummyValues()
+
+                def batchUpdate(self_inner, spreadsheetId, body):
+                    return DummyRequest(body, "requests")
+
+            self._spreadsheets = DummySpreadsheets()
+            self.svc = SimpleNamespace(spreadsheets=lambda: self._spreadsheets)
+
+        def execute(self, req):
+            return req.execute()
+
+    monkeypatch.setattr(
+        "pebble.cli.build_replace_values_requests", lambda *a, **k: []
+    )
+
+    def _fake_value_requests(spreadsheet_id, updates, *, client):
+        captured_ingest_updates.append(updates)
+        return [{"updateCells": {"range": {"sheetId": 123}}}]
+
+    monkeypatch.setattr(
+        "pebble.cli.build_value_update_requests", _fake_value_requests
+    )
+
+    _setup_pipeline(
+        monkeypatch,
+        db,
+        settings,
+        _sheet_map(settings, [], []),
+        sheets_client_cls=RecordingSheetsClient,
+    )
+
+    def ingest_with_updates(_settings, *, rows=None, client=None):
+        return {
+            "reports": 0,
+            "fights": 0,
+            "sheet_updates": [
+                {
+                    "range": f"{settings.sheets.tabs.reports}!B6",
+                    "values": [["Bad report link"]],
+                }
+            ],
+        }
+
+    monkeypatch.setattr("pebble.cli.ingest_reports", ingest_with_updates)
+
+    cli.run_pipeline(settings, _fake_log())
+
+    assert not captured_values  # no separate values().batchUpdate call
+    assert captured_ingest_updates == [
+        [
+            {
+                "range": f"{settings.sheets.tabs.reports}!B6",
+                "values": [["Bad report link"]],
+            }
+        ]
+    ]
+    assert captured_requests == [{"requests": [{"updateCells": {"range": {"sheetId": 123}}}]}]

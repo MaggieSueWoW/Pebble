@@ -359,7 +359,7 @@ def ingest_reports(
 
     sheet_rows = list(rows) if rows is not None else []
     if not sheet_rows:
-        return {"reports": 0, "fights": 0}
+        return {"reports": 0, "fights": 0, "sheet_updates": []}
 
     header = sheet_rows[0]
     colmap = {name: header.index(name) for name in REPORT_HEADERS if name in header}
@@ -412,16 +412,7 @@ def ingest_reports(
         )
 
     if not targets:
-        if updates:
-            sheet_client.execute(
-                svc.spreadsheets()
-                .values()
-                .batchUpdate(
-                    spreadsheetId=s.sheets.spreadsheet_id,
-                    body={"valueInputOption": "RAW", "data": updates},
-                )
-            )
-        return {"reports": 0, "fights": 0}
+        return {"reports": 0, "fights": 0, "sheet_updates": updates}
 
     wcl = WCLClient(
         s.wcl.client_id,
@@ -568,14 +559,8 @@ def ingest_reports(
             db["fights_all"].bulk_write(fops, ordered=False)
         total_fights += len(fights)
 
-    if updates:
-        sheet_client.execute(
-            svc.spreadsheets()
-            .values()
-            .batchUpdate(
-                spreadsheetId=s.sheets.spreadsheet_id,
-                body={"valueInputOption": "RAW", "data": updates},
-            )
-        )
-
-    return {"reports": processed_reports, "fights": total_fights}
+    return {
+        "reports": processed_reports,
+        "fights": total_fights,
+        "sheet_updates": updates,
+    }

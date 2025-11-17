@@ -39,37 +39,11 @@ def test_ingest_reports_updates_sheet(monkeypatch):
             "",
         ],
     ]
-    updates = []
-
-    class DummyRequest:
-        def __init__(self, data):
-            self.data = data
-
-        def execute(self):
-            return self.data
-
-    class DummyValues:
-        def get(self, spreadsheetId, range):
-            return DummyRequest({"values": rows})
-
-        def batchUpdate(self, spreadsheetId, body):
-            updates.extend(body["data"])
-            return DummyRequest({})
-
-    class DummySpreadsheets:
-        def values(self):
-            return DummyValues()
-
-    class DummySvc:
-        def spreadsheets(self):
-            return DummySpreadsheets()
-
     class DummySheetsClient:
-        def __init__(self, *args, **kwargs):
-            self.svc = DummySvc()
+        svc = None
 
-        def execute(self, req):
-            return req.execute()
+        def execute(self, _req):
+            raise AssertionError("ingest should not touch Sheets")
 
     sample_bundle = {
         "title": "Report One",
@@ -113,7 +87,9 @@ def test_ingest_reports_updates_sheet(monkeypatch):
 
     res = ingest_reports(settings, rows=rows, client=client)
     assert res["reports"] == 1
-    update_map = {u["range"].split("!")[1]: u["values"][0][0] for u in updates}
+    update_map = {
+        u["range"].split("!")[1]: u["values"][0][0] for u in res["sheet_updates"]
+    }
     assert update_map["G6"] == "Report One"
     assert update_map["H6"] == ms_to_pt_sheets(1000)
     assert update_map["I6"] == ms_to_pt_sheets(2000)
@@ -148,37 +124,11 @@ def test_ingest_reports_rejects_non_wcl_links(monkeypatch, caplog):
             "",
         ],
     ]
-    updates = []
-
-    class DummyRequest:
-        def __init__(self, data):
-            self.data = data
-
-        def execute(self):
-            return self.data
-
-    class DummyValues:
-        def get(self, spreadsheetId, range):
-            return DummyRequest({"values": rows})
-
-        def batchUpdate(self, spreadsheetId, body):
-            updates.extend(body["data"])
-            return DummyRequest({})
-
-    class DummySpreadsheets:
-        def values(self):
-            return DummyValues()
-
-    class DummySvc:
-        def spreadsheets(self):
-            return DummySpreadsheets()
-
     class DummySheetsClient:
-        def __init__(self, *args, **kwargs):
-            self.svc = DummySvc()
+        svc = None
 
-        def execute(self, req):
-            return req.execute()
+        def execute(self, _req):
+            raise AssertionError("ingest should not touch Sheets")
     monkeypatch.setattr("pebble.ingest.get_db", lambda s: mongomock.MongoClient().db)
     monkeypatch.setattr("pebble.ingest.ensure_indexes", lambda db: None)
 
@@ -197,7 +147,9 @@ def test_ingest_reports_rejects_non_wcl_links(monkeypatch, caplog):
         res = ingest_reports(settings, rows=rows, client=client)
 
     assert res["reports"] == 0
-    update_map = {u["range"].split("!")[1]: u["values"][0][0] for u in updates}
+    update_map = {
+        u["range"].split("!")[1]: u["values"][0][0] for u in res["sheet_updates"]
+    }
     assert update_map["B6"] == "Bad report link"
     assert "Bad report link at row" in caplog.text
 
@@ -229,37 +181,11 @@ def test_ingest_reports_marks_bad_links_on_fetch_error(monkeypatch, caplog):
             "",
         ],
     ]
-    updates = []
-
-    class DummyRequest:
-        def __init__(self, data):
-            self.data = data
-
-        def execute(self):
-            return self.data
-
-    class DummyValues:
-        def get(self, spreadsheetId, range):
-            return DummyRequest({"values": rows})
-
-        def batchUpdate(self, spreadsheetId, body):
-            updates.extend(body["data"])
-            return DummyRequest({})
-
-    class DummySpreadsheets:
-        def values(self):
-            return DummyValues()
-
-    class DummySvc:
-        def spreadsheets(self):
-            return DummySpreadsheets()
-
     class DummySheetsClient:
-        def __init__(self, *args, **kwargs):
-            self.svc = DummySvc()
+        svc = None
 
-        def execute(self, req):
-            return req.execute()
+        def execute(self, _req):
+            raise AssertionError("ingest should not touch Sheets")
     monkeypatch.setattr("pebble.ingest.get_db", lambda s: mongomock.MongoClient().db)
     monkeypatch.setattr("pebble.ingest.ensure_indexes", lambda db: None)
 
@@ -287,6 +213,8 @@ def test_ingest_reports_marks_bad_links_on_fetch_error(monkeypatch, caplog):
         res = ingest_reports(settings, rows=rows, client=client)
 
     assert res["reports"] == 0
-    update_map = {u["range"].split("!")[1]: u["values"][0][0] for u in updates}
+    update_map = {
+        u["range"].split("!")[1]: u["values"][0][0] for u in res["sheet_updates"]
+    }
     assert update_map["B6"] == "Bad report link"
     assert "Failed to fetch WCL report bundle" in caplog.text
