@@ -85,8 +85,14 @@ def pt_time_to_ms(txt: str, ref_ms: int) -> int | None:
         return None
 
     dt_ref = ms_to_pt(ref_ms)
+    # ``parser.parse`` copies unspecified fields from ``default``. When callers
+    # provide a time string without seconds (e.g., ``7:00 PM``), we want the
+    # parsed datetime to have ``00`` seconds rather than inheriting whatever
+    # value happened to be in ``ref_ms``.  Zero out the seconds/microseconds in
+    # the default before parsing so partial inputs behave intuitively.
+    dt_default = dt_ref.replace(second=0, microsecond=0)
     try:
-        dt = parser.parse(txt, default=dt_ref)
+        dt = parser.parse(txt, default=dt_default)
     except Exception:
         return None
     if dt.tzinfo is None:
