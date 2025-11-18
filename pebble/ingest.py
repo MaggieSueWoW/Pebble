@@ -47,6 +47,8 @@ REPORT_HEADERS = {
     "Notes": "notes",
     "Break Override Start (PT)": "break_override_start",
     "Break Override End (PT)": "break_override_end",
+    "Mythic Override Start (PT)": "mythic_override_start",
+    "Mythic Override End (PT)": "mythic_override_end",
     "Report Name": "report_name",
     "Report Start (PT)": "report_start_pt",
     "Report End (PT)": "report_end_pt",
@@ -57,7 +59,13 @@ REPORT_HEADERS = {
 ABS_MS_THRESHOLD = 10**12  # heuristic: anything below this is treated as relative ms
 
 
-def _report_inputs_hash(notes: str, break_start: str, break_end: str) -> str:
+def _report_inputs_hash(
+    notes: str,
+    break_start: str,
+    break_end: str,
+    mythic_start: str,
+    mythic_end: str,
+) -> str:
     """Return a stable hash for report-related sheet inputs."""
 
     normalized = "\x1e".join(
@@ -65,6 +73,8 @@ def _report_inputs_hash(notes: str, break_start: str, break_end: str) -> str:
             (notes or "").strip(),
             (break_start or "").strip(),
             (break_end or "").strip(),
+            (mythic_start or "").strip(),
+            (mythic_end or "").strip(),
         ]
     )
     return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
@@ -424,6 +434,8 @@ def ingest_reports(
         notes = val("Notes")
         break_start = val("Break Override Start (PT)")
         break_end = val("Break Override End (PT)")
+        mythic_start = val("Mythic Override Start (PT)")
+        mythic_end = val("Mythic Override End (PT)")
         targets.append(
             {
                 "row": r_index,
@@ -431,7 +443,11 @@ def ingest_reports(
                 "notes": notes,
                 "break_override_start": break_start,
                 "break_override_end": break_end,
-                "inputs_hash": _report_inputs_hash(notes, break_start, break_end),
+                "mythic_override_start": mythic_start,
+                "mythic_override_end": mythic_end,
+                "inputs_hash": _report_inputs_hash(
+                    notes, break_start, break_end, mythic_start, mythic_end
+                ),
             }
         )
 
@@ -488,6 +504,8 @@ def ingest_reports(
         night_id = night_id_from_ms(report_start_ms)
         bos_ms = pt_time_to_ms(rep.get("break_override_start"), report_start_ms)
         boe_ms = pt_time_to_ms(rep.get("break_override_end"), report_start_ms)
+        mos_ms = pt_time_to_ms(rep.get("mythic_override_start"), report_start_ms)
+        moe_ms = pt_time_to_ms(rep.get("mythic_override_end"), report_start_ms)
         now_dt = datetime.now(PT)
         now_ms = int(now_dt.timestamp() * 1000)
         now_iso = ms_to_pt_iso(now_ms)
@@ -508,6 +526,11 @@ def ingest_reports(
             "break_override_end_ms": boe_ms,
             "break_override_start_pt": (ms_to_pt_iso(bos_ms) if bos_ms is not None else ""),
             "break_override_end_pt": ms_to_pt_iso(boe_ms) if boe_ms is not None else "",
+            "mythic_override_start_ms": mos_ms,
+            "mythic_override_end_ms": moe_ms,
+            "mythic_override_start_pt":
+                ms_to_pt_iso(mos_ms) if mos_ms is not None else "",
+            "mythic_override_end_pt": ms_to_pt_iso(moe_ms) if moe_ms is not None else "",
             "ingested_at": now_dt,
             "last_checked_pt": now_iso,
             "inputs_hash": rep.get("inputs_hash"),

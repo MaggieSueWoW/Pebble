@@ -336,6 +336,8 @@ def run_pipeline(settings, log, force_full_reingest: bool = False):
             "Break Override Start (PT)",
             "Break Override End (PT)",
             "Break Duration (min)",
+            "Mythic Override Start (PT)",
+            "Mythic Override End (PT)",
             "Mythic Start (PT)",
             "Mythic End (PT)",
             "Mythic Pre (min)",
@@ -370,10 +372,6 @@ def run_pipeline(settings, log, force_full_reingest: bool = False):
             continue
         fights_m = [f for f in fights_all if f.get("is_mythic")]
 
-        env = mythic_envelope(fights_m)
-        if not env:
-            continue
-
         night_unmatched_start = set(resolver.not_on_roster)
 
         reports = list(db["reports"].find({"night_id": night}, {"_id": 0}))
@@ -382,6 +380,35 @@ def run_pipeline(settings, log, force_full_reingest: bool = False):
         report_end_ms = max(r.get("end_ms") for r in reports)
         night_start_ms = min(f["fight_abs_start_ms"] for f in fights_all)
         night_end_ms = max(f["fight_abs_end_ms"] for f in fights_all)
+
+        mythic_override_pair = next(
+            (
+                (r.get("mythic_override_start_ms"), r.get("mythic_override_end_ms"))
+                for r in reports
+                if r.get("mythic_override_start_ms") is not None
+                or r.get("mythic_override_end_ms") is not None
+            ),
+            (None, None),
+        )
+        mythic_override_start_ms, mythic_override_end_ms = mythic_override_pair
+
+        env = mythic_envelope(fights_m)
+        if not env:
+            continue
+        auto_env_start, auto_env_end = env
+        env_start, env_end = auto_env_start, auto_env_end
+        mythic_override_used = False
+        start_extension_ms = 0
+        end_extension_ms = 0
+        if mythic_override_start_ms is not None:
+            env_start = mythic_override_start_ms
+            mythic_override_used = True
+            start_extension_ms = max(0, auto_env_start - mythic_override_start_ms)
+        if mythic_override_end_ms is not None:
+            env_end = mythic_override_end_ms
+            mythic_override_used = True
+            end_extension_ms = max(0, mythic_override_end_ms - auto_env_end)
+        env = (env_start, env_end)
 
         mains_by_report: dict[str, set[str]] = {code: set() for code in report_codes}
         for f in fights_all:
@@ -423,7 +450,7 @@ def run_pipeline(settings, log, force_full_reingest: bool = False):
             night_start_ms=night_start_ms,
         )
         br_range = br_auto
-        override_used = False
+        override_used = mythic_override_used
         if override_start_ms and override_end_ms:
             br_range = (override_start_ms, override_end_ms)
             override_used = True
@@ -431,10 +458,11 @@ def run_pipeline(settings, log, force_full_reingest: bool = False):
         post_extension_min_cfg = getattr(s.time, "mythic_post_extension_min", 0.0) or 0.0
         post_extension_ms = int(round(max(0.0, post_extension_min_cfg) * 60000))
         effective_extension_ms = post_extension_ms if br_range else 0
+        post_extension_credit_ms = effective_extension_ms + end_extension_ms
 
         split = split_pre_post(env, br_range, post_extension_ms=effective_extension_ms)
         break_duration = round((br_range[1] - br_range[0]) / 60000.0, 2) if br_range else ""
-        post_extension_min = round(effective_extension_ms / 60000.0, 2)
+        post_extension_min = round(post_extension_credit_ms / 60000.0, 2)
         candidate_gaps_db = [
             {
                 "start": ms_to_pt_iso(c["start_ms"]),
@@ -453,8 +481,17 @@ def run_pipeline(settings, log, force_full_reingest: bool = False):
         ]
         largest_gap = round(gap_meta.get("largest_gap_min", 0.0), 2)
 
+        first_mythic_mains: set[str] = set()
         last_mythic_mains: set[str] = set()
         if fights_m:
+            first_mythic_fight = min(
+                fights_m,
+                key=lambda f: (
+                    f.get("fight_abs_start_ms")
+                    if f.get("fight_abs_start_ms") is not None
+                    else f.get("fight_abs_end_ms", 0)
+                ),
+            )
             last_mythic_fight = max(
                 fights_m,
                 key=lambda f: (
@@ -463,14 +500,19 @@ def run_pipeline(settings, log, force_full_reingest: bool = False):
                     else f.get("fight_abs_start_ms", 0)
                 ),
             )
-            for p in last_mythic_fight.get("participants", []) or []:
-                name = p.get("name")
-                if not name:
-                    continue
-                main = resolver.resolve(name)
-                if not main:
-                    continue
-                last_mythic_mains.add(main)
+
+            for fight, bucket in (
+                (first_mythic_fight, first_mythic_mains),
+                (last_mythic_fight, last_mythic_mains),
+            ):
+                for p in fight.get("participants", []) or []:
+                    name = p.get("name")
+                    if not name:
+                        continue
+                    main = resolver.resolve(name)
+                    if not main:
+                        continue
+                    bucket.add(main)
 
         mythic_mains: set[str] = set()
         for f in fights_m:
@@ -503,6 +545,12 @@ def run_pipeline(settings, log, force_full_reingest: bool = False):
                 ms_to_pt_sheets(override_start_ms) if override_start_ms else "",
                 ms_to_pt_sheets(override_end_ms) if override_end_ms else "",
                 f"{break_duration:.2f}" if break_duration != "" else "",
+                ms_to_pt_sheets(mythic_override_start_ms)
+                if mythic_override_start_ms is not None
+                else "",
+                ms_to_pt_sheets(mythic_override_end_ms)
+                if mythic_override_end_ms is not None
+                else "",
                 ms_to_pt_sheets(env[0]),
                 ms_to_pt_sheets(env[1]),
                 f"{split['pre_ms'] / 60000.0:.2f}",
@@ -535,6 +583,8 @@ def run_pipeline(settings, log, force_full_reingest: bool = False):
             "mythic_pre_min": round(split["pre_ms"] / 60000.0, 2),
             "mythic_post_min": round(split["post_ms"] / 60000.0, 2),
             "mythic_post_extension_min": post_extension_min,
+            "mythic_override_start_ms": mythic_override_start_ms,
+            "mythic_override_end_ms": mythic_override_end_ms,
             "gap_window": (bw.start_pt, bw.end_pt),
             "min_max_break": (bw.min_gap_minutes, bw.max_gap_minutes),
             "largest_gap_min": largest_gap,
@@ -574,7 +624,9 @@ def run_pipeline(settings, log, force_full_reingest: bool = False):
             overrides=overrides_by_night.get(night, {}),
             last_fight_mains=last_nm_mains,
             roster_map=None,
-            post_extension_ms=effective_extension_ms,
+            pre_extension_ms=start_extension_ms,
+            pre_extension_mains=first_mythic_mains,
+            post_extension_ms=post_extension_credit_ms,
             post_extension_mains=last_mythic_mains,
         )
 

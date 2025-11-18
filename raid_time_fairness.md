@@ -52,7 +52,7 @@
 
 1. **Input (Reports sheet)** (officers)
    - Paste report links, set status: *blank*=new, `in‑progress`, `done`.
-   - Optional: specify break override start/end times in PT.
+   - Optional: specify break override start/end times and Mythic override start/end times in PT (Mythic overrides may include just the start, just the end, or both).
 2. **Ingest**
    - Fetch fights for each report; dedupe with canonical key `(encounter_id, difficulty, rounded start/end)`.
    - Convert to PT. Persist raw fights in `fights_all` (Mongo).
@@ -63,7 +63,7 @@
 5. **Night QA**
    - From **All‑Fights timeline**: Night Start/End, Break detection + candidates, compact fight timeline.
    - From **Mythic fights only**: Mythic Start/End, **Mythic Pre/Post minutes** via envelope split around break.
-   - **Manual override precedence**: If `Break Override Start (PT)` / `Break Override End (PT)` are present on Reports, they fully replace auto‑detection for that report/night and are recorded in `night_qa` with `override_used = true`.
+   - **Manual override precedence**: If `Break Override Start (PT)` / `Break Override End (PT)` are present on Reports, they fully replace auto‑detection for that report/night and are recorded in `night_qa` with `override_used = true`. Likewise, `Mythic Override Start (PT)` / `Mythic Override End (PT)` replace the corresponding edge(s) of the Mythic envelope when provided—officers can supply either bound independently or both together.
 6. **Bench Night Totals**
    - For each night, include: everyone who **played Mythic**, was on the **last non‑Mythic boss before Mythic**, or has an explicit **Availability Override**.
    - Apply availability overrides; compute Bench Pre/Post/Total.
@@ -101,7 +101,7 @@ Cross‑cutting: Times stored PT ISO + UTC ms; deterministic sort; only Export t
 ### Inputs (authoritative in Sheets)
 
 - **Reports**
-  - `Report URL`, `Status` (*blank* | `in-progress` | `done`), `Last Checked (PT)`, `Notes`, `Break Override Start (PT)`, `Break Override End (PT)`.
+  - `Report URL`, `Status` (*blank* | `in-progress` | `done`), `Last Checked (PT)`, `Break Override Start (PT)`, `Break Override End (PT)`, `Mythic Override Start (PT)`, `Mythic Override End (PT)`, `Notes`.
 - **Roster Map**
   - `Alt`, `Main`.
 - **Team Roster**
@@ -111,7 +111,7 @@ Cross‑cutting: Times stored PT ISO + UTC ms; deterministic sort; only Export t
 
 ### Outputs (DB→Sheets; read‑only)
 
-- **Night QA (Compact)** (manual override values fully replace auto-detected break times when both start and end are present; if only one is filled, service logs a warning and ignores override; logged in QA row)
+- **Night QA (Compact)** (manual break overrides still require both start and end to replace auto-detected values; Mythic overrides accept either bound independently and substitute whichever edges officers provide; all overrides are logged in QA rows)
 - **Bench Night Totals**
 - **Bench Week Totals**
 
@@ -371,6 +371,6 @@ The WCL client is pluggable; if WarcraftLogs releases v3 API, adapter can be swa
 **Team Roster**: `Main`, `Join Date`, `Leave Date`, `Active?`, `Notes`.  
 **Availability Overrides**: `Night`, `Main`, `Avail Pre?`, `Avail Post?`, `Reason`.
 
-**Night QA**: `Night ID`, `Reports Involved`, `Mains Seen` (unique mains in any boss fight), `Night Start/End (PT)`, `Break Start/End (PT)`, `Break Duration (min)`, `Mythic Start/End (PT)`, `Mythic Pre/Post Duration (min)`, `Gap Window`, `Min/Max Break`, `Dedupe Tol`, `Largest Gap (min)`, `Candidate Gaps (JSON)`, `Override Used?`.
+**Night QA**: `Night ID`, `Reports Involved`, `Mains Seen` (unique mains in any boss fight), `Not on Roster`, `Report Start/End (PT)`, `Night Start/End (PT)`, `Mythic Fights`, `Break Start/End (PT)`, `Break Override Start/End (PT)`, `Break Duration (min)`, `Mythic Override Start/End (PT)`, `Mythic Start/End (PT)`, `Mythic Pre/Post Duration (min)`, `Mythic Post Extension (min)`, `Gap Window`, `Min/Max Break`, `Largest Gap (min)`, `Candidate Gaps (JSON)`, `Override Used?`.
 **Bench Night Totals**: `Night ID`, `Main`, `Bench Minutes Pre/Post/Total`, `Played Pre/Post/Total`, `Avail Pre?/Post?`, `Status Source`.
 **Bench Week Totals**: `Game Week`, `Main`, `Bench Minutes (Week)`, `Played Minutes (Week)`, `Bench Pre/Post`.

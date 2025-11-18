@@ -60,6 +60,29 @@ def test_bench_minutes_extends_last_mythic_participants():
     assert b["bench_post_min"] == 5
 
 
+def test_bench_minutes_extends_first_mythic_participants():
+    blocks = [
+        {"main": "A-Illidan", "half": "pre", "start_ms": 0, "end_ms": 10 * 60000},
+        {"main": "B-Illidan", "half": "pre", "start_ms": 0, "end_ms": 10 * 60000},
+    ]
+    res = bench_minutes_for_night(
+        blocks,
+        pre_ms=30 * 60000,
+        post_ms=0,
+        pre_extension_ms=15 * 60000,
+        pre_extension_mains={"A-Illidan"},
+    )
+    res_by_main = {r["main"]: r for r in res}
+
+    a = res_by_main["A-Illidan"]
+    assert a["played_pre_min"] == 25
+    assert a["bench_pre_min"] == 5
+
+    b = res_by_main["B-Illidan"]
+    assert b["played_pre_min"] == 10
+    assert b["bench_pre_min"] == 20
+
+
 def test_last_fight_overrides_and_roster_map():
     blocks = [
         {"main": "Alt1-Illidan", "half": "pre", "start_ms": 0, "end_ms": 5 * 60000},

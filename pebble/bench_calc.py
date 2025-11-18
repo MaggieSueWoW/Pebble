@@ -21,6 +21,8 @@ def bench_minutes_for_night(
     overrides: Optional[Dict[str, Dict[str, Optional[Union[bool, int]]]]] = None,
     last_fight_mains: Iterable[str] | None = None,
     roster_map: Optional[Dict[str, str]] = None,
+    pre_extension_ms: int = 0,
+    pre_extension_mains: Iterable[str] | None = None,
     post_extension_ms: int = 0,
     post_extension_mains: Iterable[str] | None = None,
 ) -> List[dict]:
@@ -32,15 +34,18 @@ def bench_minutes_for_night(
     representing officer availability overrides per half. ``last_fight_mains``
     lists mains who appeared in the final non‑Mythic fight and are therefore
     treated as available for the entire night. ``roster_map`` maps alt names to
-    main names. ``post_extension_ms`` and ``post_extension_mains`` allow
-    callers to credit mains from the final Mythic fight with additional post
-    time when the Mythic window is extended.
+    main names. ``pre_extension_ms``/``pre_extension_mains`` and
+    ``post_extension_ms``/``post_extension_mains`` allow callers to credit
+    mains from the first/last Mythic fights with additional pre/post time when
+    the Mythic window is extended.
     """
 
     roster_map = roster_map or {}
     overrides = overrides or {}
     last_fight_mains = set(last_fight_mains or [])
+    pre_extension_ms = max(0, int(pre_extension_ms))
     post_extension_ms = max(0, int(post_extension_ms))
+    pre_extension_mains = set(pre_extension_mains or [])
     post_extension_mains = set(post_extension_mains or [])
 
     from collections import defaultdict
@@ -60,7 +65,10 @@ def bench_minutes_for_night(
     post_full = post_ms
     for main in sorted(all_mains):
         halves = agg.get(main, {})
-        pre_played_ms = halves.get("pre", 0)
+        pre_played_ms_raw = halves.get("pre", 0)
+        pre_played_ms = pre_played_ms_raw
+        if pre_extension_ms and main in pre_extension_mains:
+            pre_played_ms = min(pre_full, pre_played_ms + pre_extension_ms)
         post_played_ms_raw = halves.get("post", 0)
         post_played_ms = post_played_ms_raw
         if post_extension_ms and main in post_extension_mains:

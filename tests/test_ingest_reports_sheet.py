@@ -18,9 +18,11 @@ def test_ingest_reports_updates_sheet(monkeypatch):
             "Report URL",
             "Status",
             "Last Checked (PT)",
-            "Notes",
             "Break Override Start (PT)",
             "Break Override End (PT)",
+            "Mythic Override Start (PT)",
+            "Mythic Override End (PT)",
+            "Notes",
             "Report Name",
             "Report Start (PT)",
             "Report End (PT)",
@@ -28,6 +30,8 @@ def test_ingest_reports_updates_sheet(monkeypatch):
         ],
         [
             "https://www.warcraftlogs.com/reports/ABC123",
+            "",
+            "",
             "",
             "",
             "",
@@ -89,11 +93,11 @@ def test_ingest_reports_updates_sheet(monkeypatch):
     update_map = {
         u["range"].split("!")[1]: u["values"][0][0] for u in res["sheet_updates"]
     }
-    assert update_map["G6"] == "Report One"
-    assert update_map["H6"] == ms_to_pt_sheets(1000)
-    assert update_map["I6"] == ms_to_pt_sheets(2000)
+    assert update_map["I6"] == "Report One"
+    assert update_map["J6"] == ms_to_pt_sheets(1000)
+    assert update_map["K6"] == ms_to_pt_sheets(2000)
     assert update_map["C6"] == ms_to_pt_sheets(int(fixed_now.timestamp() * 1000))
-    assert update_map["J6"] == "Creator"
+    assert update_map["L6"] == "Creator"
 
 
 def test_ingest_reports_rejects_non_wcl_links(monkeypatch, caplog):
@@ -102,9 +106,11 @@ def test_ingest_reports_rejects_non_wcl_links(monkeypatch, caplog):
             "Report URL",
             "Status",
             "Last Checked PT",
-            "Notes",
             "Break Override Start (PT)",
             "Break Override End (PT)",
+            "Mythic Override Start (PT)",
+            "Mythic Override End (PT)",
+            "Notes",
             "Report Name",
             "Report Start (PT)",
             "Report End (PT)",
@@ -112,6 +118,8 @@ def test_ingest_reports_rejects_non_wcl_links(monkeypatch, caplog):
         ],
         [
             "https://example.com/notwcl",
+            "",
+            "",
             "",
             "",
             "",
@@ -158,9 +166,11 @@ def test_ingest_reports_marks_bad_links_on_fetch_error(monkeypatch, caplog):
             "Report URL",
             "Status",
             "Last Checked PT",
-            "Notes",
             "Break Override Start (PT)",
             "Break Override End (PT)",
+            "Mythic Override Start (PT)",
+            "Mythic Override End (PT)",
+            "Notes",
             "Report Name",
             "Report Start (PT)",
             "Report End (PT)",
@@ -168,6 +178,8 @@ def test_ingest_reports_marks_bad_links_on_fetch_error(monkeypatch, caplog):
         ],
         [
             "https://www.warcraftlogs.com/reports/ABC123",  # missing last char
+            "",
+            "",
             "",
             "",
             "",
@@ -223,9 +235,11 @@ def _base_report_rows():
             "Report URL",
             "Status",
             "Last Checked (PT)",
-            "Notes",
             "Break Override Start (PT)",
             "Break Override End (PT)",
+            "Mythic Override Start (PT)",
+            "Mythic Override End (PT)",
+            "Notes",
             "Report Name",
             "Report Start (PT)",
             "Report End (PT)",
@@ -235,9 +249,11 @@ def _base_report_rows():
             "https://www.warcraftlogs.com/reports/ABC123",
             "",
             "",
-            "Some note",
             "8:00 PM",
             "8:15 PM",
+            "8:30 PM",
+            "11:00 PM",
+            "Some note",
             "",
             "",
             "",
@@ -260,7 +276,9 @@ def _base_settings():
 def test_ingest_reports_skips_when_inputs_unchanged(monkeypatch):
     rows = _base_report_rows()
     db = mongomock.MongoClient().db
-    existing_hash = _report_inputs_hash("Some note", "8:00 PM", "8:15 PM")
+    existing_hash = _report_inputs_hash(
+        "Some note", "8:00 PM", "8:15 PM", "8:30 PM", "11:00 PM"
+    )
     db["reports"].insert_one(
         {
             "code": "ABC123",
@@ -297,7 +315,9 @@ def test_ingest_reports_skips_when_inputs_unchanged(monkeypatch):
 def test_ingest_reports_force_full_reingest(monkeypatch):
     rows = _base_report_rows()
     db = mongomock.MongoClient().db
-    existing_hash = _report_inputs_hash("Some note", "8:00 PM", "8:15 PM")
+    existing_hash = _report_inputs_hash(
+        "Some note", "8:00 PM", "8:15 PM", "8:30 PM", "11:00 PM"
+    )
     db["reports"].insert_one(
         {
             "code": "ABC123",

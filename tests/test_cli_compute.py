@@ -1,9 +1,11 @@
-import mongomock
 from datetime import datetime, timedelta
 from types import SimpleNamespace
 
+import mongomock
+import pytest
+
 import pebble.cli as cli
-from pebble.utils.time import PT
+from pebble.utils.time import PT, ms_to_pt_sheets
 
 
 def _base_settings():
@@ -83,7 +85,9 @@ def _sheet_map(settings, roster=None, overrides=None, attendance=None):
 def _setup_pipeline(monkeypatch, db, settings, sheet_values_map, *, sheets_client_cls=None):
     monkeypatch.setattr("pebble.cli.get_db", lambda s: db)
 
-    def fake_ingest_reports(_settings, *, rows=None, client=None):
+    def fake_ingest_reports(
+        _settings, *, rows=None, client=None, force_full_reingest=False
+    ):
         return {"reports": 0, "fights": 0}
 
     def fake_ingest_roster(_settings, *, rows=None, client=None):
@@ -262,6 +266,302 @@ def test_run_pipeline_extends_last_mythic_players(monkeypatch):
     assert doc_for("Alice")["played_post_min"] == 15
     assert doc_for("Charlie")["played_post_min"] == 15
     assert doc_for("Bob")["played_post_min"] == 0
+
+
+def test_run_pipeline_respects_mythic_override(monkeypatch):
+    db = mongomock.MongoClient().db
+
+    night_id = "2024-07-10"
+    base = datetime(2024, 7, 10, 19, 0, tzinfo=PT)
+    report_start = int(base.timestamp() * 1000)
+    report_end = int((base + timedelta(hours=5)).timestamp() * 1000)
+    fight_start = int((base + timedelta(minutes=30)).timestamp() * 1000)
+    fight_end = int((base + timedelta(minutes=45)).timestamp() * 1000)
+    mythic_override_start = int((base + timedelta(hours=2)).timestamp() * 1000)
+    mythic_override_end = int((base + timedelta(hours=4)).timestamp() * 1000)
+
+    db["reports"].insert_one(
+        {
+            "night_id": night_id,
+            "code": "R1",
+            "start_ms": report_start,
+            "end_ms": report_end,
+            "mythic_override_start_ms": mythic_override_start,
+            "mythic_override_end_ms": mythic_override_end,
+        }
+    )
+    db["fights_all"].insert_one(
+        {
+            "night_id": night_id,
+            "report_code": "R1",
+            "fight_abs_start_ms": fight_start,
+            "fight_abs_end_ms": fight_end,
+            "participants": [{"name": "Alice-Illidan"}],
+            "encounter_id": 1,
+            "is_mythic": True,
+            "id": 1,
+        }
+    )
+    db["team_roster"].insert_one({"main": "Alice-Illidan", "active": True})
+
+    captured = {}
+
+    def fake_build_requests(spreadsheet_id, tab, values, *, client=None, **kwargs):
+        captured[tab] = values
+        return []
+
+    settings = _base_settings()
+
+    monkeypatch.setattr(
+        "pebble.cli.build_replace_values_requests", fake_build_requests
+    )
+    _setup_pipeline(monkeypatch, db, settings, _sheet_map(settings))
+
+    cli.run_pipeline(settings, _fake_log())
+
+    qa_doc = db["night_qa"].find_one({"night_id": night_id}, {"_id": 0})
+    assert qa_doc["mythic_start_ms"] == mythic_override_start
+    assert qa_doc["mythic_end_ms"] == mythic_override_end
+    assert qa_doc["override_used"] is True
+
+    header = captured[settings.sheets.tabs.night_qa][0]
+    row = captured[settings.sheets.tabs.night_qa][1]
+    mos_idx = header.index("Mythic Override Start (PT)")
+    moe_idx = header.index("Mythic Override End (PT)")
+    assert row[mos_idx] == ms_to_pt_sheets(mythic_override_start)
+    assert row[moe_idx] == ms_to_pt_sheets(mythic_override_end)
+
+
+@pytest.mark.parametrize("override_kind", ["start", "end"])
+def test_run_pipeline_supports_partial_mythic_override(monkeypatch, override_kind):
+    db = mongomock.MongoClient().db
+
+    night_id = "2024-07-11"
+    base = datetime(2024, 7, 11, 19, 0, tzinfo=PT)
+    report_start = int(base.timestamp() * 1000)
+    report_end = int((base + timedelta(hours=5)).timestamp() * 1000)
+    fight_start = int((base + timedelta(minutes=20)).timestamp() * 1000)
+    fight_end = int((base + timedelta(minutes=80)).timestamp() * 1000)
+    mythic_override_start = int((base + timedelta(hours=2)).timestamp() * 1000)
+    mythic_override_end = int((base + timedelta(hours=4)).timestamp() * 1000)
+
+    override_start = mythic_override_start if override_kind == "start" else None
+    override_end = mythic_override_end if override_kind == "end" else None
+    expected_start = override_start or fight_start
+    expected_end = override_end or fight_end
+
+    db["reports"].insert_one(
+        {
+            "night_id": night_id,
+            "code": "R2",
+            "start_ms": report_start,
+            "end_ms": report_end,
+            "mythic_override_start_ms": override_start,
+            "mythic_override_end_ms": override_end,
+        }
+    )
+    db["fights_all"].insert_one(
+        {
+            "night_id": night_id,
+            "report_code": "R2",
+            "fight_abs_start_ms": fight_start,
+            "fight_abs_end_ms": fight_end,
+            "participants": [{"name": "Alice-Illidan"}],
+            "encounter_id": 1,
+            "is_mythic": True,
+            "id": 1,
+        }
+    )
+    db["team_roster"].insert_one({"main": "Alice-Illidan", "active": True})
+
+    captured = {}
+
+    def fake_build_requests(spreadsheet_id, tab, values, *, client=None, **kwargs):
+        captured[tab] = values
+        return []
+
+    settings = _base_settings()
+
+    monkeypatch.setattr(
+        "pebble.cli.build_replace_values_requests", fake_build_requests
+    )
+    _setup_pipeline(monkeypatch, db, settings, _sheet_map(settings))
+
+    cli.run_pipeline(settings, _fake_log())
+
+    qa_doc = db["night_qa"].find_one({"night_id": night_id}, {"_id": 0})
+    assert qa_doc["mythic_start_ms"] == expected_start
+    assert qa_doc["mythic_end_ms"] == expected_end
+    assert qa_doc["override_used"] is True
+
+    header = captured[settings.sheets.tabs.night_qa][0]
+    row = captured[settings.sheets.tabs.night_qa][1]
+    mos_idx = header.index("Mythic Override Start (PT)")
+    moe_idx = header.index("Mythic Override End (PT)")
+    expected_start_str = (
+        ms_to_pt_sheets(mythic_override_start)
+        if override_kind == "start"
+        else ""
+    )
+    expected_end_str = (
+        ms_to_pt_sheets(mythic_override_end)
+        if override_kind == "end"
+        else ""
+    )
+    assert row[mos_idx] == expected_start_str
+    assert row[moe_idx] == expected_end_str
+
+
+def test_run_pipeline_credits_first_mythic_players_with_start_override(monkeypatch):
+    db = mongomock.MongoClient().db
+
+    night_id = "2024-07-12"
+    base = datetime(2024, 7, 12, 19, 0, tzinfo=PT)
+    report_start = int(base.timestamp() * 1000)
+    report_end = int((base + timedelta(hours=5)).timestamp() * 1000)
+    fight_start = int((base + timedelta(minutes=30)).timestamp() * 1000)
+    fight_end = int((base + timedelta(minutes=45)).timestamp() * 1000)
+    override_start = int((base + timedelta(minutes=15)).timestamp() * 1000)
+
+    db["reports"].insert_one(
+        {
+            "night_id": night_id,
+            "code": "R3",
+            "start_ms": report_start,
+            "end_ms": report_end,
+            "mythic_override_start_ms": override_start,
+        }
+    )
+    db["fights_all"].insert_one(
+        {
+            "night_id": night_id,
+            "report_code": "R3",
+            "fight_abs_start_ms": fight_start,
+            "fight_abs_end_ms": fight_end,
+            "participants": [{"name": "Alice-Illidan"}],
+            "encounter_id": 1,
+            "is_mythic": True,
+            "id": 1,
+        }
+    )
+    db["team_roster"].insert_one({"main": "Alice-Illidan", "active": True})
+
+    captured = {}
+
+    def fake_build_requests(spreadsheet_id, tab, values, *, client=None, **kwargs):
+        captured[tab] = values
+        return []
+
+    settings = _base_settings()
+
+    monkeypatch.setattr(
+        "pebble.cli.build_replace_values_requests", fake_build_requests
+    )
+    _setup_pipeline(monkeypatch, db, settings, _sheet_map(settings))
+
+    cli.run_pipeline(settings, _fake_log())
+
+    bench_doc = db["bench_night_totals"].find_one(
+        {"night_id": night_id, "main": "Alice"},
+        {"_id": 0, "played_pre_min": 1, "bench_pre_min": 1},
+    )
+    assert bench_doc == {"played_pre_min": 30, "bench_pre_min": 0}
+
+
+def test_run_pipeline_credits_last_mythic_players_with_end_override(monkeypatch):
+    db = mongomock.MongoClient().db
+
+    night_id = "2024-07-13"
+    base = datetime(2024, 7, 13, 19, 0, tzinfo=PT)
+    report_start = int(base.timestamp() * 1000)
+    report_end = int((base + timedelta(hours=5)).timestamp() * 1000)
+    break_start = int((base + timedelta(minutes=30)).timestamp() * 1000)
+    break_end = int((base + timedelta(minutes=40)).timestamp() * 1000)
+    pre_start = int((base + timedelta(minutes=20)).timestamp() * 1000)
+    pre_end = int((base + timedelta(minutes=30)).timestamp() * 1000)
+    post_start = break_end
+    post_end = int((base + timedelta(minutes=55)).timestamp() * 1000)
+    override_end = int((base + timedelta(minutes=75)).timestamp() * 1000)
+
+    db["reports"].insert_one(
+        {
+            "night_id": night_id,
+            "code": "R4",
+            "start_ms": report_start,
+            "end_ms": report_end,
+            "break_override_start_ms": break_start,
+            "break_override_end_ms": break_end,
+            "mythic_override_end_ms": override_end,
+        }
+    )
+    db["fights_all"].insert_many(
+        [
+            {
+                "night_id": night_id,
+                "report_code": "R4",
+                "fight_abs_start_ms": pre_start,
+                "fight_abs_end_ms": pre_end,
+                "participants": [{"name": "Alice-Illidan"}],
+                "encounter_id": 1,
+                "is_mythic": True,
+                "id": 1,
+            },
+            {
+                "night_id": night_id,
+                "report_code": "R4",
+                "fight_abs_start_ms": post_start,
+                "fight_abs_end_ms": post_end,
+                "participants": [
+                    {"name": "Alice-Illidan"},
+                    {"name": "Charlie-Illidan"},
+                ],
+                "encounter_id": 2,
+                "is_mythic": True,
+                "id": 2,
+            },
+        ]
+    )
+    db["team_roster"].insert_many(
+        [
+            {"main": "Alice-Illidan", "active": True},
+            {"main": "Charlie-Illidan", "active": True},
+        ]
+    )
+
+    captured = {}
+
+    def fake_build_requests(spreadsheet_id, tab, values, *, client=None, **kwargs):
+        captured[tab] = values
+        return []
+
+    settings = _base_settings()
+
+    monkeypatch.setattr(
+        "pebble.cli.build_replace_values_requests", fake_build_requests
+    )
+    _setup_pipeline(monkeypatch, db, settings, _sheet_map(settings))
+
+    cli.run_pipeline(settings, _fake_log())
+
+    bench_docs = list(
+        db["bench_night_totals"].find(
+            {"night_id": night_id},
+            {"_id": 0, "main": 1, "played_post_min": 1, "bench_post_min": 1},
+        )
+    )
+    by_main = {doc["main"]: doc for doc in bench_docs}
+    assert by_main["Alice"]["played_post_min"] == 40
+    assert by_main["Alice"]["bench_post_min"] == 0
+    assert by_main["Charlie"]["played_post_min"] == 40
+    assert by_main["Charlie"]["bench_post_min"] == 0
+
+    qa_doc = db["night_qa"].find_one({"night_id": night_id}, {"_id": 0})
+    assert qa_doc["mythic_post_extension_min"] == 25.0
+
+    header = captured[settings.sheets.tabs.night_qa][0]
+    row = captured[settings.sheets.tabs.night_qa][1]
+    idx = header.index("Mythic Post Extension (min)")
+    assert row[idx] == "25.00"
 
 
 def test_run_pipeline_removes_stale_bench_entries(monkeypatch):
@@ -583,7 +883,9 @@ def test_run_pipeline_batches_ingest_sheet_updates(monkeypatch):
         sheets_client_cls=RecordingSheetsClient,
     )
 
-    def ingest_with_updates(_settings, *, rows=None, client=None):
+    def ingest_with_updates(
+        _settings, *, rows=None, client=None, force_full_reingest=False
+    ):
         return {
             "reports": 0,
             "fights": 0,
