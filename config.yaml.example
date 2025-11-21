@@ -21,16 +21,7 @@ sheets:
     bench_rankings: "A5"
     attendance: "A5"
     attendance_probability: "N5"
-  last_processed:
-    reports: "B3"
-    roster_map: "B3"
-    team_roster: "B3"
-    availability_overrides: "B3"
-    night_qa: "B3"
-    bench_night_totals: "B3"
-    bench_week_totals: "B3"
-    bench_rankings: "B3"
-    attendance: "B3"
+  last_processed: "Bench Rankings!C3"
   triggers:
     ingest_compute_week: "Reports!B2"
 

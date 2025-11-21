@@ -8,7 +8,7 @@ from typing import Dict, List, Sequence
 from googleapiclient.errors import HttpError
 
 from .sheets_client import SheetsClient
-from .utils.sheets import update_last_processed
+from .utils.sheets import parse_tab_cell, update_last_processed
 from .utils.time import PT, ms_to_pt_sheets
 
 
@@ -183,6 +183,7 @@ def build_replace_values_requests(
     client: SheetsClient,
     start_cell: str = "A5",
     last_processed_cell: str | None = None,
+    last_processed_tab: str | None = None,
     ensure_tail_space: bool = False,
     clear_range: bool = True,
     include_last_processed: bool = False,
@@ -265,12 +266,23 @@ def build_replace_values_requests(
             )
 
     if include_last_processed and last_processed_cell:
+        parsed_tab, parsed_cell = parse_tab_cell(last_processed_cell)
+        last_processed_cell = parsed_cell
+        last_processed_tab = last_processed_tab or parsed_tab or tab
+
+        target_props = _get_sheet_properties(
+            client, spreadsheet_id, last_processed_tab
+        )
+        if not target_props or target_props.get("sheetId") is None:
+            raise ValueError("Invalid last processed tab")
+        target_sheet_id = target_props["sheetId"]
+
         last_col_idx, last_row = _split_cell(last_processed_cell)
         requests.append(
             {
                 "pasteData": {
                     "coordinate": {
-                        "sheetId": sheet_id,
+                        "sheetId": target_sheet_id,
                         "rowIndex": last_row - 1,
                         "columnIndex": last_col_idx,
                     },
@@ -356,6 +368,7 @@ def replace_values(
     client: SheetsClient,
     start_cell: str = "A5",
     last_processed_cell: str | None = None,
+    last_processed_tab: str | None = None,
     ensure_tail_space: bool = False,
     clear_range: bool = True,
     existing_header_row: Sequence[str] | None = None,
@@ -370,6 +383,7 @@ def replace_values(
         client=client,
         start_cell=start_cell,
         last_processed_cell=last_processed_cell,
+        last_processed_tab=last_processed_tab,
         ensure_tail_space=ensure_tail_space,
         clear_range=clear_range,
         existing_header_row=existing_header_row,
@@ -387,7 +401,7 @@ def replace_values(
     if last_processed_cell:
         update_last_processed(
             spreadsheet_id,
-            tab,
-            last_processed_cell,
+            last_processed_tab or tab,
+            parse_tab_cell(last_processed_cell)[1],
             client=client,
         )

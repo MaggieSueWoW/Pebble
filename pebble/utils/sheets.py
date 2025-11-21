@@ -31,3 +31,23 @@ def update_last_processed(
             body=body,
         )
     )
+
+
+def parse_tab_cell(tab_cell: str) -> tuple[str | None, str]:
+    """Split a fully-qualified cell like ``"Tab!C3"`` into its parts.
+
+    Returns a tuple of ``(tab, cell)`` where ``tab`` may be ``None`` when no tab
+    prefix is present.
+    """
+
+    if "!" not in tab_cell:
+        return None, tab_cell
+
+    tab, cell = tab_cell.split("!", 1)
+    tab = tab.strip()
+    cell = cell.strip()
+
+    if not cell:
+        raise ValueError(f"Invalid tab/cell reference: {tab_cell}")
+
+    return (tab or None, cell)

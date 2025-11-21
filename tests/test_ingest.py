@@ -49,7 +49,7 @@ def _setup_monkeypatch(monkeypatch, db, updates):
             spreadsheet_id="sheet-1",
             tabs=SimpleNamespace(team_roster="Team Roster"),
             starts=SimpleNamespace(team_roster="A5"),
-            last_processed=SimpleNamespace(team_roster="B3"),
+            last_processed="Team Roster!B3",
         ),
     )
     return s, db, FakeSheetsClient("")

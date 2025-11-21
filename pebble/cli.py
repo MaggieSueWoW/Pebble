@@ -17,6 +17,7 @@ from .export_sheets import build_replace_values_requests, build_value_update_req
 from .sheets_client import SheetsClient
 from .week_agg import materialize_rankings, materialize_week_totals
 from .attendance import build_attendance_probability_rows, build_attendance_rows
+from .utils.sheets import parse_tab_cell
 from .utils.time import (
     ms_to_pt_iso,
     ms_to_pt_sheets,
@@ -690,6 +691,7 @@ def run_pipeline(settings, log, force_full_reingest: bool = False):
         *,
         start_cell: str,
         last_processed_cell: str | None = None,
+        last_processed_tab: str | None = None,
         ensure_tail_space: bool = False,
         include_last_processed: bool = False,
         existing_header_row: Sequence[str] | None = None,
@@ -702,6 +704,7 @@ def run_pipeline(settings, log, force_full_reingest: bool = False):
                 client=sheet_client,
                 start_cell=start_cell,
                 last_processed_cell=last_processed_cell,
+                last_processed_tab=last_processed_tab,
                 ensure_tail_space=ensure_tail_space,
                 include_last_processed=include_last_processed,
                 existing_header_row=existing_header_row,
@@ -785,11 +788,17 @@ def run_pipeline(settings, log, force_full_reingest: bool = False):
                 ratio_display,
             ]
         )
+
+    last_processed_tab, last_processed_cell = parse_tab_cell(
+        settings.sheets.last_processed
+    )
+    last_processed_tab = last_processed_tab or settings.sheets.tabs.bench_rankings
     queue_sheet_write(
         settings.sheets.tabs.bench_rankings,
         rank_rows,
         start_cell=settings.sheets.starts.bench_rankings,
-        last_processed_cell=settings.sheets.last_processed.bench_rankings,
+        last_processed_cell=last_processed_cell,
+        last_processed_tab=last_processed_tab,
         include_last_processed=True,
     )
 

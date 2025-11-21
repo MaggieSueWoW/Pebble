@@ -3,7 +3,7 @@ from typing import List, Dict, Any
 
 from ..sheets_client import SheetsClient
 from ..config_loader import Settings
-from ..utils.sheets import update_last_processed
+from ..utils.sheets import parse_tab_cell, update_last_processed
 
 HEADERS = {
     "Reports": [
@@ -143,6 +143,9 @@ def _ensure_headers(
 def bootstrap_sheets(settings: Settings) -> Dict[str, Any]:
     client = SheetsClient(settings.service_account_json)
     sheet_id = settings.sheets.spreadsheet_id
+    last_processed_tab, last_processed_cell = parse_tab_cell(
+        settings.sheets.last_processed
+    )
     desired = {
         settings.sheets.tabs.reports: (
             "Reports",
@@ -182,7 +185,9 @@ def bootstrap_sheets(settings: Settings) -> Dict[str, Any]:
         settings.sheets.tabs.bench_rankings: (
             "Bench Rankings",
             settings.sheets.starts.bench_rankings,
-            settings.sheets.last_processed.bench_rankings,
+            last_processed_cell
+            if last_processed_tab in (None, settings.sheets.tabs.bench_rankings)
+            else None,
         ),
         settings.sheets.tabs.attendance: (
             "Attendance",

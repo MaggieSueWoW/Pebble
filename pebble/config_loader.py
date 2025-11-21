@@ -33,18 +33,6 @@ class SheetsStarts(BaseModel):
     attendance_probability: str = Field(default="A5")
 
 
-class SheetsLastProcessed(BaseModel):
-    reports: str = Field(default="B3")
-    roster_map: str = Field(default="B3")
-    team_roster: str = Field(default="B3")
-    availability_overrides: str = Field(default="B3")
-    night_qa: str = Field(default="B3")
-    bench_night_totals: str = Field(default="B3")
-    bench_week_totals: str = Field(default="B3")
-    bench_rankings: str = Field(default="B3")
-    attendance: str = Field(default="B3")
-
-
 class SheetsTriggers(BaseModel):
     ingest_compute_week: str
 
@@ -53,7 +41,7 @@ class SheetsConfig(BaseModel):
     spreadsheet_id: str
     tabs: SheetsTabs = Field(default_factory=SheetsTabs)
     starts: SheetsStarts = Field(default_factory=SheetsStarts)
-    last_processed: SheetsLastProcessed = Field(default_factory=SheetsLastProcessed)
+    last_processed: str = Field(default="Bench Rankings!C3")
     triggers: SheetsTriggers
 
 

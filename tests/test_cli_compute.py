@@ -31,17 +31,7 @@ def _base_settings():
         bench_rankings="A1",
         attendance="A1",
     )
-    last_processed = SimpleNamespace(
-        team_roster="B3",
-        reports="B3",
-        roster_map="B2",
-        availability_overrides="B2",
-        night_qa="B1",
-        bench_night_totals="B1",
-        bench_week_totals="B1",
-        bench_rankings="B1",
-        attendance="B1",
-    )
+    last_processed = "Bench Rankings!B1"
     sheets = SimpleNamespace(
         spreadsheet_id="sheet",
         tabs=tabs,
