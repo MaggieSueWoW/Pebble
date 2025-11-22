@@ -102,6 +102,7 @@ def _sheet_values_batch(
     requests: Sequence[Tuple[str, str, str]],
     *,
     client: SheetsClient,
+    prefetched_value_ranges: Sequence[dict] | None = None,
 ) -> Dict[str, List[List[Any]]]:
     """Fetch multiple sheet ranges in a single request.
 
@@ -116,15 +117,23 @@ def _sheet_values_batch(
     if not requests:
         return {}
 
-    svc = client.svc
+    if prefetched_value_ranges is not None and len(prefetched_value_ranges) != len(
+        requests
+    ):
+        raise ValueError("Unexpected number of prefetched sheet ranges")
 
-    ranges = [f"{tab}!{start}:Z" for _, tab, start in requests]
-    resp = client.execute(
-        svc.spreadsheets()
-        .values()
-        .batchGet(spreadsheetId=s.sheets.spreadsheet_id, ranges=ranges)
-    )
-    value_ranges = resp.get("valueRanges", [])
+    if prefetched_value_ranges is None:
+        svc = client.svc
+
+        ranges = [f"{tab}!{start}:Z" for _, tab, start in requests]
+        resp = client.execute(
+            svc.spreadsheets()
+            .values()
+            .batchGet(spreadsheetId=s.sheets.spreadsheet_id, ranges=ranges)
+        )
+        value_ranges = resp.get("valueRanges", [])
+    else:
+        value_ranges = list(prefetched_value_ranges)
 
     values_by_key: Dict[str, List[List[Any]]] = {}
     for idx, (key, tab, _start) in enumerate(requests):

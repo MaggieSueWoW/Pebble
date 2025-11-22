@@ -1,8 +1,20 @@
 from types import SimpleNamespace
+from pathlib import Path
+import sys
 
 import pytest
 
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
 import pebble.cli as cli
+from pebble.config_loader import clear_settings_cache, get_cached_settings, load_settings_entry
+from tests.test_config_loader import (
+    StubSheetsClient,
+    _default_settings_values,
+    _write_config,
+)
 
 
 class FakeRequest:
@@ -99,6 +111,19 @@ def test_read_ingest_trigger_checkbox_false_for_empty():
     assert cli._read_ingest_trigger_checkbox(settings, client=client) is False
 
 
+def test_read_ingest_trigger_checkbox_prefetched_skips_request():
+    settings = _settings_with_trigger()
+    client = FakeSheetsClient([["FALSE"]])
+
+    assert (
+        cli._read_ingest_trigger_checkbox(
+            settings, client=client, prefetched_values=[["TRUE"]]
+        )
+        is True
+    )
+    assert client.values_api.last_get_args is None
+
+
 def test_set_ingest_trigger_checkbox_updates_cell():
     settings = _settings_with_trigger()
     client = FakeSheetsClient([])
@@ -177,6 +202,75 @@ def test_wait_for_ingest_trigger_zero_timeout(monkeypatch):
     assert should_run is False
     assert clock.sleeps == [0.0]
     assert clock.monotonic() == pytest.approx(100.0)
+
+
+def test_load_settings_and_pipeline_values_batches_trigger(tmp_path, monkeypatch):
+    clear_settings_cache()
+    config_path = _write_config(tmp_path)
+
+    settings_values = _default_settings_values()
+    ordered_ranges = list(settings_values.keys())
+    settings_response = {
+        "valueRanges": [
+            {"range": rng, "values": [[settings_values[rng]]]} for rng in ordered_ranges
+        ]
+    }
+
+    # Seed the cache with settings read from the Settings tab
+    seed_client = StubSheetsClient(settings_response)
+    load_settings_entry(config_path=config_path, sheets_client=seed_client)
+    cached = get_cached_settings(config_path)
+
+    data_values = {
+        "reports": [["reports"]],
+        "team_roster": [["roster"]],
+        "roster_map": [["map"]],
+        "availability_overrides": [["overrides"]],
+        "attendance_header": [["attendance"]],
+        "ingest_trigger": [["TRUE"]],
+    }
+
+    pipeline_requests = cli._pipeline_sheet_requests(cached.settings)
+    pipeline_ranges = [f"{tab}!{start}:Z" for _, tab, start in pipeline_requests]
+
+    combined_response = {
+        "valueRanges": settings_response["valueRanges"]
+        + [
+            {"range": rng, "values": data_values[key]}
+            for (key, _, _), rng in zip(pipeline_requests, pipeline_ranges)
+        ]
+    }
+
+    class RecordingSheetsClient:
+        def __init__(self, response):
+            self._response = response
+            self.recorded_ranges: list[list[str]] = []
+            self.svc = self
+
+        def spreadsheets(self):
+            return self
+
+        def values(self):
+            return self
+
+        def batchGet(self, spreadsheetId: str, ranges):
+            self.recorded_ranges.append(ranges)
+            return self
+
+        def execute(self, req=None):
+            return self._response
+
+    recording_client = RecordingSheetsClient(combined_response)
+    monkeypatch.setattr(cli, "SheetsClient", lambda *_args, **_kwargs: recording_client)
+
+    try:
+        settings, sheet_client, sheet_values = cli._load_settings_and_pipeline_values(config_path)
+
+        assert sheet_client is recording_client
+        assert recording_client.recorded_ranges == [cached.ranges + pipeline_ranges]
+        assert sheet_values["ingest_trigger"] == data_values["ingest_trigger"]
+    finally:
+        clear_settings_cache()
 
 
 def test_require_ingest_trigger_range_missing():

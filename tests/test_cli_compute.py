@@ -31,11 +31,13 @@ def _base_settings():
         bench_rankings="A1",
         attendance="A1",
     )
+    triggers = SimpleNamespace(ingest_compute_week="Triggers!A1")
     last_processed = "Bench Rankings!B1"
     sheets = SimpleNamespace(
         spreadsheet_id="sheet",
         tabs=tabs,
         starts=starts,
+        triggers=triggers,
         last_processed=last_processed,
     )
     time = SimpleNamespace(

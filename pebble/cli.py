@@ -2,9 +2,14 @@ import click
 import json
 import time
 from collections import defaultdict
-from typing import Dict, List, Optional, Sequence, Union
+from typing import Any, Dict, List, Optional, Sequence, Union
 
-from .config_loader import load_settings
+from .config_loader import (
+    Settings,
+    get_cached_settings,
+    load_settings,
+    load_settings_entry,
+)
 from .logging_setup import setup_logging
 from .mongo_client import get_db, ensure_indexes
 from .ingest import ingest_reports, ingest_roster, _sheet_values_batch
@@ -34,6 +39,11 @@ def _require_ingest_trigger_range(settings) -> str:
         raise click.ClickException("sheets.triggers.ingest_compute_week must be configured") from exc
     if not trigger_range:
         raise click.ClickException("sheets.triggers.ingest_compute_week must be configured")
+    tab, cell = parse_tab_cell(trigger_range)
+    if tab is None or not cell:
+        raise click.ClickException(
+            "sheets.triggers.ingest_compute_week must include a tab and cell reference"
+        )
     return trigger_range
 
 
@@ -42,11 +52,17 @@ def _read_ingest_trigger_checkbox(
     *,
     client: SheetsClient,
     trigger_range: str | None = None,
+    prefetched_values: list[list[Any]] | None = None,
 ) -> bool:
     rng = trigger_range or _require_ingest_trigger_range(settings)
-    svc = client.svc
-    resp = client.execute(svc.spreadsheets().values().get(spreadsheetId=settings.sheets.spreadsheet_id, range=rng))
-    values = resp.get("values", [])
+    if prefetched_values is not None:
+        values = prefetched_values
+    else:
+        svc = client.svc
+        resp = client.execute(
+            svc.spreadsheets().values().get(spreadsheetId=settings.sheets.spreadsheet_id, range=rng)
+        )
+        values = resp.get("values", [])
     if not values or not values[0]:
         return False
 
@@ -95,6 +111,7 @@ def _wait_for_ingest_trigger(
     *,
     client: SheetsClient,
     trigger_range: str | None = None,
+    prefetched_values: list[list[Any]] | None = None,
 ) -> bool:
     rng = trigger_range or _require_ingest_trigger_range(settings)
     log.info(
@@ -108,7 +125,12 @@ def _wait_for_ingest_trigger(
     )
 
     deadline = time.monotonic() + timeout
-    if _read_ingest_trigger_checkbox(settings, client=client, trigger_range=rng):
+    if _read_ingest_trigger_checkbox(
+        settings,
+        client=client,
+        trigger_range=rng,
+        prefetched_values=prefetched_values,
+    ):
         log.info(
             "ingest-compute-week trigger detected",
             extra={"stage": "loop", "iteration": iteration},
@@ -238,40 +260,119 @@ def parse_availability_overrides(
     return overrides_by_night, {night: set(names) for night, names in unmatched.items()}
 
 
-def run_pipeline(settings, log, force_full_reingest: bool = False):
+def _pipeline_sheet_requests(settings: Settings) -> list[tuple[str, str, str]]:
+    trigger_tab, trigger_cell = parse_tab_cell(_require_ingest_trigger_range(settings))
+
+    return [
+        (
+            "reports",
+            settings.sheets.tabs.reports,
+            settings.sheets.starts.reports,
+        ),
+        (
+            "team_roster",
+            settings.sheets.tabs.team_roster,
+            settings.sheets.starts.team_roster,
+        ),
+        (
+            "roster_map",
+            settings.sheets.tabs.roster_map,
+            settings.sheets.starts.roster_map,
+        ),
+        (
+            "availability_overrides",
+            settings.sheets.tabs.availability_overrides,
+            settings.sheets.starts.availability_overrides,
+        ),
+        (
+            "attendance_header",
+            settings.sheets.tabs.attendance,
+            settings.sheets.starts.attendance,
+        ),
+        ("ingest_trigger", trigger_tab or "", trigger_cell or ""),
+    ]
+
+
+def _load_settings_and_pipeline_values(
+    config_path: str,
+) -> tuple[Settings, SheetsClient, dict[str, list[list[Any]]]]:
+    cached_entry = get_cached_settings(config_path)
+
+    if cached_entry is None:
+        entry = load_settings_entry(config_path)
+        settings = entry.settings
+        sheet_client = SheetsClient(settings.service_account_json)
+        sheet_values = _sheet_values_batch(
+            settings, _pipeline_sheet_requests(settings), client=sheet_client
+        )
+        return settings, sheet_client, sheet_values
+
+    settings = cached_entry.settings
+    sheet_client = SheetsClient(settings.service_account_json)
+    sheet_requests = _pipeline_sheet_requests(settings)
+    sheet_ranges = [f"{tab}!{start}:Z" for _, tab, start in sheet_requests]
+    ranges = cached_entry.ranges + sheet_ranges
+
+    response = sheet_client.execute(
+        sheet_client.svc.spreadsheets()
+        .values()
+        .batchGet(spreadsheetId=settings.sheets.spreadsheet_id, ranges=ranges)
+    )
+    value_ranges = response.get("valueRanges", [])
+
+    expected_ranges = len(ranges)
+    if len(value_ranges) != expected_ranges:
+        raise ValueError("Unexpected response when reading pipeline sheets")
+
+    settings_value_ranges = value_ranges[: len(cached_entry.ranges)]
+    data_value_ranges = value_ranges[len(cached_entry.ranges) :]
+
+    fresh_entry = load_settings_entry(
+        config_path,
+        sheets_client=sheet_client,
+        settings_value_ranges=settings_value_ranges,
+        update_cache=False,
+    )
+
+    if fresh_entry.values != cached_entry.values:
+        load_settings_entry(
+            config_path,
+            sheets_client=sheet_client,
+            settings_value_ranges=settings_value_ranges,
+            update_cache=True,
+        )
+        updated_settings = fresh_entry.settings
+        sheet_values = _sheet_values_batch(
+            updated_settings,
+            _pipeline_sheet_requests(updated_settings),
+            client=sheet_client,
+        )
+        return updated_settings, sheet_client, sheet_values
+
+    sheet_values = _sheet_values_batch(
+        settings,
+        sheet_requests,
+        client=sheet_client,
+        prefetched_value_ranges=data_value_ranges,
+    )
+    return settings, sheet_client, sheet_values
+
+
+def run_pipeline(
+    settings,
+    log,
+    force_full_reingest: bool = False,
+    *,
+    sheet_values: dict[str, list[list[Any]]] | None = None,
+    sheet_client: SheetsClient | None = None,
+):
     """Ingest reports, compute nightly tables, and refresh weekly exports."""
 
     s = settings
-    sheet_client = SheetsClient(s.service_account_json)
-    sheet_values = _sheet_values_batch(
+    sheet_client = sheet_client or SheetsClient(s.service_account_json)
+    sheet_values = sheet_values or _sheet_values_batch(
         s,
-        [
-            (
-                "reports",
-                s.sheets.tabs.reports,
-                s.sheets.starts.reports,
-            ),
-            (
-                "team_roster",
-                s.sheets.tabs.team_roster,
-                s.sheets.starts.team_roster,
-            ),
-            (
-                "roster_map",
-                s.sheets.tabs.roster_map,
-                s.sheets.starts.roster_map,
-            ),
-            (
-                "availability_overrides",
-                s.sheets.tabs.availability_overrides,
-                s.sheets.starts.availability_overrides,
-            ),
-            (
-                "attendance_header",
-                s.sheets.tabs.attendance,
-                s.sheets.starts.attendance,
-            ),
-        ],
+        _pipeline_sheet_requests(s),
         client=sheet_client,
     )
 
@@ -916,14 +1017,18 @@ def loop(
             )
 
             settings = None
+            sheet_client: SheetsClient | None = None
+            sheet_values: dict[str, list[list[Any]]] | None = None
             should_run = False
             trigger_range: str | None = None
             trigger_client: SheetsClient | None = None
             try:
-                settings = load_settings(config)
+                settings, sheet_client, sheet_values = _load_settings_and_pipeline_values(
+                    config
+                )
                 trigger_range = _require_ingest_trigger_range(settings)
 
-                trigger_client = SheetsClient(settings.service_account_json)
+                trigger_client = sheet_client or SheetsClient(settings.service_account_json)
                 if ignore_trigger_state:
                     should_run = True
                     log.info(
@@ -938,7 +1043,8 @@ def loop(
                         iteration,
                         client=trigger_client,
                         trigger_range=trigger_range,
-                    )
+                        prefetched_values=sheet_values.get("ingest_trigger"),
+                        )
                 if not should_run:
                     consecutive_errors = 0
                     log.info(
@@ -950,7 +1056,13 @@ def loop(
                         },
                     )
                 else:
-                    run_pipeline(settings, log, force_full_reingest=force_full_reingest)
+                    run_pipeline(
+                        settings,
+                        log,
+                        force_full_reingest=force_full_reingest,
+                        sheet_values=sheet_values,
+                        sheet_client=sheet_client,
+                    )
                     consecutive_errors = 0
             except click.ClickException:
                 raise
