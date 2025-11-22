@@ -1,5 +1,9 @@
 from __future__ import annotations
-import logging, json, sys
+
+import json
+import logging
+import sys
+
 from .utils.time import ms_to_pt_iso
 
 # attributes that are always present on ``LogRecord`` instances.  Any additional
@@ -16,6 +20,11 @@ class JsonFormatter(logging.Formatter):
             "msg": record.getMessage(),
             "logger": record.name,
         }
+
+        if record.exc_info:
+            payload["exc_info"] = self.formatException(record.exc_info)
+        elif record.exc_text:
+            payload["exc_info"] = record.exc_text
 
         # Merge any additional attributes (those not part of the base
         # ``LogRecord``) into the payload so callers can provide structured
