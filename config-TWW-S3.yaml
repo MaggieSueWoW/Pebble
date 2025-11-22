@@ -1,37 +1,37 @@
 sheets:
   spreadsheet_id: "1b266t-HvbCS7wkApGNC6cJby0An72swatXmx5z8qTac"
   tabs:
-    reports: "Settings!B2"
-    roster_map: "Settings!B3"
-    team_roster: "Settings!B4"
-    availability_overrides: "Settings!B5"
-    night_qa: "Settings!B6"
-    bench_night_totals: "Settings!B7"
-    bench_week_totals: "Settings!B8"
-    bench_rankings: "Settings!B9"
-    attendance: "Settings!B10"
+    reports: "Settings!C3"
+    roster_map: "Settings!C4"
+    team_roster: "Settings!C5"
+    availability_overrides: "Settings!C6"
+    night_qa: "Settings!C7"
+    bench_night_totals: "Settings!C8"
+    bench_week_totals: "Settings!C9"
+    bench_rankings: "Settings!C10"
+    attendance: "Settings!C11"
   starts:
-    reports: "Settings!C2"
-    roster_map: "Settings!C3"
-    team_roster: "Settings!C4"
-    availability_overrides: "Settings!C5"
-    night_qa: "Settings!C6"
-    bench_night_totals: "Settings!C7"
-    bench_week_totals: "Settings!C8"
-    bench_rankings: "Settings!C9"
-    attendance: "Settings!C10"
-  last_processed: "Settings!B12"
+    reports: "Settings!D3"
+    roster_map: "Settings!D4"
+    team_roster: "Settings!D5"
+    availability_overrides: "Settings!D6"
+    night_qa: "Settings!D7"
+    bench_night_totals: "Settings!D8"
+    bench_week_totals: "Settings!D9"
+    bench_rankings: "Settings!D10"
+    attendance: "Settings!D11"
+  last_processed: "Settings!C13"
   triggers:
-    ingest_compute_week: "Settings!B13"
+    ingest_compute_week: "Settings!C14"
 
 time:
-  tz: "Settings!B15"
+  tz: "Settings!C16"
   break_window:
-    start_pt: "Settings!B16"  # HH:MM in PT
-    end_pt: "Settings!B17"    # HH:MM in PT
-    min_gap_minutes: "Settings!B18"
-    max_gap_minutes: "Settings!B19"
-  mythic_post_extension_min: "Settings!B20"
+    start_pt: "Settings!C17"  # HH:MM in PT
+    end_pt: "Settings!C18"    # HH:MM in PT
+    min_gap_minutes: "Settings!C19"
+    max_gap_minutes: "Settings!C20"
+  mythic_post_extension_min: "Settings!C21"
 
 wcl:
   client_id: "${WCL_CLIENT_ID}"
