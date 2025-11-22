@@ -96,7 +96,6 @@ def _write_config(tmp_path) -> str:
                 bench_week_totals: "Settings!C8"
                 bench_rankings: "Settings!C9"
                 attendance: "Settings!C10"
-                attendance_probability: "Settings!C11"
               last_processed: "Settings!B12"
               triggers:
                 ingest_compute_week: "Settings!B13"

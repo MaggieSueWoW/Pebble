@@ -47,7 +47,6 @@ class SheetsStarts(BaseModel):
     bench_week_totals: str = Field(default="A5")
     bench_rankings: str = Field(default="A5")
     attendance: str = Field(default="A5")
-    attendance_probability: str = Field(default="A5")
 
 
 class SheetsTriggers(BaseModel):
@@ -179,10 +178,6 @@ def _collect_setting_references(data: dict) -> list[tuple[tuple[str, ...], str]]
             starts["bench_rankings"],
         ),
         (("sheets", "starts", "attendance"), starts["attendance"]),
-        (
-            ("sheets", "starts", "attendance_probability"),
-            starts["attendance_probability"],
-        ),
         (("sheets", "last_processed"), sheets["last_processed"]),
         (
             ("sheets", "triggers", "ingest_compute_week"),
