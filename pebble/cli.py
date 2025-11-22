@@ -494,6 +494,28 @@ def run_pipeline(
         )
         mythic_override_start_ms, mythic_override_end_ms = mythic_override_pair
 
+        if mythic_override_start_ms is None:
+            first_boss_fight = min(
+                (
+                    f
+                    for f in fights_all
+                    if int(f.get("encounter_id", 0)) > 0
+                ),
+                key=lambda f: f.get("fight_abs_start_ms", 0),
+                default=None,
+            )
+            mythic_default_start_pt = getattr(s.time, "mythic_default_start_pt", "") or ""
+            if (
+                first_boss_fight
+                and first_boss_fight.get("is_mythic")
+                and mythic_default_start_pt
+            ):
+                default_mythic_override_start_ms = pt_time_to_ms(
+                    mythic_default_start_pt, report_start_ms
+                )
+                if default_mythic_override_start_ms is not None:
+                    mythic_override_start_ms = default_mythic_override_start_ms
+
         env = mythic_envelope(fights_m)
         if not env:
             continue

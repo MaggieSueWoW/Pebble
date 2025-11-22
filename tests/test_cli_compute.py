@@ -5,7 +5,7 @@ import mongomock
 import pytest
 
 import pebble.cli as cli
-from pebble.utils.time import PT, ms_to_pt_sheets
+from pebble.utils.time import PT, ms_to_pt_sheets, pt_time_to_ms
 
 
 def _base_settings():
@@ -48,6 +48,7 @@ def _base_settings():
             max_gap_minutes=30,
         ),
         mythic_post_extension_min=5,
+        mythic_default_start_pt="",
     )
     return SimpleNamespace(service_account_json="creds.json", sheets=sheets, time=time)
 
@@ -458,6 +459,142 @@ def test_run_pipeline_credits_first_mythic_players_with_start_override(monkeypat
         {"_id": 0, "played_pre_min": 1, "bench_pre_min": 1},
     )
     assert bench_doc == {"played_pre_min": 30, "bench_pre_min": 0}
+
+
+def test_run_pipeline_applies_default_mythic_start_when_first_fight_is_mythic(
+    monkeypatch,
+):
+    db = mongomock.MongoClient().db
+
+    night_id = "2024-07-13"
+    base = datetime(2024, 7, 13, 19, 0, tzinfo=PT)
+    report_start = int(base.timestamp() * 1000)
+    report_end = int((base + timedelta(hours=4)).timestamp() * 1000)
+    fight_start = int((base + timedelta(minutes=60)).timestamp() * 1000)
+    fight_end = int((base + timedelta(minutes=80)).timestamp() * 1000)
+
+    db["reports"].insert_one(
+        {
+            "night_id": night_id,
+            "code": "R4",
+            "start_ms": report_start,
+            "end_ms": report_end,
+        }
+    )
+    db["fights_all"].insert_one(
+        {
+            "night_id": night_id,
+            "report_code": "R4",
+            "fight_abs_start_ms": fight_start,
+            "fight_abs_end_ms": fight_end,
+            "participants": [{"name": "Alice-Illidan"}],
+            "encounter_id": 1,
+            "is_mythic": True,
+            "id": 1,
+        }
+    )
+    db["team_roster"].insert_one({"main": "Alice-Illidan", "active": True})
+
+    captured = {}
+
+    def fake_build_requests(spreadsheet_id, tab, values, *, client=None, **kwargs):
+        captured[tab] = values
+        return []
+
+    settings = _base_settings()
+    settings.time.mythic_default_start_pt = "19:15"
+
+    monkeypatch.setattr(
+        "pebble.cli.build_replace_values_requests", fake_build_requests
+    )
+    _setup_pipeline(monkeypatch, db, settings, _sheet_map(settings))
+
+    cli.run_pipeline(settings, _fake_log())
+
+    expected_start = pt_time_to_ms(settings.time.mythic_default_start_pt, report_start)
+
+    qa_doc = db["night_qa"].find_one({"night_id": night_id}, {"_id": 0})
+    assert qa_doc["mythic_start_ms"] == expected_start
+    assert qa_doc["override_used"] is True
+
+    header = captured[settings.sheets.tabs.night_qa][0]
+    row = captured[settings.sheets.tabs.night_qa][1]
+    mos_idx = header.index("Mythic Override Start (PT)")
+    assert row[mos_idx] == ms_to_pt_sheets(expected_start)
+
+
+def test_run_pipeline_ignores_default_mythic_start_when_first_fight_not_mythic(
+    monkeypatch,
+):
+    db = mongomock.MongoClient().db
+
+    night_id = "2024-07-14"
+    base = datetime(2024, 7, 14, 19, 0, tzinfo=PT)
+    report_start = int(base.timestamp() * 1000)
+    report_end = int((base + timedelta(hours=4)).timestamp() * 1000)
+    heroic_start = int((base + timedelta(minutes=10)).timestamp() * 1000)
+    heroic_end = int((base + timedelta(minutes=25)).timestamp() * 1000)
+    mythic_start = int((base + timedelta(minutes=60)).timestamp() * 1000)
+    mythic_end = int((base + timedelta(minutes=90)).timestamp() * 1000)
+
+    db["reports"].insert_one(
+        {
+            "night_id": night_id,
+            "code": "R5",
+            "start_ms": report_start,
+            "end_ms": report_end,
+        }
+    )
+    db["fights_all"].insert_many(
+        [
+            {
+                "night_id": night_id,
+                "report_code": "R5",
+                "fight_abs_start_ms": heroic_start,
+                "fight_abs_end_ms": heroic_end,
+                "participants": [{"name": "Alice-Illidan"}],
+                "encounter_id": 1,
+                "is_mythic": False,
+                "id": 1,
+            },
+            {
+                "night_id": night_id,
+                "report_code": "R5",
+                "fight_abs_start_ms": mythic_start,
+                "fight_abs_end_ms": mythic_end,
+                "participants": [{"name": "Alice-Illidan"}],
+                "encounter_id": 2,
+                "is_mythic": True,
+                "id": 2,
+            },
+        ]
+    )
+    db["team_roster"].insert_one({"main": "Alice-Illidan", "active": True})
+
+    captured = {}
+
+    def fake_build_requests(spreadsheet_id, tab, values, *, client=None, **kwargs):
+        captured[tab] = values
+        return []
+
+    settings = _base_settings()
+    settings.time.mythic_default_start_pt = "19:15"
+
+    monkeypatch.setattr(
+        "pebble.cli.build_replace_values_requests", fake_build_requests
+    )
+    _setup_pipeline(monkeypatch, db, settings, _sheet_map(settings))
+
+    cli.run_pipeline(settings, _fake_log())
+
+    qa_doc = db["night_qa"].find_one({"night_id": night_id}, {"_id": 0})
+    assert qa_doc["mythic_start_ms"] == mythic_start
+    assert qa_doc["override_used"] is False
+
+    header = captured[settings.sheets.tabs.night_qa][0]
+    row = captured[settings.sheets.tabs.night_qa][1]
+    mos_idx = header.index("Mythic Override Start (PT)")
+    assert row[mos_idx] == ""
 
 
 def test_run_pipeline_credits_last_mythic_players_with_end_override(monkeypatch):

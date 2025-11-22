@@ -89,6 +89,7 @@ class TimeConfig(BaseModel):
     tz: str = Field(default="America/Los_Angeles")
     break_window: BreakWindowConfig = Field(default_factory=BreakWindowConfig)
     mythic_post_extension_min: float = Field(default=5.0)
+    mythic_default_start_pt: str = Field(default="")
 
 
 class Settings(BaseModel):
@@ -197,6 +198,10 @@ def _collect_setting_references(data: dict) -> list[tuple[tuple[str, ...], str]]
         (
             ("time", "mythic_post_extension_min"),
             time_cfg["mythic_post_extension_min"],
+        ),
+        (
+            ("time", "mythic_default_start_pt"),
+            time_cfg["mythic_default_start_pt"],
         ),
     ]
 

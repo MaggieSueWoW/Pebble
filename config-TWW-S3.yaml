@@ -32,6 +32,7 @@ time:
     min_gap_minutes: "Settings!C19"
     max_gap_minutes: "Settings!C20"
   mythic_post_extension_min: "Settings!C21"
+  mythic_default_start_pt: "Settings!C22"
 
 wcl:
   client_id: "${WCL_CLIENT_ID}"
