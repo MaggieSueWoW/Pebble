@@ -100,12 +100,4 @@ def pt_time_to_ms(txt: str, ref_ms: int) -> int | None:
     else:
         dt = dt.astimezone(PT)
 
-    while dt.timestamp() * 1000 < ref_ms:
-        dt += timedelta(hours=12)
-        if dt.timestamp() * 1000 - ref_ms > 24 * 3600 * 1000:
-            return None
-
-    if dt.timestamp() * 1000 - ref_ms > 24 * 3600 * 1000:
-        return None
-
     return int(dt.timestamp() * 1000)
