@@ -17,7 +17,7 @@ COPY pebble /app/pebble
 RUN pip install --upgrade pip \
     && pip install --no-cache-dir .
 
-COPY config-TWW-S3.yaml /app/
+COPY config-*.yaml /app/
 COPY service-account.json /app/
 
 ENTRYPOINT ["pebble"]

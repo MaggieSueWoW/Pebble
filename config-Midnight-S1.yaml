@@ -1,0 +1,52 @@
+sheets:
+  spreadsheet_id: "1tiONjm5QIwL4DO6oyGINFmPCbNr8-TFvsCzNnAlZSTs"
+  tabs:
+    reports: "Settings!C3"
+    roster_map: "Settings!C4"
+    team_roster: "Settings!C5"
+    availability_overrides: "Settings!C6"
+    night_qa: "Settings!C7"
+    bench_night_totals: "Settings!C8"
+    bench_week_totals: "Settings!C9"
+    bench_rankings: "Settings!C10"
+    attendance: "Settings!C11"
+  starts:
+    reports: "Settings!D3"
+    roster_map: "Settings!D4"
+    team_roster: "Settings!D5"
+    availability_overrides: "Settings!D6"
+    night_qa: "Settings!D7"
+    bench_night_totals: "Settings!D8"
+    bench_week_totals: "Settings!D9"
+    bench_rankings: "Settings!D10"
+    attendance: "Settings!D11"
+  last_processed: "Settings!C13"
+  triggers:
+    ingest_compute_week: "Settings!C14"
+
+time:
+  tz: "Settings!C16"
+  break_window:
+    start_pt: "Settings!C17"  # HH:MM in PT
+    end_pt: "Settings!C18"    # HH:MM in PT
+    min_gap_minutes: "Settings!C19"
+    max_gap_minutes: "Settings!C20"
+  mythic_post_extension_min: "Settings!C21"
+  mythic_default_start_pt: "Settings!C22"
+
+wcl:
+  client_id: "${WCL_CLIENT_ID}"
+  client_secret: "${WCL_CLIENT_SECRET}"
+  base_url: "https://www.warcraftlogs.com/api/v2/client"
+  token_url: "https://www.warcraftlogs.com/oauth/token"
+
+redis:
+  url: "redis://localhost:6379/0"
+  key_prefix: "pebble:wcl:"
+
+mongo:
+  db: "pebble-midnight-s1"
+  write_batch_size: 500
+  uri: "mongodb://localhost:27017"
+
+service_account_json: "./service-account.json"
