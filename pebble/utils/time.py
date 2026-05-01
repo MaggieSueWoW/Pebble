@@ -1,5 +1,6 @@
 from __future__ import annotations
 from datetime import datetime, timezone, timedelta
+import re
 import zoneinfo
 from dateutil import parser
 
@@ -99,5 +100,11 @@ def pt_time_to_ms(txt: str, ref_ms: int) -> int | None:
         dt = dt.replace(tzinfo=PT)
     else:
         dt = dt.astimezone(PT)
+
+    has_meridiem = bool(re.search(r"\b[ap]\.?m\.?\b", txt, flags=re.IGNORECASE))
+    if not has_meridiem and 1 <= dt.hour <= 11 and dt < dt_ref:
+        evening_dt = dt + timedelta(hours=12)
+        if evening_dt >= dt_ref:
+            dt = evening_dt
 
     return int(dt.timestamp() * 1000)

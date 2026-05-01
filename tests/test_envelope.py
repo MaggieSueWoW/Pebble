@@ -14,3 +14,10 @@ def test_split_pre_post_extension_skipped_without_break():
     envelope = (0, 90_000)
     res = split_pre_post(envelope, None, post_extension_ms=45_000)
     assert res == {"pre_ms": 90_000, "post_ms": 0}
+
+
+def test_split_pre_post_extension_skipped_without_post_mythic():
+    envelope = (0, 50_000)
+    break_range = (60_000, 70_000)
+    res = split_pre_post(envelope, break_range, post_extension_ms=45_000)
+    assert res == {"pre_ms": 50_000, "post_ms": 0}

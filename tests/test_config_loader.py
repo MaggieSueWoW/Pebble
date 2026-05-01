@@ -108,6 +108,7 @@ def _write_config(tmp_path) -> str:
                 min_gap_minutes: "Settings!B18"
                 max_gap_minutes: "Settings!B19"
               mythic_post_extension_min: "Settings!B20"
+              mythic_default_start_pt: "Settings!B21"
 
             wcl:
               client_id: "client-id"
@@ -147,7 +148,6 @@ def _default_settings_values():
         "Settings!C8": "B5",
         "Settings!C9": "B5",
         "Settings!C10": "B5",
-        "Settings!C11": "N5",
         "Settings!B12": "Bench Rankings!C3",
         "Settings!B13": "Reports!B2",
         "Settings!B15": "America/Los_Angeles",
@@ -156,6 +156,7 @@ def _default_settings_values():
         "Settings!B18": "8",
         "Settings!B19": "45",
         "Settings!B20": "5",
+        "Settings!B21": "",
     }
 
 

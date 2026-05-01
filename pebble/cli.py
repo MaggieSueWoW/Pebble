@@ -581,7 +581,8 @@ def run_pipeline(
 
         post_extension_min_cfg = getattr(s.time, "mythic_post_extension_min", 0.0) or 0.0
         post_extension_ms = int(round(max(0.0, post_extension_min_cfg) * 60000))
-        effective_extension_ms = post_extension_ms if br_range else 0
+        base_split = split_pre_post(env, br_range)
+        effective_extension_ms = post_extension_ms if base_split["post_ms"] > 0 else 0
         post_extension_credit_ms = effective_extension_ms + end_extension_ms
 
         split = split_pre_post(env, br_range, post_extension_ms=effective_extension_ms)

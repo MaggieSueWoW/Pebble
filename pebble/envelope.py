@@ -17,6 +17,6 @@ def split_pre_post(envelope: Tuple[int, int], break_range, *, post_extension_ms:
     bs, be = break_range
     pre = max(0, min(bs, e) - s)
     post = max(0, e - max(be, s))
-    if post_extension_ms > 0:
+    if post > 0 and post_extension_ms > 0:
         post += post_extension_ms
     return {"pre_ms": pre, "post_ms": post}
