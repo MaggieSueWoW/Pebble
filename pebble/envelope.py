@@ -106,8 +106,34 @@ def mythic_half_summary_from_fights(
     env_start = envelope[0] if envelope else None
     env_end = envelope[1] if envelope else None
 
+    def _half_window(half_name: str) -> tuple[int | None, int | None]:
+        if env_start is None or env_end is None:
+            return (None, None)
+        if not break_range:
+            return (env_start, env_end) if half_name == "pre" else (None, None)
+
+        bs, be = break_range
+        if half_name == "pre":
+            window_start = env_start
+            window_end = min(bs, env_end)
+        else:
+            window_start = max(be, env_start)
+            window_end = env_end
+        if window_end <= window_start:
+            return (None, None)
+        return (window_start, window_end)
+
     def _half_summary(half_fights: List[dict], half_name: str) -> dict:
+        window_start, window_end = _half_window(half_name)
+        other_half_fights = post_fights if half_name == "pre" else pre_fights
         if not half_fights:
+            if window_start is not None and window_end is not None:
+                return {
+                    "start_ms": window_start,
+                    "end_ms": window_end,
+                    "duration_ms": max(0, window_end - window_start),
+                    "excluded_intervals": [],
+                }
             return {
                 "start_ms": None,
                 "end_ms": None,
@@ -116,10 +142,17 @@ def mythic_half_summary_from_fights(
             }
         start = min(f["fight_abs_start_ms"] for f in half_fights)
         end = max(f["fight_abs_end_ms"] for f in half_fights)
-        if env_start is not None and _fight_half({"fight_abs_start_ms": env_start, "fight_abs_end_ms": env_start}, break_range) == half_name:
-            start = min(start, env_start)
-        if env_end is not None and _fight_half({"fight_abs_start_ms": env_end, "fight_abs_end_ms": env_end}, break_range) == half_name:
-            end = max(end, env_end)
+        if window_start is not None and env_start is not None and window_start == env_start:
+            start = min(start, window_start)
+        if window_end is not None and env_end is not None and window_end == env_end:
+            end = max(end, window_end)
+        # If an override pushes the envelope into the opposite half but there are
+        # no Mythic fights logged there, extend to the break boundary so the
+        # synthetic half receives the inferred downtime.
+        if window_start is not None and window_start < start and not other_half_fights:
+            start = min(start, window_start)
+        if window_end is not None and window_end > end and not other_half_fights:
+            end = max(end, window_end)
         duration = max(0, end - start)
         excluded_intervals = non_mythic_boss_gap_intervals(fights_all, half_fights, break_range)
         for ex_start, ex_end in excluded_intervals:
