@@ -13,7 +13,11 @@ from .config_loader import (
 from .logging_setup import setup_logging
 from .mongo_client import get_db, ensure_indexes
 from .ingest import ingest_reports, ingest_roster, _sheet_values_batch
-from .envelope import mythic_envelope, split_pre_post
+from .envelope import (
+    mythic_envelope,
+    mythic_half_summary_from_fights,
+    split_pre_post_from_fights,
+)
 from .breaks import detect_break
 from .blocks import build_blocks
 from .bench_calc import bench_minutes_for_night, last_non_mythic_boss_mains
@@ -581,11 +585,24 @@ def run_pipeline(
 
         post_extension_min_cfg = getattr(s.time, "mythic_post_extension_min", 0.0) or 0.0
         post_extension_ms = int(round(max(0.0, post_extension_min_cfg) * 60000))
-        base_split = split_pre_post(env, br_range)
+        base_split = split_pre_post_from_fights(fights_all, fights_m, br_range, envelope=env)
         effective_extension_ms = post_extension_ms if base_split["post_ms"] > 0 else 0
         post_extension_credit_ms = effective_extension_ms + end_extension_ms
 
-        split = split_pre_post(env, br_range, post_extension_ms=effective_extension_ms)
+        split = split_pre_post_from_fights(
+            fights_all,
+            fights_m,
+            br_range,
+            envelope=env,
+            post_extension_ms=effective_extension_ms,
+        )
+        split_summary = mythic_half_summary_from_fights(
+            fights_all,
+            fights_m,
+            br_range,
+            envelope=env,
+            post_extension_ms=effective_extension_ms,
+        )
         break_duration = round((br_range[1] - br_range[0]) / 60000.0, 2) if br_range else ""
         post_extension_min = round(post_extension_credit_ms / 60000.0, 2)
         candidate_gaps_db = [
@@ -605,6 +622,52 @@ def run_pipeline(
             for c in gap_meta.get("candidates", [])
         ]
         largest_gap = round(gap_meta.get("largest_gap_min", 0.0), 2)
+
+        mythic_fight_windows = [
+            {
+                "fight_id": f.get("id"),
+                "half": "pre"
+                if (not br_range or ((f.get("fight_abs_start_ms", 0) + f.get("fight_abs_end_ms", 0)) // 2) < br_range[0])
+                else "post",
+                "start": ms_to_pt_iso(f.get("fight_abs_start_ms")),
+                "end": ms_to_pt_iso(f.get("fight_abs_end_ms")),
+            }
+            for f in sorted(fights_m, key=lambda fight: fight.get("fight_abs_start_ms", 0))
+        ]
+
+        def _half_log_payload(name: str) -> dict:
+            half = split_summary[name]
+            return {
+                "start": ms_to_pt_iso(half["start_ms"]) if half["start_ms"] is not None else None,
+                "end": ms_to_pt_iso(half["end_ms"]) if half["end_ms"] is not None else None,
+                "duration_min": round(half["duration_ms"] / 60000.0, 2),
+                "excluded_intervals": [
+                    {
+                        "start": ms_to_pt_iso(start),
+                        "end": ms_to_pt_iso(end),
+                    }
+                    for start, end in half["excluded_intervals"]
+                ],
+            }
+
+        log.info(
+            "mythic half timing",
+            extra={
+                "stage": "compute",
+                "night_id": night,
+                "mythic_fights": mythic_fight_windows,
+                "mythic_pre": _half_log_payload("pre"),
+                "mythic_post": _half_log_payload("post"),
+                "break_range": {
+                    "start": ms_to_pt_iso(br_range[0]) if br_range else None,
+                    "end": ms_to_pt_iso(br_range[1]) if br_range else None,
+                },
+                "mythic_envelope": {
+                    "start": ms_to_pt_iso(env[0]),
+                    "end": ms_to_pt_iso(env[1]),
+                },
+            },
+        )
 
         first_mythic_mains: set[str] = set()
         last_mythic_mains: set[str] = set()

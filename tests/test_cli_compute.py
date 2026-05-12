@@ -258,7 +258,138 @@ def test_run_pipeline_extends_last_mythic_players(monkeypatch):
 
     assert doc_for("Alice")["played_post_min"] == 15
     assert doc_for("Charlie")["played_post_min"] == 15
-    assert doc_for("Bob")["played_post_min"] == 0
+
+
+def test_run_pipeline_excludes_heroic_segment_from_bench_time(monkeypatch):
+    db = mongomock.MongoClient().db
+
+    night_id = "2024-07-10"
+    base = datetime(2024, 7, 10, 19, 0, tzinfo=PT)
+    report_start = int(base.timestamp() * 1000)
+    report_end = int((base + timedelta(hours=4)).timestamp() * 1000)
+    break_start = int((base + timedelta(minutes=60)).timestamp() * 1000)
+    break_end = int((base + timedelta(minutes=75)).timestamp() * 1000)
+
+    mythic_1_start = int((base + timedelta(minutes=10)).timestamp() * 1000)
+    mythic_1_end = int((base + timedelta(minutes=20)).timestamp() * 1000)
+    mythic_2_start = int((base + timedelta(minutes=25)).timestamp() * 1000)
+    mythic_2_end = int((base + timedelta(minutes=35)).timestamp() * 1000)
+    heroic_1_start = int((base + timedelta(minutes=40)).timestamp() * 1000)
+    heroic_1_end = int((base + timedelta(minutes=50)).timestamp() * 1000)
+    heroic_2_start = int((base + timedelta(minutes=80)).timestamp() * 1000)
+    heroic_2_end = int((base + timedelta(minutes=90)).timestamp() * 1000)
+    mythic_3_start = int((base + timedelta(minutes=100)).timestamp() * 1000)
+    mythic_3_end = int((base + timedelta(minutes=110)).timestamp() * 1000)
+
+    db["reports"].insert_one(
+        {
+            "night_id": night_id,
+            "code": "R1",
+            "start_ms": report_start,
+            "end_ms": report_end,
+            "break_override_start_ms": break_start,
+            "break_override_end_ms": break_end,
+        }
+    )
+
+    db["fights_all"].insert_many(
+        [
+            {
+                "night_id": night_id,
+                "report_code": "R1",
+                "fight_abs_start_ms": mythic_1_start,
+                "fight_abs_end_ms": mythic_1_end,
+                "participants": [{"name": "Alice-Illidan"}, {"name": "Bob-Illidan"}],
+                "encounter_id": 1,
+                "is_mythic": True,
+                "id": 1,
+            },
+            {
+                "night_id": night_id,
+                "report_code": "R1",
+                "fight_abs_start_ms": mythic_2_start,
+                "fight_abs_end_ms": mythic_2_end,
+                "participants": [{"name": "Alice-Illidan"}, {"name": "Bob-Illidan"}],
+                "encounter_id": 2,
+                "is_mythic": True,
+                "id": 2,
+            },
+            {
+                "night_id": night_id,
+                "report_code": "R1",
+                "fight_abs_start_ms": heroic_1_start,
+                "fight_abs_end_ms": heroic_1_end,
+                "participants": [{"name": "Alice-Illidan"}, {"name": "Bob-Illidan"}],
+                "encounter_id": 101,
+                "is_mythic": False,
+                "id": 3,
+            },
+            {
+                "night_id": night_id,
+                "report_code": "R1",
+                "fight_abs_start_ms": heroic_2_start,
+                "fight_abs_end_ms": heroic_2_end,
+                "participants": [{"name": "Alice-Illidan"}, {"name": "Bob-Illidan"}],
+                "encounter_id": 102,
+                "is_mythic": False,
+                "id": 4,
+            },
+            {
+                "night_id": night_id,
+                "report_code": "R1",
+                "fight_abs_start_ms": mythic_3_start,
+                "fight_abs_end_ms": mythic_3_end,
+                "participants": [{"name": "Alice-Illidan"}],
+                "encounter_id": 3,
+                "is_mythic": True,
+                "id": 5,
+            },
+        ]
+    )
+
+    db["team_roster"].insert_many(
+        [
+            {"main": "Alice-Illidan", "active": True},
+            {"main": "Bob-Illidan", "active": True},
+        ]
+    )
+
+    captured = {}
+
+    def fake_build_requests(spreadsheet_id, tab, values, *, client=None, **kwargs):
+        captured[tab] = values
+        return []
+
+    settings = _base_settings()
+    settings.time.mythic_post_extension_min = 0
+
+    monkeypatch.setattr(
+        "pebble.cli.build_replace_values_requests", fake_build_requests
+    )
+    _setup_pipeline(monkeypatch, db, settings, _sheet_map(settings))
+
+    cli.run_pipeline(settings, _fake_log())
+
+    qa_doc = db["night_qa"].find_one({"night_id": night_id}, {"_id": 0})
+    assert qa_doc["mythic_pre_min"] == 25
+    assert qa_doc["mythic_post_min"] == 10
+
+    bench_docs = list(db["bench_night_totals"].find({}, {"_id": 0}))
+
+    def doc_for(main):
+        return next(doc for doc in bench_docs if doc["main"] == main)
+
+    alice = doc_for("Alice")
+    assert alice["played_pre_min"] == 25
+    assert alice["played_post_min"] == 10
+    assert alice["bench_pre_min"] == 0
+    assert alice["bench_post_min"] == 0
+
+    bob = doc_for("Bob")
+    assert bob["played_pre_min"] == 25
+    assert bob["played_post_min"] == 0
+    assert bob["bench_pre_min"] == 0
+    assert bob["bench_post_min"] == 10
 
 
 def test_run_pipeline_skips_post_extension_without_post_mythic(monkeypatch):
