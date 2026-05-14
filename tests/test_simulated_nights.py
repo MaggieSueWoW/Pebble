@@ -217,10 +217,10 @@ def _simulate_expected_blocks(
 ) -> dict[str, list[tuple[int, int, str]]]:
     mythic = [fight for fight in sorted(fights_all, key=lambda fight: fight["fight_abs_start_ms"]) if fight.get("is_mythic")]
     roster_map = roster_map or {}
-    nm_bosses = [
+    boss_intervals = [
         (fight["fight_abs_start_ms"], fight["fight_abs_end_ms"])
         for fight in fights_all
-        if not fight.get("is_mythic") and int(fight.get("encounter_id", 0)) > 0
+        if int(fight.get("encounter_id", 0)) > 0
     ]
     output: dict[str, list[tuple[int, int, str]]] = {}
     for fight in mythic:
@@ -232,7 +232,7 @@ def _simulate_expected_blocks(
                 blocks.append((fight["fight_abs_start_ms"], fight["fight_abs_end_ms"], half))
                 continue
             start_ms, end_ms, current_half = blocks[-1]
-            split = any(end_ms <= nm_start and nm_end <= fight["fight_abs_start_ms"] for nm_start, nm_end in nm_bosses)
+            split = any(end_ms <= boss_start and boss_end <= fight["fight_abs_start_ms"] for boss_start, boss_end in boss_intervals)
             if current_half == half and not split:
                 blocks[-1] = (start_ms, fight["fight_abs_end_ms"], half)
             else:
@@ -698,6 +698,68 @@ def test_simulated_repeated_swaps_create_disjoint_blocks(monkeypatch):
     bench = _bench_by_main(db, scenario["night_id"])
     assert bench[_main(scenario["players"][0])]["played_pre_min"] == 16
     assert bench[_main(scenario["players"][0])]["bench_pre_min"] == 8
+
+
+def test_simulated_luhey_boss_two_swap_gets_bench_credit(monkeypatch):
+    start_dt = datetime(2024, 8, 21, 19, 0, tzinfo=PT)
+    pre_roster = list(range(20))
+    boss_two_roster = list(range(1, 21))
+    post_roster = [0] + list(range(3, 20)) + [21, 22]
+    scenario = _build_night(
+        night_id="2024-08-21",
+        start_dt=start_dt,
+        roster_count=23,
+        segments=[
+            {"gap_before_min": 10, "duration_min": 8, "difficulty": "mythic", "encounter_id": 1, "participants": pre_roster, "kill": False, "report_code": "R1"},
+            {"gap_before_min": 4, "duration_min": 8, "difficulty": "mythic", "encounter_id": 1, "participants": pre_roster, "kill": False, "report_code": "R1"},
+            {"gap_before_min": 4, "duration_min": 9, "difficulty": "mythic", "encounter_id": 1, "participants": pre_roster, "kill": True, "report_code": "R1"},
+            {"gap_before_min": 0, "duration_min": 8, "difficulty": "mythic", "encounter_id": 2, "participants": boss_two_roster, "kill": False, "report_code": "R1"},
+            {"gap_before_min": 4, "duration_min": 8, "difficulty": "mythic", "encounter_id": 2, "participants": boss_two_roster, "kill": False, "report_code": "R1"},
+            {"gap_before_min": 4, "duration_min": 9, "difficulty": "mythic", "encounter_id": 2, "participants": boss_two_roster, "kill": True, "report_code": "R1"},
+            {"gap_before_min": 0, "duration_min": 8, "difficulty": "mythic", "encounter_id": 3, "participants": pre_roster, "kill": False, "report_code": "R1"},
+            {"gap_before_min": 4, "duration_min": 10, "difficulty": "mythic", "encounter_id": 3, "participants": pre_roster, "kill": True, "report_code": "R1"},
+            {"gap_before_min": 20, "duration_min": 8, "difficulty": "mythic", "encounter_id": 4, "participants": post_roster, "kill": False, "report_code": "R2"},
+            {"gap_before_min": 4, "duration_min": 8, "difficulty": "mythic", "encounter_id": 4, "participants": post_roster, "kill": False, "report_code": "R2"},
+            {"gap_before_min": 4, "duration_min": 8, "difficulty": "mythic", "encounter_id": 4, "participants": post_roster, "kill": False, "report_code": "R2"},
+            {"gap_before_min": 4, "duration_min": 8, "difficulty": "mythic", "encounter_id": 4, "participants": post_roster, "kill": False, "report_code": "R2"},
+            {"gap_before_min": 4, "duration_min": 9, "difficulty": "mythic", "encounter_id": 4, "participants": post_roster, "kill": True, "report_code": "R2"},
+            {"gap_before_min": 4, "duration_min": 8, "difficulty": "mythic", "encounter_id": 5, "participants": post_roster, "kill": False, "report_code": "R2"},
+            {"gap_before_min": 4, "duration_min": 8, "difficulty": "mythic", "encounter_id": 5, "participants": post_roster, "kill": False, "report_code": "R2"},
+            {"gap_before_min": 4, "duration_min": 8, "difficulty": "mythic", "encounter_id": 5, "participants": post_roster, "kill": False, "report_code": "R2"},
+            {"gap_before_min": 4, "duration_min": 8, "difficulty": "mythic", "encounter_id": 5, "participants": post_roster, "kill": False, "report_code": "R2"},
+        ],
+        report_overrides={
+            "R1": {
+                "break_override_start_ms": int((start_dt + timedelta(minutes=98)).timestamp() * 1000),
+                "break_override_end_ms": int((start_dt + timedelta(minutes=118)).timestamp() * 1000),
+            }
+        },
+    )
+
+    name_map = {"Player01": "Luhey", "Player21": "Dino"}
+    scenario["players"] = [name_map.get(player, player) for player in scenario["players"]]
+    for doc in scenario["roster_docs"]:
+        doc["main"] = name_map.get(doc["main"], doc["main"])
+    for fight in scenario["fights_all"]:
+        for participant in fight["participants"]:
+            participant["name"] = name_map.get(participant["name"], participant["name"])
+
+    db, _captured, _settings = _run_scenario(monkeypatch, scenario)
+    bench = _bench_by_main(db, scenario["night_id"])
+
+    boss_two_fights = [
+        fight
+        for fight in scenario["fights_all"]
+        if fight["encounter_id"] == 2 and fight.get("is_mythic")
+    ]
+    boss_two_window_min = (
+        max(fight["fight_abs_end_ms"] for fight in boss_two_fights)
+        - min(fight["fight_abs_start_ms"] for fight in boss_two_fights)
+    ) // 60000
+
+    assert bench["Dino"]["played_pre_min"] == boss_two_window_min
+    assert bench["Luhey"]["bench_pre_min"] == boss_two_window_min
+    assert bench["Luhey"]["bench_total_min"] == boss_two_window_min
 
 
 def test_simulated_multi_report_night_matches_single_report_totals(monkeypatch):

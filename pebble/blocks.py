@@ -8,7 +8,8 @@ def build_blocks(
 ) -> List[dict]:
     """Collapse per‑fight rows into contiguous blocks per (main, night_id, half).
     Trash between fights does not split blocks, regardless of time spent.
-    Only non‑Mythic boss fights occurring between Mythic pulls break blocks.
+    Any boss fight a player misses between participated Mythic pulls breaks
+    blocks, while trash-only gaps do not.
     """
     if not participation_rows:
         return []
@@ -20,15 +21,17 @@ def build_blocks(
     for r in participation_rows:
         groups[(r["main"], r["night_id"])].append(r)
 
-    # Pre-compute non-Mythic boss intervals for block splitting
-    nm_boss_intervals: List[Tuple[int, int]] = []
+    # Pre-compute boss intervals for block splitting. If any boss happens
+    # entirely between two participated Mythic pulls, the player was not
+    # continuously in for that span and should receive a new block.
+    boss_intervals: List[Tuple[int, int]] = []
     if fights_all:
         for f in fights_all:
-            if not f.get("is_mythic") and f.get("encounter_id", 0) > 0:
-                nm_boss_intervals.append((f.get("fight_abs_start_ms", 0), f.get("fight_abs_end_ms", 0)))
+            if f.get("encounter_id", 0) > 0:
+                boss_intervals.append((f.get("fight_abs_start_ms", 0), f.get("fight_abs_end_ms", 0)))
 
-    def has_nm_boss_between(s: int, e: int) -> bool:
-        for bs, be in nm_boss_intervals:
+    def has_boss_between(s: int, e: int) -> bool:
+        for bs, be in boss_intervals:
             if s <= bs and be <= e:
                 return True
         return False
@@ -46,7 +49,7 @@ def build_blocks(
             else:
                 half = "pre"
 
-            if current and current["half"] == half and not has_nm_boss_between(current["end_ms"], r["start_ms"]):
+            if current and current["half"] == half and not has_boss_between(current["end_ms"], r["start_ms"]):
                 current["end_ms"] = max(current["end_ms"], r["end_ms"])
                 current["end_pt"] = ms_to_pt_iso(current["end_ms"])
             else:

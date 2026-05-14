@@ -93,3 +93,32 @@ def test_long_gap_does_not_split_blocks():
     assert len(blocks) == 1
     assert blocks[0]["start_ms"] == 0
     assert blocks[0]["end_ms"] == 11 * 60 * 1000 + 2000
+
+
+def test_missed_mythic_boss_splits_blocks():
+    rows = [
+        {"main": "A", "night_id": "N1", "start_ms": 0, "end_ms": 1000},
+        {"main": "A", "night_id": "N1", "start_ms": 3000, "end_ms": 4000},
+    ]
+    fights_all = [
+        {
+            "fight_abs_start_ms": 0,
+            "fight_abs_end_ms": 1000,
+            "is_mythic": True,
+            "encounter_id": 1,
+        },
+        {
+            "fight_abs_start_ms": 1500,
+            "fight_abs_end_ms": 2500,
+            "is_mythic": True,
+            "encounter_id": 2,
+        },
+        {
+            "fight_abs_start_ms": 3000,
+            "fight_abs_end_ms": 4000,
+            "is_mythic": True,
+            "encounter_id": 3,
+        },
+    ]
+    blocks = build_blocks(rows, break_range=None, fights_all=fights_all)
+    assert len(blocks) == 2
