@@ -15,6 +15,18 @@ This document is for Codex agents contributing to the project. It captures codin
 - **Warcraft Logs (WCL)** for nightly data about raid encounters.
 - **Google Sheets**
 
+## GitHub CLI
+
+- Use `./gh-project` instead of plain `gh` for this repository's issues and PRs.
+  It selects MaggieSueWoW's credentials, verifies the authenticated account, and
+  targets `MaggieSueWoW/Pebble` without changing the global active account.
+- One-time setup: run `gh auth login --hostname github.com --git-protocol ssh
+  --skip-ssh-key --web` and authorize as **MaggieSueWoW** in the browser. Then run
+  `gh auth switch --hostname github.com --user <OTHER USER>` to restore the default
+  account for other projects.
+- Verify with `./gh-project api user --jq .login`, `./gh-project issue list`, and
+  `./gh-project pr list`. Credentials stay in gh's credential storage.
+
 ## Coding Conventions
 
 - Follow PEP 8 with **Black** auto-formatting and **isort** for imports.

@@ -1,0 +1,24 @@
+#!/bin/sh
+# Use this project's GitHub account without changing gh's global active account.
+set -eu
+
+unset GH_TOKEN GITHUB_TOKEN
+GH_HOST=github.com
+GH_REPO=MaggieSueWoW/Pebble
+export GH_HOST GH_REPO
+
+if ! project_token=$(gh auth token --hostname github.com --user MaggieSueWoW); then
+    echo 'Sign in as MaggieSueWoW first; see AGENTS.md for setup.' >&2
+    exit 1
+fi
+GH_TOKEN=$project_token
+export GH_TOKEN
+unset project_token
+
+project_user=$(gh api user --jq .login)
+if [ "$(printf '%s' "$project_user" | tr '[:upper:]' '[:lower:]')" != maggiesuewow ]; then
+    echo "Refusing to continue: expected MaggieSueWoW, authenticated as $project_user." >&2
+    exit 1
+fi
+
+exec gh "$@"
