@@ -2,12 +2,13 @@ import { after, before, beforeEach, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { assertFails, assertSucceeds, initializeTestEnvironment } from '@firebase/rules-unit-testing';
-import { collection, doc, getDoc, getDocs, serverTimestamp, setDoc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, getDocFromServer, getDocsFromServer, serverTimestamp, setDoc, updateDoc, deleteDoc } from 'firebase/firestore';
 let env;
+const [emulatorHost, emulatorPort] = (process.env.FIRESTORE_EMULATOR_HOST || '127.0.0.1:8080').split(':');
 const season = 'seasons/midnight-s2';
 const code = 'aB3dE6gH9jK2mN5p';
 const meta = (uid = 'officer', version = 1) => ({ version, updatedBy: uid, updatedAt: serverTimestamp() });
-before(async () => { env = await initializeTestEnvironment({ projectId: 'demo-pebble', firestore: { host: '127.0.0.1', port: 8080, rules: await readFile(new URL('../firestore.rules', import.meta.url), 'utf8') } }); });
+before(async () => { env = await initializeTestEnvironment({ projectId: process.env.PEBBLE_RULES_TEST_PROJECT || 'demo-pebble', firestore: { host: emulatorHost, port: Number(emulatorPort), rules: await readFile(new URL('../firestore.rules', import.meta.url), 'utf8') } }); });
 after(async () => env?.cleanup());
 beforeEach(async () => {
   await env.clearFirestore();
@@ -74,4 +75,34 @@ test('timing requires a pair of explicit break boundaries', async () => {
   const ref = doc(db, `${season}/nightOverrides/2026-10-15`);
   await assertSucceeds(setDoc(ref, { start: '', breakStart: '', breakEnd: '', end: '', ...meta() }));
   await assertFails(updateDoc(ref, { breakStart: '2026-10-15T20:30', ...meta('officer', 2) }));
+});
+
+test('revocation removes private access from an existing session while completed results stay public', async () => {
+  const db = env.authenticatedContext('officer').firestore();
+  const report = doc(db, `${season}/reports/${code}`);
+  await assertSucceeds(setDoc(report, { enabled: true, notes: 'private note', ...meta() }));
+  await assertSucceeds(setDoc(doc(db, `${season}/runs/before-revocation`), { status: 'queued', requestedBy: 'officer', requestedAt: serverTimestamp() }));
+  await env.withSecurityRulesDisabled(async ctx => {
+    await setDoc(doc(ctx.firestore(), `${season}/results/ready`), { complete: true });
+    await setDoc(doc(ctx.firestore(), `${season}/results/ready/players/p1`), { name: 'Example' });
+    await setDoc(doc(ctx.firestore(), 'officers/officer'), { enabled: false });
+  });
+  // Server reads exercise the current rules, rather than previously cached data.
+  for (const path of [`${season}/reports/${code}`, `${season}/players/p1`, `${season}/characters/alt`, `${season}/availabilityOverrides/private`, `${season}/nightOverrides/private`, `${season}/settings/calculation`, `${season}/runs/before-revocation`, 'bot/status']) {
+    await assertFails(getDocFromServer(doc(db, path)));
+  }
+  await assertFails(getDocsFromServer(collection(db, `${season}/runs`)));
+  await assertFails(updateDoc(report, { enabled: false, ...meta('officer', 2) }));
+  await assertFails(setDoc(doc(db, `${season}/runs/after-revocation`), { status: 'queued', requestedBy: 'officer', requestedAt: serverTimestamp() }));
+  await assertFails(setDoc(doc(db, 'officers/officer'), { enabled: true }));
+  await assertSucceeds(getDocFromServer(doc(db, 'officers/officer')));
+  for (const reader of [db, env.authenticatedContext('member').firestore(), env.unauthenticatedContext().firestore()]) {
+    await assertSucceeds(getDocFromServer(doc(reader, `${season}/results/ready`)));
+    await assertSucceeds(getDocsFromServer(collection(reader, `${season}/results/ready/players`)));
+  }
+  // Re-enabling membership restores access using the same signed-in identity.
+  await env.withSecurityRulesDisabled(async ctx => {
+    await setDoc(doc(ctx.firestore(), 'officers/officer'), { enabled: true });
+  });
+  await assertSucceeds(getDocFromServer(report));
 });

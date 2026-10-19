@@ -2,11 +2,16 @@
 
 This is a small bot to help our team with tracking bench time. It uses a list of Warcraft Logs reports to figure out who is present when we're fighting mythic bosses, computes time spent on the bench vs. being absent, and lets officers make tweaks to the results as necessary.
 
-The web interface, monorepo layout, Firestore data model, and officer
-workflow for reports, overrides, and Run Pebble are described in
-[the web app design](docs/web-app-design.md). Current status, spreadsheet parity,
-deployment host deployment work, and assignable work packages are tracked in the
-[implementation plan](docs/web-app-implementation.md).
+The web app's implementation backlog, spreadsheet parity, dependencies, and cutover
+checklist live in the web rollout tracker (#14). Architecture decisions
+are recorded in stack and workflow (#2),
+Firestore and security contracts (#3), and
+officer/public UX (#4). These reference issues include design targets;
+the tracker records what is implemented and what remains.
+
+Web-app work integrates into `codex/pebble-web-app`; keep `main` unchanged until
+that work is complete. The existing Pebble/Sheets bot on deployment host must remain
+undisturbed during implementation; deployment and cutover remain future work.
 
 The [web app](apps/web/README.md) in `apps/web` connects directly to Firestore
 with Google officer login. A local Python worker handles Run Pebble and publishes
@@ -31,7 +36,7 @@ The loop continues until interrupted. Use `--max-errors 0` to keep it running re
 
 The current Dockerfile and Compose service run the legacy Sheets loop. Web-worker
 packaging and deployment host cutover are outstanding in
-[OPS-1](docs/web-app-implementation.md#ops-1-container-and-deployment host-deployment);
+OPS-1 (#5);
 the existing image build copies a credential file and must be changed before
 building the new web-worker image.
 
