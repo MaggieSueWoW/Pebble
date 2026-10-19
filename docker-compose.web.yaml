@@ -1,0 +1,43 @@
+# Intentionally separate from the legacy docker-compose.yaml.
+name: pebble-web
+services:
+  web-worker:
+    image: ${PEBBLE_WEB_IMAGE:?Set an immutable web image tag}
+    container_name: pebble-web-worker
+    command: ["web", "worker", "--config", "/run/pebble/config.yaml"]
+    user: "${PEBBLE_WEB_UID:-10001}:${PEBBLE_WEB_GID:-10001}"
+    # Linux deployment host: reuse published Mongo/Redis without changing them.
+    network_mode: host
+    restart: unless-stopped
+    stop_grace_period: 30m
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    environment:
+      GOOGLE_APPLICATION_CREDENTIALS: /run/pebble/firestore.json
+      TMPDIR: /run/pebble/locks
+    env_file:
+      - ${PEBBLE_WEB_ENV_FILE:?Set the client-side private WCL env file}
+    volumes:
+      - type: bind
+        source: ${PEBBLE_WEB_RUNTIME_DIR:?Set an absolute deployment-host path}/config.yaml
+        target: /run/pebble/config.yaml
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${PEBBLE_WEB_RUNTIME_DIR}/firestore.json
+        target: /run/pebble/firestore.json
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${PEBBLE_WEB_RUNTIME_DIR}/locks
+        target: /run/pebble/locks
+        bind:
+          create_host_path: false
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"

@@ -34,11 +34,10 @@ The loop continues until interrupted. Use `--max-errors 0` to keep it running re
 
 ## Docker
 
-The current Dockerfile and Compose service run the legacy Sheets loop. Web-worker
-packaging and deployment host cutover are outstanding in
-OPS-1 (#5);
-the existing image build copies a credential file and must be changed before
-building the new web-worker image.
+For the isolated Firestore worker, use the [deployment runbook](docs/web-worker-deployment.md)
+and `docker-compose.web.yaml`. It builds from the feature branch and mounts private
+configuration and Firestore credentials at runtime. The legacy `docker-compose.yaml`
+is deliberately unchanged; do not use it to deploy the web worker.
 
 A Docker image is provided for running the loop in a container. Build and run it with:
 
@@ -51,3 +50,6 @@ docker run --rm \
 ```
 
 Mount any required credentials (e.g., Google service account JSON) and override the command arguments as needed.
+The image runs as UID/GID 10001 by default; grant that identity read access to
+mounted files or select a matching non-root UID/GID. Newly built images contain
+no configs or credentials. Existing running images are unaffected.
