@@ -463,13 +463,15 @@ class Worker:
 
         return claim(self.client.transaction(max_attempts=3))
 
-    def process_next(self) -> bool:
+    def process_next(self, stop: threading.Event | None = None) -> bool:
         if threading.current_thread() is not threading.main_thread():
             raise RuntimeError(
                 "Worker processing requires the main thread for deadlines"
             )
+        if stop is not None and stop.is_set():
+            return False
         queued = list(self.queued_runs().stream(**RPC_OPTIONS))
-        if not queued:
+        if not queued or (stop is not None and stop.is_set()):
             return False
         ref = queued[0].reference
 
@@ -626,7 +628,7 @@ class Worker:
                         if not wake.wait(1):
                             continue
                         wake.clear()
-                        while not stop.is_set() and self.process_next():
+                        while not stop.is_set() and self.process_next(stop=stop):
                             pass
                         retry_delay = 1
                         continue
@@ -668,7 +670,7 @@ class Worker:
             if once:
                 self.recover()
                 self.heartbeat()
-                self.process_next()
+                self.process_next(stop=stop)
                 return
             stop = stop if stop is not None else threading.Event()
 

@@ -318,6 +318,22 @@ def test_fatal_loop_stops_heartbeat_thread(config, monkeypatch):
     assert not any(t.name == "pebble-heartbeat" for t in threading.enumerate())
 
 
+def test_sigterm_during_queue_read_does_not_claim_new_work(config, monkeypatch):
+    worker = Worker(config, Mock(), mongomock.MongoClient())
+    stop = threading.Event()
+    query = Mock()
+
+    def selected(**_):
+        stop.set()
+        return [Mock()]
+
+    query.stream.side_effect = selected
+    monkeypatch.setattr(worker, "queued_runs", lambda: query)
+    monkeypatch.setattr(worker, "claim", Mock())
+    assert not worker.process_next(stop=stop)
+    worker.claim.assert_not_called()
+
+
 @pytest.mark.parametrize(
     "error", [AutoReconnect, RedisConnectionError, ServiceUnavailable]
 )

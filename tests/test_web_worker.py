@@ -310,7 +310,7 @@ def test_listener_drains_requests_on_main_thread_and_unsubscribes(config, monkey
     monkeypatch.setattr(worker, "recover", Mock())
     calls = []
 
-    def process():
+    def process(stop=None):
         calls.append(threading.get_ident())
         if len(calls) == 3:
             stop.set()
@@ -381,7 +381,7 @@ def test_listener_retries_startup_and_stopped_watch_with_backoff(config, monkeyp
         worker, "recover", Mock(side_effect=[ServiceUnavailable("offline"), None, None])
     )
 
-    def process():
+    def process(stop=None):
         stop.is_set.return_value = True
         return False
 
@@ -431,9 +431,9 @@ def test_listener_receives_real_firestore_requests_and_restarts(
     queued_runs = worker.queued_runs
     calls = []
 
-    def process():
+    def process(stop=None):
         calls.append(threading.get_ident())
-        worked = process_next()
+        worked = process_next(stop=stop)
         first = season.collection("runs").document("listener-first").get().to_dict()
         if first and first["status"] == "succeeded":
             first_finished.set()
