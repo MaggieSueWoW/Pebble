@@ -304,3 +304,7 @@ node_modules/
 config-web.yaml
 config-web-admin.yaml
 .firebase/
+
+# Browser acceptance artifacts
+apps/web/test-results/
+apps/web/playwright-report/
