@@ -1,0 +1,518 @@
+from __future__ import annotations
+
+import json
+import os
+import threading
+from datetime import datetime, timezone
+from unittest.mock import Mock
+
+import mongomock
+import pytest
+from google.api_core.exceptions import ServiceUnavailable
+from google.cloud import firestore
+
+from pebble.web_models import Availability, WorkerConfig, validate_snapshot, wall_ms
+from pebble.web_worker import (
+    Worker,
+    calculate_snapshot,
+    capture_inputs,
+    firestore_client,
+)
+
+CODES = ["aB3dE6gH9jK2mN5p", "bD4fG7jL2nQ5sV8x"]
+
+
+def meta(**values):
+    return {
+        "version": 1,
+        "updatedBy": "test-officer",
+        "updatedAt": datetime.now(timezone.utc),
+        **values,
+    }
+
+
+def snapshot():
+    return {
+        "reports": {
+            code: meta(enabled=True, notes="PRIVATE REPORT NOTE") for code in CODES
+        },
+        "players": {
+            "maggie": meta(
+                name="Maggie",
+                className="Druid",
+                role="Healer",
+                active=True,
+                joinDate="",
+                leaveDate="",
+                notes="PRIVATE PLAYER NOTE",
+            ),
+            "solace": meta(
+                name="Solace",
+                className="Paladin",
+                role="Healer",
+                active=True,
+                joinDate="",
+                leaveDate="",
+            ),
+        },
+        "characters": {},
+        "nightOverrides": {},
+        "settings": {},
+        "availabilityOverrides": {
+            "2026-10-15_solace": meta(
+                nightId="2026-10-15",
+                playerId="solace",
+                pre={"mode": "partial", "minutes": 45},
+                post={"mode": "automatic"},
+                notes="PRIVATE OVERRIDE NOTE",
+            )
+        },
+    }
+
+
+@pytest.fixture
+def config():
+    return WorkerConfig(
+        firestore={"project_id": "demo-pebble", "season_id": "worker-tests"},
+        mongo={"uri": "mongodb://localhost:27017", "db": "test"},
+        wcl={"client_id": "test", "client_secret": "test"},
+    )
+
+
+@pytest.fixture
+def wcl(monkeypatch):
+    original = mongomock.collection.BulkOperationBuilder.add_update
+
+    def compatible_update(self, *args, sort=None, **kwargs):
+        return original(self, *args, **kwargs)
+
+    monkeypatch.setattr(
+        mongomock.collection.BulkOperationBuilder, "add_update", compatible_update
+    )
+
+    def fetch(_self, code):
+        day = "2026-10-15" if code == CODES[0] else "2026-10-14"
+        start = wall_ms(f"{day}T19:00")
+        return {
+            "title": "Test raid",
+            "startTime": start,
+            "endTime": start + 4_200_000,
+            "masterData": {
+                "actors": [
+                    {
+                        "id": 1,
+                        "name": "Maggie",
+                        "server": "TestRealm",
+                        "type": "Player",
+                        "subType": "Druid",
+                    }
+                ]
+            },
+            "fights": [
+                {
+                    "id": 1,
+                    "encounterID": 123,
+                    "difficulty": 5,
+                    "startTime": 0,
+                    "endTime": 600_000,
+                    "friendlyPlayers": [1],
+                },
+                {
+                    "id": 2,
+                    "encounterID": 123,
+                    "difficulty": 5,
+                    "startTime": 3_600_000,
+                    "endTime": 4_200_000,
+                    "friendlyPlayers": [1],
+                },
+            ],
+        }
+
+    monkeypatch.setattr("pebble.web_worker.WCLClient.fetch_report_bundle", fetch)
+
+
+def test_snapshot_projection_and_exclusion(config, wcl):
+    db = mongomock.MongoClient().working
+    raw = snapshot()
+    first = calculate_snapshot(config, db, raw)
+    assert len(first["nights"]) == 2
+    assert next(p for p in first["players"] if p["id"] == "solace")["bench"] == 45
+    assert "PRIVATE" not in json.dumps(first, default=str)
+    raw["reports"][CODES[1]]["enabled"] = False
+    second = calculate_snapshot(config, db, raw)
+    assert [n["night"] for n in second["nights"]] == ["2026-10-15"]
+    assert db.reports.count_documents({}) == 1
+    assert db.fights_all.distinct("night_id") == ["2026-10-15"]
+    raw["reports"][CODES[0]]["enabled"] = False
+    empty = calculate_snapshot(config, db, raw)
+    assert empty["nights"] == []
+    assert all(p["bench"] == p["played"] == 0 for p in empty["players"])
+
+
+def test_worker_validates_input_even_when_rules_are_bypassed(config, wcl):
+    raw = snapshot()
+    raw["reports"][CODES[0]]["command"] = "anything"
+    with pytest.raises(ValueError):
+        calculate_snapshot(config, mongomock.MongoClient().db, raw)
+    with pytest.raises(ValueError):
+        Availability(mode="partial", minutes=True)
+    with pytest.raises(ValueError):
+        Availability(mode="available", minutes=5)
+    raw = snapshot()
+    raw["players"]["solace"]["name"] = "Maggie"
+    with pytest.raises(ValueError, match="unique"):
+        validate_snapshot(raw)
+
+
+def test_wall_times_reject_dst_gaps_and_ambiguity():
+    assert wall_ms("2026-10-15T19:00") is not None
+    with pytest.raises(ValueError, match="does not exist"):
+        wall_ms("2026-03-08T02:30")
+    with pytest.raises(ValueError, match="ambiguous"):
+        wall_ms("2026-11-01T01:30")
+
+
+@pytest.fixture
+def emulator(config):
+    if not os.getenv("FIRESTORE_EMULATOR_HOST"):
+        pytest.skip(
+            "Set FIRESTORE_EMULATOR_HOST to run Firestore worker integration tests"
+        )
+    client = firestore_client("demo-pebble")
+    # Use a dedicated season and never contact a real Firebase project.
+    season = client.document("seasons/worker-tests")
+    for name in [
+        "runs",
+        "reports",
+        "players",
+        "characters",
+        "nightOverrides",
+        "availabilityOverrides",
+        "settings",
+    ]:
+        for doc in season.collection(name).stream():
+            doc.reference.delete()
+    client.document("officers/test-officer").set({"enabled": True})
+    season.set({"displayName": "Worker test season"})
+    for name, docs in snapshot().items():
+        for key, value in docs.items():
+            season.collection(name).document(key).set(value)
+    yield client, season
+    client.close()
+
+
+def test_real_firestore_run_publish_failure_and_revocation(
+    config, emulator, wcl, monkeypatch
+):
+    client, season = emulator
+    worker = Worker(config, client, mongomock.MongoClient())
+
+    def queue(run_id):
+        ref = season.collection("runs").document(run_id)
+        ref.set(
+            {
+                "status": "queued",
+                "requestedBy": "test-officer",
+                "requestedAt": firestore.SERVER_TIMESTAMP,
+            }
+        )
+        return ref
+
+    ref = queue("first")
+    raw, versions = capture_inputs(client, "worker-tests")
+    assert len(raw["reports"]) == 2 and versions[f"reports/{CODES[0]}"] == 1
+    # Progress must reach Firestore immediately, independently of the periodic
+    # heartbeat, so the browser can show each real processing stage.
+    observed = []
+    publish = worker.publish
+
+    def compute_with_progress(config, db, raw, *, stage):
+        observed.append(ref.get().to_dict()["stage"])
+
+        def progress(message):
+            stage(message)
+            observed.append(ref.get().to_dict()["stage"])
+
+        return calculate_snapshot(config, db, raw, stage=progress)
+
+    def publish_with_progress(run_ref, output):
+        observed.append(run_ref.get().to_dict()["stage"])
+        return publish(run_ref, output)
+
+    with monkeypatch.context() as patch:
+        patch.setattr("pebble.web_worker.calculate_snapshot", compute_with_progress)
+        patch.setattr(worker, "publish", publish_with_progress)
+        heartbeat = Mock()
+        patch.setattr(worker, "heartbeat", heartbeat)
+        assert worker.process_next()
+        heartbeat.assert_not_called()
+    assert observed == [
+        "Validating inputs",
+        "Fetching reports",
+        "Calculating results",
+        "Updating results",
+    ]
+    assert ref.get().to_dict()["status"] == "succeeded"
+    pointer = client.document("publicSeasons/worker-tests")
+    assert pointer.get().to_dict()["latestRunId"] == "first"
+    assert (
+        season.collection("results").document("first").get().to_dict()["complete"]
+        is True
+    )
+    assert (
+        len(
+            list(
+                season.collection("results")
+                .document("first")
+                .collection("nights")
+                .stream()
+            )
+        )
+        == 2
+    )
+    assert not worker.process_next(), "completed requests must not run twice"
+
+    def interrupted(run_ref, _output):
+        season.collection("results").document(run_ref.id).set({"complete": False})
+        raise RuntimeError("simulated upload interruption")
+
+    monkeypatch.setattr(worker, "publish", interrupted)
+    failed = queue("failed-upload")
+    worker.process_next()
+    assert failed.get().to_dict()["status"] == "failed"
+    assert pointer.get().to_dict()["latestRunId"] == "first"
+    assert (
+        season.collection("results")
+        .document("failed-upload")
+        .get()
+        .to_dict()["complete"]
+        is False
+    )
+    client.document("officers/test-officer").set({"enabled": False})
+    revoked = queue("revoked")
+    worker.process_next()
+    assert revoked.get().to_dict()["status"] == "failed"
+    assert pointer.get().to_dict()["latestRunId"] == "first"
+    interrupted_ref = queue("interrupted")
+    interrupted_ref.update({"status": "running"})
+    worker.recover()
+    assert interrupted_ref.get().to_dict()["status"] == "failed"
+
+
+def test_listener_drains_requests_on_main_thread_and_unsubscribes(config, monkeypatch):
+
+    worker = Worker(config, Mock(), mongomock.MongoClient())
+    stop = threading.Event()
+    watch = Mock(is_active=True)
+    query = Mock()
+    query.on_snapshot.side_effect = lambda callback: (callback([], [], None) or watch)
+    monkeypatch.setattr(worker, "queued_runs", lambda: query)
+    monkeypatch.setattr(worker, "recover", Mock())
+    calls = []
+
+    def process():
+        calls.append(threading.get_ident())
+        if len(calls) == 3:
+            stop.set()
+            return False
+        return True
+
+    monkeypatch.setattr(worker, "process_next", process)
+    worker.listen(stop)
+    assert calls == [threading.get_ident()] * 3
+    worker.recover.assert_called_once()
+    query.on_snapshot.assert_called_once()
+    query.stream.assert_not_called()
+    watch.unsubscribe.assert_called_once()
+
+
+def test_idle_listener_health_checks_do_not_query_firestore(config, monkeypatch):
+
+    stop = threading.Event()
+    waits = []
+
+    class IdleWake:
+        def wait(self, timeout):
+            waits.append(timeout)
+            if len(waits) == 3:
+                stop.set()
+            return False
+
+    worker = Worker(config, Mock(), mongomock.MongoClient())
+    watch = Mock(is_active=True)
+    query = Mock()
+    query.on_snapshot.return_value = watch
+    monkeypatch.setattr(threading, "Event", IdleWake)
+    monkeypatch.setattr(worker, "queued_runs", lambda: query)
+    monkeypatch.setattr(worker, "recover", Mock())
+    monkeypatch.setattr(worker, "process_next", Mock())
+    worker.listen(stop)
+    assert len(waits) == 3
+    worker.process_next.assert_not_called()
+    query.stream.assert_not_called()
+    query.on_snapshot.assert_called_once()
+    watch.unsubscribe.assert_called_once()
+
+
+def test_listener_retries_startup_and_stopped_watch_with_backoff(config, monkeypatch):
+
+    worker = Worker(config, Mock(), mongomock.MongoClient())
+    stop = Mock()
+    stop.is_set.return_value = False
+    stop.wait.return_value = False
+    dead = Mock(is_active=False)
+    healthy = Mock(is_active=True)
+    query = Mock()
+    attempts = 0
+
+    def attach(callback):
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1:
+            raise ServiceUnavailable("temporarily offline")
+        if attempts == 2:
+            return dead
+        callback([], [], None)  # A new listener supplies the initial queue state.
+        return healthy
+
+    query.on_snapshot.side_effect = attach
+    monkeypatch.setattr(worker, "queued_runs", lambda: query)
+    monkeypatch.setattr(
+        worker, "recover", Mock(side_effect=[ServiceUnavailable("offline"), None, None])
+    )
+
+    def process():
+        stop.is_set.return_value = True
+        return False
+
+    monkeypatch.setattr(worker, "process_next", process)
+    worker.listen(stop)
+    assert [c.args[0] for c in stop.wait.call_args_list] == [1, 2, 4]
+    dead.unsubscribe.assert_called_once()
+    healthy.unsubscribe.assert_called_once()
+    assert worker.recover.call_count == 3
+
+
+def test_listener_retry_delay_is_bounded_and_can_stop(config, monkeypatch):
+
+    worker = Worker(config, Mock(), mongomock.MongoClient())
+    stop = Mock()
+    stop.is_set.return_value = False
+    stop.wait.side_effect = [False] * 8 + [True]
+    monkeypatch.setattr(
+        worker, "recover", Mock(side_effect=ServiceUnavailable("offline"))
+    )
+    worker.listen(stop)
+    assert [c.args[0] for c in stop.wait.call_args_list] == [
+        1,
+        2,
+        4,
+        8,
+        16,
+        32,
+        60,
+        60,
+        60,
+    ]
+
+
+def test_listener_receives_real_firestore_requests_and_restarts(
+    config, emulator, wcl, monkeypatch
+):
+    client, season = emulator
+    worker = Worker(config, client, mongomock.MongoClient())
+    stop = threading.Event()
+    finished = threading.Event()
+    first_finished = threading.Event()
+    attached = threading.Event()
+    watches = []
+    failures = []
+    process_next = worker.process_next
+    queued_runs = worker.queued_runs
+    calls = []
+
+    def process():
+        calls.append(threading.get_ident())
+        worked = process_next()
+        first = season.collection("runs").document("listener-first").get().to_dict()
+        if first and first["status"] == "succeeded":
+            first_finished.set()
+        second = season.collection("runs").document("listener-second").get().to_dict()
+        if second and second["status"] == "succeeded":
+            stop.set()
+            finished.set()
+        return worked
+
+    def listen():
+        try:
+            worker.listen(stop)
+        except Exception as exc:
+            failures.append(exc)
+            finished.set()
+
+    monkeypatch.setattr(worker, "process_next", process)
+    original_query = queued_runs()
+    original_attach = type(original_query).on_snapshot
+
+    def observe_attach(self, callback):
+        watch = original_attach(self, callback)
+        watches.append(watch)
+        attached.set()
+        return watch
+
+    monkeypatch.setattr(type(original_query), "on_snapshot", observe_attach)
+
+    # Existing work must be delivered by the initial snapshot.
+    def queue(run_id):
+        season.collection("runs").document(run_id).set(
+            {
+                "status": "queued",
+                "requestedBy": "test-officer",
+                "requestedAt": firestore.SERVER_TIMESTAMP,
+            }
+        )
+
+    queue("listener-first")
+    thread = threading.Thread(target=listen, daemon=True)
+    thread.start()
+    try:
+        assert attached.wait(10)
+        assert first_finished.wait(10)
+        # Force a fully stopped listener, beyond SDK transient reconnection.
+        attached.clear()
+        watches[0].unsubscribe()
+        assert attached.wait(15), "stopped listener was not recreated"
+        queue("listener-second")
+        assert finished.wait(10), "listener did not pick up work after restarting"
+        assert not failures
+        assert len(watches) >= 2
+        assert set(calls) == {thread.ident}, "all processing must remain serial"
+        for name in ("listener-first", "listener-second"):
+            assert (
+                season.collection("runs").document(name).get().to_dict()["status"]
+                == "succeeded"
+            )
+    finally:
+        stop.set()
+        thread.join(timeout=12)
+        assert not thread.is_alive()
+
+
+def test_worker_heartbeat_runs_at_most_once_per_minute(config, monkeypatch):
+    worker = Worker(config, Mock(), mongomock.MongoClient())
+    stop = threading.Event()
+    waited = threading.Event()
+    intervals = []
+
+    def wait(interval):
+        intervals.append(interval)
+        stop.set()
+        waited.set()
+        return True
+
+    monkeypatch.setattr(stop, "wait", wait)
+    monkeypatch.setattr(worker, "heartbeat", Mock())
+    monkeypatch.setattr(worker, "listen", lambda _: waited.wait(1))
+    worker.run(stop=stop)
+    worker.heartbeat.assert_called_once()
+    assert intervals == [60]

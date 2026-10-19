@@ -564,82 +564,7 @@ def ingest_reports(
         _update(report_end_idx, end_sheet)
         _update(created_by_idx, (bundle.get("owner") or {}).get("name", ""))
 
-        # actors (players) per report — small, useful for audits; dedup by (report_code, actor_id)
-        actors = (bundle.get("masterData") or {}).get("actors") or []
-        actor_map = {
-            int(a.get("id")): {
-                "actor_id": int(a.get("id")),
-                "name": (f"{a.get('name')}-{a.get('server')}" if a.get("server") else a.get("name")),
-                "type": a.get("type"),
-                "subType": a.get("subType"),
-                "server": a.get("server"),
-            }
-            for a in actors
-        }
-        if actor_map:
-            ops = []
-            for aid, a in actor_map.items():
-                key = {"report_code": code, "actor_id": aid}
-                ops.append(UpdateOne(key, {"$set": {**key, **a}}, upsert=True))
-            if ops:
-                db["actors"].bulk_write(ops, ordered=False)
-
-        # fights (single unified collection persisted to ``fights_all``)
-        fights = bundle.get("fights", []) or []
-        fops = []
-        for f in fights:
-            rel_s, rel_e, abs_s, abs_e = _normalize_fight_times(report_start_ms, f.get("startTime"), f.get("endTime"))
-            participants = []
-            for pid in f.get("friendlyPlayers") or []:
-                a = actor_map.get(int(pid))
-                if not a:
-                    continue
-                if str(a.get("type", "")).lower() != "player":
-                    continue
-                participants.append(
-                    {
-                        "actor_id": a["actor_id"],
-                        "name": a.get("name"),
-                        "class": a.get("subType"),  # WoW class
-                        "server": a.get("server"),
-                    }
-                )
-
-            key = canonical_fight_key(f, abs_s, abs_e)
-            base = {
-                **key,
-                "report_code": code,
-                "id": int(f.get("id")),
-                "night_id": night_id,
-                "name": f.get("name"),
-                "is_mythic": int(f.get("difficulty") or 0) == 5,
-                "kill": bool(f.get("kill")),
-                # times
-                "report_start_ms": report_start_ms,
-                "report_start_pt": ms_to_pt_iso(report_start_ms),
-                "fight_rel_start_ms": rel_s,
-                "fight_rel_end_ms": rel_e,
-                "fight_abs_start_ms": abs_s,
-                "fight_abs_start_pt": ms_to_pt_iso(abs_s),
-                "fight_abs_end_ms": abs_e,
-                "fight_abs_end_pt": ms_to_pt_iso(abs_e),
-            }
-            # Use $setOnInsert so the first observed report for a given fight
-            # establishes the document; subsequent overlapping reports only add
-            # participants but do not clobber the original report metadata.
-            fops.append(
-                UpdateOne(
-                    key,
-                    {
-                        "$setOnInsert": base,
-                        "$addToSet": {"participants": {"$each": participants}},
-                    },
-                    upsert=True,
-                )
-            )
-        if fops:
-            db["fights_all"].bulk_write(fops, ordered=False)
-        total_fights += len(fights)
+        total_fights += persist_report_fights(db, code, bundle, report_start_ms, night_id)
 
     return {
         "reports": processed_reports,
@@ -647,3 +572,83 @@ def ingest_reports(
         "fights": total_fights,
         "sheet_updates": updates,
     }
+
+
+def persist_report_fights(db, code: str, bundle: dict, report_start_ms: int, night_id: str) -> int:
+    """Store WCL actors and deduplicated fights for either input adapter."""
+    # actors (players) per report — small, useful for audits; dedup by (report_code, actor_id)
+    actors = (bundle.get("masterData") or {}).get("actors") or []
+    actor_map = {
+        int(a.get("id")): {
+            "actor_id": int(a.get("id")),
+            "name": (f"{a.get('name')}-{a.get('server')}" if a.get("server") else a.get("name")),
+            "type": a.get("type"),
+            "subType": a.get("subType"),
+            "server": a.get("server"),
+        }
+        for a in actors
+    }
+    if actor_map:
+        ops = []
+        for aid, a in actor_map.items():
+            key = {"report_code": code, "actor_id": aid}
+            ops.append(UpdateOne(key, {"$set": {**key, **a}}, upsert=True))
+        if ops:
+            db["actors"].bulk_write(ops, ordered=False)
+
+    # fights (single unified collection persisted to ``fights_all``)
+    fights = bundle.get("fights", []) or []
+    fops = []
+    for f in fights:
+        rel_s, rel_e, abs_s, abs_e = _normalize_fight_times(report_start_ms, f.get("startTime"), f.get("endTime"))
+        participants = []
+        for pid in f.get("friendlyPlayers") or []:
+            a = actor_map.get(int(pid))
+            if not a:
+                continue
+            if str(a.get("type", "")).lower() != "player":
+                continue
+            participants.append(
+                {
+                    "actor_id": a["actor_id"],
+                    "name": a.get("name"),
+                    "class": a.get("subType"),  # WoW class
+                    "server": a.get("server"),
+                }
+            )
+
+        key = canonical_fight_key(f, abs_s, abs_e)
+        base = {
+            **key,
+            "report_code": code,
+            "id": int(f.get("id")),
+            "night_id": night_id,
+            "name": f.get("name"),
+            "is_mythic": int(f.get("difficulty") or 0) == 5,
+            "kill": bool(f.get("kill")),
+            # times
+            "report_start_ms": report_start_ms,
+            "report_start_pt": ms_to_pt_iso(report_start_ms),
+            "fight_rel_start_ms": rel_s,
+            "fight_rel_end_ms": rel_e,
+            "fight_abs_start_ms": abs_s,
+            "fight_abs_start_pt": ms_to_pt_iso(abs_s),
+            "fight_abs_end_ms": abs_e,
+            "fight_abs_end_pt": ms_to_pt_iso(abs_e),
+        }
+        # Use $setOnInsert so the first observed report for a given fight
+        # establishes the document; subsequent overlapping reports only add
+        # participants but do not clobber the original report metadata.
+        fops.append(
+            UpdateOne(
+                key,
+                {
+                    "$setOnInsert": base,
+                    "$addToSet": {"participants": {"$each": participants}},
+                },
+                upsert=True,
+            )
+        )
+    if fops:
+        db["fights_all"].bulk_write(fops, ordered=False)
+    return len(fights)

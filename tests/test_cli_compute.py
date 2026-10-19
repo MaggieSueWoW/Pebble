@@ -1157,7 +1157,7 @@ def test_run_pipeline_removes_stale_bench_entries(monkeypatch):
     monkeypatch.setattr(
         "pebble.cli.build_replace_values_requests", fake_build_requests
     )
-    monkeypatch.setattr("pebble.cli.bench_minutes_for_night", fake_bench_minutes)
+    monkeypatch.setattr("pebble.pipeline.bench_minutes_for_night", fake_bench_minutes)
     _setup_pipeline(monkeypatch, db, settings, _sheet_map(settings))
 
     cli.run_pipeline(settings, _fake_log())
@@ -1268,7 +1268,7 @@ def test_run_pipeline_refreshes_weekly_rankings(monkeypatch):
     monkeypatch.setattr(
         "pebble.cli.build_replace_values_requests", fake_build_requests
     )
-    monkeypatch.setattr("pebble.cli.bench_minutes_for_night", fake_bench_minutes)
+    monkeypatch.setattr("pebble.pipeline.bench_minutes_for_night", fake_bench_minutes)
     _setup_pipeline(monkeypatch, db, settings, _sheet_map(settings))
 
     cli.run_pipeline(settings, _fake_log())

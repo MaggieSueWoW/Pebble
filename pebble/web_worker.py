@@ -1,0 +1,581 @@
+"""Local Firestore worker using Pebble's existing calculation engine."""
+
+from __future__ import annotations
+
+import fcntl
+import hashlib
+import json
+import logging
+import os
+import tempfile
+import threading
+from datetime import datetime, timezone
+from pathlib import Path
+
+import yaml
+from dotenv import load_dotenv
+from google.api_core.exceptions import GoogleAPICallError
+from google.auth.credentials import AnonymousCredentials
+from google.cloud import firestore
+from google.cloud.firestore_v1.base_query import FieldFilter
+
+from .ingest import WOW_CLASS_COLORS, persist_report_fights
+from .mongo_client import ensure_indexes
+from .pipeline import compute_results
+from .utils.time import ms_to_pt_iso, night_id_from_ms
+from .wcl_client import WCLClient
+from .web_models import (
+    CalculationInput,
+    INPUT_MODELS,
+    WorkerConfig,
+    validate_snapshot,
+    wall_ms,
+)
+
+log = logging.getLogger(__name__)
+WORKING_COLLECTIONS = (
+    "reports",
+    "actors",
+    "fights_all",
+    "team_roster",
+    "night_qa",
+    "participation_m",
+    "blocks",
+    "bench_night_totals",
+    "bench_week_totals",
+    "bench_rankings",
+)
+
+
+def load_worker_config(path: str) -> WorkerConfig:
+    """Read local secrets and project configuration without contacting Sheets."""
+    load_dotenv(override=False)
+    data = yaml.safe_load(Path(path).read_text()) or {}
+    for section, fields in {
+        "wcl": {"client_id": "WCL_CLIENT_ID", "client_secret": "WCL_CLIENT_SECRET"},
+        "mongo": {"uri": "MONGODB_URI"},
+        "redis": {"url": "REDIS_URL"},
+        "firestore": {
+            "project_id": "FIREBASE_PROJECT_ID",
+            "season_id": "PEBBLE_SEASON_ID",
+        },
+    }.items():
+        for key, env in fields.items():
+            if os.getenv(env):
+                data.setdefault(section, {})[key] = os.environ[env]
+    return WorkerConfig.model_validate(data)
+
+
+def firestore_client(project_id: str, credentials_file: str | None = None):
+    """Use ADC in production and anonymous credentials only for the emulator."""
+    kwargs = (
+        {"credentials": AnonymousCredentials()}
+        if os.getenv("FIRESTORE_EMULATOR_HOST")
+        else {}
+    )
+    if credentials_file and not kwargs:
+        from google.oauth2.service_account import Credentials
+
+        kwargs["credentials"] = Credentials.from_service_account_file(credentials_file)
+    return firestore.Client(project=project_id, **kwargs)
+
+
+def capture_inputs(client, season_id: str) -> tuple[dict, dict]:
+    """Read every input collection at one Firestore transaction snapshot."""
+    season = client.collection("seasons").document(season_id)
+
+    @firestore.transactional
+    def read(transaction):
+        result, versions = {}, {}
+        for name in (*INPUT_MODELS, "settings"):
+            result[name] = {}
+            for document in season.collection(name).get(transaction=transaction):
+                value = document.to_dict()
+                result[name][document.id] = value
+                versions[f"{name}/{document.id}"] = value.get("version")
+        return result, versions
+
+    return read(client.transaction(read_only=True))
+
+
+def calculate_snapshot(
+    config: WorkerConfig, db, raw: dict, stage=lambda _: None
+) -> dict:
+    """Rebuild local materializations and return a public-safe result projection."""
+    inputs = validate_snapshot(raw)
+    settings = raw.get("settings", {}).get("calculation")
+    config = config.model_copy(
+        update={
+            "time": (
+                CalculationInput.model_validate(settings).time_config()
+                if settings
+                else config.time
+            )
+        }
+    )
+    if config.time.tz != "America/Los_Angeles":
+        raise ValueError("The existing calculation engine requires America/Los_Angeles")
+    enabled = [code for code, report in inputs["reports"].items() if report.enabled]
+    if enabled and not inputs["players"]:
+        raise ValueError("Add the team roster before processing reports")
+    # This database is dedicated to web runs; never clear the existing Sheets DB.
+    for collection in WORKING_COLLECTIONS:
+        db[collection].delete_many({})
+    ensure_indexes(db)
+    roster = [
+        {
+            "main": p.name,
+            "join_night": p.joinDate,
+            "leave_night": p.leaveDate,
+            "active": p.active,
+            "class_color": WOW_CLASS_COLORS.get(
+                p.className.replace(" ", "").upper(), "#AAAAAA"
+            ),
+        }
+        for p in inputs["players"].values()
+    ]
+    if roster:
+        db.team_roster.insert_many(roster)
+    aliases = {
+        (f"{c.name}-{c.realm}" if c.realm else c.name): inputs["players"][
+            c.playerId
+        ].name
+        for c in inputs["characters"].values()
+    }
+    stage("Fetching reports")
+    wcl = WCLClient(
+        config.wcl.client_id,
+        config.wcl.client_secret,
+        base_url=config.wcl.base_url,
+        token_url=config.wcl.token_url,
+        redis_url=config.redis.url,
+        cache_prefix=config.redis.key_prefix,
+    )
+    summaries = {}
+    for code in enabled:
+        try:
+            bundle = wcl.fetch_report_bundle(code)
+            start, end = int(bundle["startTime"]), int(bundle["endTime"])
+            if start <= 0 or end < start:
+                raise ValueError("Invalid report timestamps")
+        except Exception as exc:
+            raise ValueError(
+                f"Could not fetch report {code}. Check its code and WCL accessibility, then run again."
+            ) from exc
+        night = night_id_from_ms(start)
+        doc = {
+            "code": code,
+            "title": bundle.get("title", ""),
+            "start_ms": start,
+            "end_ms": end,
+            "night_id": night,
+        }
+        timing = inputs["nightOverrides"].get(night)
+        for field, attribute in (
+            ("break_override_start_ms", "breakStart"),
+            ("break_override_end_ms", "breakEnd"),
+            ("mythic_override_start_ms", "start"),
+            ("mythic_override_end_ms", "end"),
+        ):
+            doc[field] = wall_ms(getattr(timing, attribute)) if timing else None
+        db.reports.insert_one(doc)
+        persist_report_fights(db, code, bundle, start, night)
+        summaries[code] = {
+            "title": doc["title"],
+            "night": night,
+            "checkedAt": datetime.now(timezone.utc),
+        }
+    stage("Calculating results")
+    overrides = {}
+    for a in inputs["availabilityOverrides"].values():
+        name = inputs["players"][a.playerId].name
+        overrides.setdefault(a.nightId, {})[name] = {
+            "pre": a.pre.effective(),
+            "post": a.post.effective(),
+        }
+    compute_results(config, db, log, roster_map=aliases, overrides_by_night=overrides)
+    qa = {r["night_id"]: r for r in db.night_qa.find({}, {"_id": 0})}
+    for a in inputs["availabilityOverrides"].values():
+        if a.nightId in qa:
+            for half in ("pre", "post"):
+                value = getattr(a, half)
+                if (
+                    value.mode == "partial"
+                    and value.minutes > qa[a.nightId][f"mythic_{half}_min"]
+                ):
+                    raise ValueError(
+                        f"Partial availability exceeds {half}-break duration on {a.nightId}"
+                    )
+
+    def player_metadata(pid, player):
+        return {
+            "id": pid,
+            "name": player.name,
+            "className": player.className,
+            "role": player.role,
+            "color": WOW_CLASS_COLORS.get(
+                player.className.replace(" ", "").upper(), "#AAAAAA"
+            ),
+        }
+
+    metadata = {p.name: player_metadata(pid, p) for pid, p in inputs["players"].items()}
+    nightly = list(db.bench_night_totals.find({}, {"_id": 0}))
+
+    def player_row(name, rows):
+        return {
+            **metadata[name],
+            "played": sum(r["played_total_min"] for r in rows),
+            "bench": sum(r["bench_total_min"] for r in rows),
+            "preBench": sum(r["bench_pre_min"] for r in rows),
+            "postBench": sum(r["bench_post_min"] for r in rows),
+            "nights": sum(
+                r["played_total_min"] + r["bench_total_min"] > 0 for r in rows
+            ),
+            "overridden": any(
+                inputs["availabilityOverrides"].get(
+                    f"{r['night_id']}_{metadata[name]['id']}"
+                )
+                and (
+                    inputs["availabilityOverrides"][
+                        f"{r['night_id']}_{metadata[name]['id']}"
+                    ].pre.mode
+                    != "automatic"
+                    or inputs["availabilityOverrides"][
+                        f"{r['night_id']}_{metadata[name]['id']}"
+                    ].post.mode
+                    != "automatic"
+                )
+                for r in rows
+            ),
+        }
+
+    totals = [
+        player_row(p.name, [r for r in nightly if r["main"] == p.name])
+        for p in inputs["players"].values()
+        if p.active
+    ]
+    nights = []
+    warnings = []
+    for night, q in sorted(qa.items(), reverse=True):
+        if q["mythic_end_ms"] <= q["mythic_start_ms"]:
+            raise ValueError(f"Mythic end must follow start on {night}")
+
+        def wall(ms):
+            return ms_to_pt_iso(ms)[:16] if ms is not None else ""
+
+        timing = {
+            "start": wall(q["mythic_start_ms"]),
+            "end": wall(q["mythic_end_ms"]),
+            "breakStart": wall(q["break_start_ms"]),
+            "breakEnd": wall(q["break_end_ms"]),
+            "notes": "",
+        }
+        rows = [
+            player_row(
+                p.name,
+                [r for r in nightly if r["night_id"] == night and r["main"] == p.name],
+            )
+            for p in inputs["players"].values()
+            if p.active
+        ]
+        nights.append(
+            {
+                "night": night,
+                "duration": q["mythic_pre_min"] + q["mythic_post_min"],
+                "preMinutes": q["mythic_pre_min"],
+                "postMinutes": q["mythic_post_min"],
+                "timing": timing,
+                "players": rows,
+                "reports": len(q["reports"]),
+            }
+        )
+        if q["not_on_roster_mains"]:
+            warnings.append(
+                f"{night}: unknown characters: {', '.join(q['not_on_roster_mains'])}"
+            )
+    observed = {r["night_id"] for r in db.reports.find({})}
+    for night in sorted(observed - set(qa)):
+        warnings.append(
+            f"{night}: no Mythic encounters; no bench totals for this night"
+        )
+    return {
+        "players": totals,
+        "nights": nights,
+        "weeks": list(db.bench_week_totals.find({}, {"_id": 0})),
+        "reportCount": len(enabled),
+        "reportSummaries": summaries,
+        "warnings": warnings,
+    }
+
+
+class Worker:
+    """Process one season serially and atomically replace complete results."""
+
+    def __init__(self, config, client, mongo):
+        self.config, self.client = config, client
+        self.season = client.collection("seasons").document(config.firestore.season_id)
+        suffix = hashlib.sha256(config.firestore.season_id.encode()).hexdigest()[:12]
+        self.db = mongo[f"{config.mongo.db}_web_{suffix}"]
+        self.current_run = None
+
+    def heartbeat(self):
+        self.client.document("bot/status").set(
+            {
+                "lastHeartbeatAt": firestore.SERVER_TIMESTAMP,
+                "currentRunId": self.current_run,
+            }
+        )
+
+    def recover(self):
+        for run in (
+            self.season.collection("runs")
+            .where(filter=FieldFilter("status", "==", "running"))
+            .stream()
+        ):
+            run.reference.update(
+                {
+                    "status": "failed",
+                    "completedAt": firestore.SERVER_TIMESTAMP,
+                    "error": "Worker stopped during this run. Run Pebble again.",
+                }
+            )
+
+    def queued_runs(self):
+        """Select the oldest queued request for both listening and claiming."""
+        return (
+            self.season.collection("runs")
+            .where(filter=FieldFilter("status", "==", "queued"))
+            .order_by("requestedAt")
+            .limit(1)
+        )
+
+    def process_next(self) -> bool:
+        queued = list(self.queued_runs().stream())
+        if not queued:
+            return False
+        ref = queued[0].reference
+
+        @firestore.transactional
+        def claim(tx):
+            run = ref.get(transaction=tx).to_dict()
+            if run.get("status") != "queued":
+                return False
+            officer = self.client.document(
+                f"officers/{run.get('requestedBy', '')}"
+            ).get(transaction=tx)
+            if not officer.exists or not officer.to_dict().get("enabled"):
+                tx.update(
+                    ref,
+                    {
+                        "status": "failed",
+                        "completedAt": firestore.SERVER_TIMESTAMP,
+                        "error": "Requester no longer has officer access.",
+                    },
+                )
+                return False
+            tx.update(
+                ref,
+                {
+                    "status": "running",
+                    "startedAt": firestore.SERVER_TIMESTAMP,
+                    "stage": "Validating inputs",
+                },
+            )
+            return True
+
+        if not claim(self.client.transaction()):
+            return True
+        self.current_run = ref.id
+        try:
+            raw, versions = capture_inputs(self.client, self.config.firestore.season_id)
+            self.db.input_snapshots.replace_one(
+                {"run_id": ref.id}, {"run_id": ref.id, "inputs": raw}, upsert=True
+            )
+            digest = hashlib.sha256(
+                json.dumps(raw, default=str, sort_keys=True).encode()
+            ).hexdigest()
+            ref.update(
+                {
+                    "inputVersions": versions,
+                    "inputSnapshotHash": digest,
+                    "engineVersion": "0.1.2",
+                }
+            )
+            output = calculate_snapshot(
+                self.config,
+                self.db,
+                raw,
+                stage=lambda stage: ref.update({"stage": stage}),
+            )
+            ref.update(
+                {
+                    "stage": "Updating results",
+                    "reportSummaries": output["reportSummaries"],
+                    "warnings": output["warnings"],
+                }
+            )
+            self.publish(ref, output)
+        except Exception as exc:
+            log.exception("Web run failed", extra={"run_id": ref.id})
+            message = (
+                str(exc)
+                if isinstance(exc, ValueError)
+                else "Processing failed. Check the local bot log and Run Pebble again."
+            )
+            ref.update(
+                {
+                    "status": "failed",
+                    "completedAt": firestore.SERVER_TIMESTAMP,
+                    "error": message[:2000],
+                }
+            )
+        finally:
+            self.current_run = None
+        return True
+
+    def publish(self, run_ref, output):
+        root = self.season.collection("results").document(run_ref.id)
+        root.set({"complete": False})
+        writes = [
+            (root.collection("players").document(p["id"]), p) for p in output["players"]
+        ]
+        writes += [
+            (root.collection("nights").document(n["night"]), n)
+            for n in output["nights"]
+        ]
+        weeks = {}
+        for row in output["weeks"]:
+            weeks.setdefault(row["game_week"], []).append(
+                {k: v for k, v in row.items() if k != "updated_at"}
+            )
+        writes += [
+            (root.collection("weeks").document(week), {"players": rows})
+            for week, rows in weeks.items()
+        ]
+        for offset in range(0, len(writes), 400):
+            batch = self.client.batch()
+            for ref, value in writes[offset : offset + 400]:
+                batch.set(ref, value)
+            batch.commit()
+
+        @firestore.transactional
+        def finish(tx):
+            run = run_ref.get(transaction=tx).to_dict()
+            if run["status"] != "running":
+                raise ValueError("Run was interrupted before results were committed")
+            season_data = self.season.get(transaction=tx).to_dict() or {}
+            tx.set(
+                root,
+                {
+                    "complete": True,
+                    "completedAt": firestore.SERVER_TIMESTAMP,
+                    "reportCount": output["reportCount"],
+                    "warnings": output["warnings"],
+                },
+            )
+            tx.set(
+                self.client.document(
+                    f"publicSeasons/{self.config.firestore.season_id}"
+                ),
+                {
+                    "latestRunId": run_ref.id,
+                    "displayName": season_data.get(
+                        "displayName", self.config.firestore.season_id
+                    ),
+                    "completedAt": firestore.SERVER_TIMESTAMP,
+                },
+            )
+            tx.update(
+                run_ref,
+                {"status": "succeeded", "completedAt": firestore.SERVER_TIMESTAMP},
+            )
+
+        finish(self.client.transaction())
+
+    def listen(self, stop: threading.Event):
+        """Wake on queue changes; let the SDK resume transient stream failures."""
+        wake = threading.Event()
+        watch = None
+        retry_delay = 1
+        needs_recovery = True
+
+        def changed(_snapshot, _changes, _read_time):
+            # Never compute on the SDK callback thread. Coalesce notifications
+            # while the main thread drains requests serially.
+            wake.set()
+
+        try:
+            while not stop.is_set():
+                try:
+                    if needs_recovery:
+                        self.recover()
+                        needs_recovery = False
+                    if watch is None:
+                        watch = self.queued_runs().on_snapshot(changed)
+                        log.info("Listening for queued Pebble runs")
+                    if not watch.is_active:
+                        log.warning("Queue listener stopped; reconnecting")
+                        watch.unsubscribe()
+                        watch = None
+                    else:
+                        # This timeout only checks local listener health; it
+                        # makes no Firestore query when there is no notification.
+                        if not wake.wait(10):
+                            continue
+                        wake.clear()
+                        while not stop.is_set() and self.process_next():
+                            pass
+                        retry_delay = 1
+                        continue
+                except GoogleAPICallError as exc:
+                    log.warning("Firestore unavailable; reconnecting: %s", exc.message)
+                    if watch is not None:
+                        watch.unsubscribe()
+                        watch = None
+                    # A network failure during processing may leave a claimed
+                    # run interrupted. Resolve it before accepting more work.
+                    needs_recovery = True
+                if stop.wait(retry_delay):
+                    break
+                retry_delay = min(retry_delay * 2, 60)
+        finally:
+            if watch is not None:
+                watch.unsubscribe()
+
+    def run(self, once=False, stop: threading.Event | None = None):
+        identity = (
+            f"{self.config.firestore.project_id}/{self.config.firestore.season_id}"
+        )
+        lock_path = (
+            Path(tempfile.gettempdir())
+            / f"pebble-{hashlib.sha256(identity.encode()).hexdigest()[:20]}.lock"
+        )
+        with lock_path.open("w") as lock:
+            try:
+                fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError as exc:
+                raise ValueError(
+                    "A local worker is already running for this project and season"
+                ) from exc
+            if once:
+                self.recover()
+                self.heartbeat()
+                self.process_next()
+                return
+            stop = stop if stop is not None else threading.Event()
+
+            def beat():
+                while not stop.is_set():
+                    try:
+                        self.heartbeat()
+                    except Exception:
+                        log.warning("Could not update worker heartbeat")
+                    stop.wait(60)
+
+            thread = threading.Thread(target=beat, daemon=True)
+            thread.start()
+            try:
+                self.listen(stop)
+            finally:
+                stop.set()
+                thread.join(timeout=2)
