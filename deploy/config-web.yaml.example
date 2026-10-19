@@ -1,0 +1,13 @@
+firestore:
+  project_id: YOUR_FIREBASE_PROJECT_ID
+  season_id: midnight-s2
+mongo:
+  # Linux host networking uses existing published services; no dependency changes.
+  uri: mongodb://127.0.0.1:27017/
+  db: pebble_feature
+wcl:
+  client_id: ''
+  client_secret: ''
+redis:
+  url: redis://127.0.0.1:6379/0
+  key_prefix: 'pebble:web:YOUR_FIREBASE_PROJECT_ID:midnight-s2:wcl:'
