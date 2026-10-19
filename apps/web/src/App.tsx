@@ -12,13 +12,11 @@ import {
   ChevronRight,
   CircleAlert,
   Clock3,
-  ExternalLink,
   FileText,
   FlaskConical,
   Info,
   LoaderCircle,
   Play,
-  Plus,
   RotateCcw,
   Search,
   Settings2,
@@ -34,14 +32,12 @@ import {
   adjustmentKey,
   calculate,
   defaultTiming,
-  demoCode,
   emptyAdjustment,
   formatDate,
   formatTime,
   freshState,
   minutes,
   nightOptions as sampleNights,
-  parseReports,
   players as samplePlayers,
   signature,
   stableJSON,
@@ -56,6 +52,9 @@ import {
   type Saved,
   type Timing,
 } from "./model";
+
+import { useReportEditor } from "./useReportEditor";
+import { ReportsPanel } from "./ReportsPanel";
 
 const STORAGE = "pebble-prototype-v1";
 const formatRunDate = (iso: string) =>
@@ -265,8 +264,6 @@ export default function App({ connection }: { connection?: LiveConnection }) {
     : sampleNights;
   const firstPlayer = players[0]?.id ?? "";
   const [page, setPage] = useState<Page>(canManage ? "reports" : "results");
-  const [reportText, setReportText] = useState("");
-  const [includeEdits, setIncludeEdits] = useState<Record<string, boolean>>({});
   const [night, setNight] = useState(nightOptions[0]);
   const [overrideTab, setOverrideTab] = useState<"availability" | "timing">(
     "availability",
@@ -278,7 +275,6 @@ export default function App({ connection }: { connection?: LiveConnection }) {
   const [timingVersions, setTimingVersions] = useState<Versions>(
     connection?.versions ?? {},
   );
-  const inclusionVersions = useRef<Versions>({});
   const [edit, setEdit] = useState<Adjustment>(() =>
     structuredClone(
       inputs.adjustments[adjustmentKey(nightOptions[0], firstPlayer)] ??
@@ -314,16 +310,42 @@ export default function App({ connection }: { connection?: LiveConnection }) {
   const timingDirty =
     stableJSON(timingEdit) !==
     stableJSON(inputs.timings[night] ?? blankTiming());
+  const reportEditor = useReportEditor(
+    inputs.reports,
+    connection?.versions ?? {},
+    async (reports, expected) => {
+      if (connection)
+        await connection.saveInputs(
+          { reports, adjustments: {}, timings: {} },
+          expected,
+        );
+      else
+        setSaved((old) => ({
+          ...old,
+          inputs: {
+            ...old.inputs,
+            reports: [
+              ...reports.filter(
+                (r) =>
+                  !old.inputs.reports.some(
+                    (existing) => existing.code === r.code,
+                  ),
+              ),
+              ...old.inputs.reports.map(
+                (r) => reports.find((change) => change.code === r.code) ?? r,
+              ),
+            ],
+          },
+        }));
+    },
+    Boolean(connection?.busy),
+    connection ? "" : nightOptions[0],
+  );
   const unsaved =
-    Boolean(reportText.trim()) ||
-    Object.keys(includeEdits).length > 0 ||
-    editDirty ||
-    timingDirty;
+    reportEditor.dirty || reportEditor.saving || editDirty || timingDirty;
   const unprocessed = connection
     ? connection.unprocessed
     : results.signature !== signature(inputs);
-  const parsed = parseReports(reportText, inputs.reports);
-  const ready = parsed.filter((p) => p.state === "ready");
   const included = inputs.reports.filter((r) => r.enabled);
   const visiblePlayers = players.filter((p) =>
     `${p.name} ${p.className}`.toLowerCase().includes(search.toLowerCase()),
@@ -511,12 +533,15 @@ export default function App({ connection }: { connection?: LiveConnection }) {
   function clearEdits() {
     setEditVersions(connection?.versions ?? {});
     setTimingVersions(connection?.versions ?? {});
-    setReportText("");
-    setIncludeEdits({});
+    reportEditor.reset();
     setEdit(structuredClone(lastAdjustment));
     setTimingEdit(structuredClone(inputs.timings[night] ?? blankTiming()));
   }
   function guard(action: () => void) {
+    if (reportEditor.saving) {
+      notify("Wait for the report save to finish.");
+      return;
+    }
     if (unsaved) setPendingAction(() => action);
     else action();
   }
@@ -549,44 +574,6 @@ export default function App({ connection }: { connection?: LiveConnection }) {
         ),
       );
     });
-  }
-  async function addReports() {
-    if (!ready.length || parsed.some((p) => p.state === "invalid")) return;
-    const newReports = ready.map((item) => ({
-      code: item.code,
-      enabled: true,
-      night: connection ? "" : nightOptions[0],
-      title: connection ? "" : "Sample · Additional perspective",
-      fetched: false,
-    }));
-    if (
-      !(await updateInputs({
-        ...inputs,
-        reports: [...newReports, ...inputs.reports],
-      }))
-    )
-      return;
-    setReportText("");
-    notify(
-      `Added ${ready.length} report${ready.length === 1 ? "" : "s"}. Run Pebble when you’re ready.`,
-    );
-  }
-  async function saveInclusion() {
-    if (
-      !(await updateInputs(
-        {
-          ...inputs,
-          reports: inputs.reports.map((r) => ({
-            ...r,
-            enabled: includeEdits[r.code] ?? r.enabled,
-          })),
-        },
-        inclusionVersions.current,
-      ))
-    )
-      return;
-    setIncludeEdits({});
-    notify("Report selection saved. Run Pebble to update results.");
   }
   async function startRun() {
     if (active || unsaved || !canManage) return;
@@ -1062,260 +1049,11 @@ export default function App({ connection }: { connection?: LiveConnection }) {
                   detail="Players tracked this season"
                 />
               </div>
-              <section className="card add-card">
-                <div className="section-title">
-                  <span className="icon-tile">
-                    <Plus size={20} />
-                  </span>
-                  <div>
-                    <h2>Add a report</h2>
-                    <p>
-                      Paste Warcraft Logs links or report codes, one per line.
-                    </p>
-                  </div>
-                  <Badge tone="purple">WARCRAFT LOGS</Badge>
-                </div>
-                <label className="sr-only" htmlFor="report-input">
-                  Warcraft Logs reports
-                </label>
-                <textarea
-                  id="report-input"
-                  rows={3}
-                  value={reportText}
-                  onChange={(e) => setReportText(e.target.value)}
-                  placeholder={
-                    "https://www.warcraftlogs.com/reports/…\nOr a 16-character report code"
-                  }
-                  spellCheck={false}
-                  aria-describedby="report-help"
-                />
-                {parsed.length > 0 && (
-                  <ul className="parse-results" aria-live="polite">
-                    {parsed.map((item, i) => (
-                      <li
-                        key={`${item.raw}-${i}`}
-                        className={item.state === "invalid" ? "invalid" : ""}
-                      >
-                        {item.state === "ready" ? (
-                          <Check size={14} />
-                        ) : item.state === "invalid" ? (
-                          <CircleAlert size={14} />
-                        ) : (
-                          <Info size={14} />
-                        )}
-                        <code>{item.code || item.raw}</code>
-                        <span>{item.message}</span>
-                        {item.state === "disabled" && (
-                          <button
-                            className="text-button"
-                            onClick={async () => {
-                              if (
-                                !(await updateInputs({
-                                  ...inputs,
-                                  reports: inputs.reports.map((r) =>
-                                    r.code === item.code
-                                      ? { ...r, enabled: true }
-                                      : r,
-                                  ),
-                                }))
-                              )
-                                return;
-                              setReportText((text) =>
-                                text
-                                  .split(/\r?\n/)
-                                  .filter((line) => !line.includes(item.code))
-                                  .join("\n"),
-                              );
-                              notify(
-                                "Report included again. Run Pebble to update results.",
-                              );
-                            }}
-                          >
-                            Re-enable
-                          </button>
-                        )}
-                      </li>
-                    ))}
-                  </ul>
-                )}
-                <div className="card-action-row">
-                  <span className="muted small" id="report-help">
-                    <ShieldCheck size={14} /> Adding a report won’t start the
-                    bot.
-                  </span>
-                  <div className="button-row">
-                    {!connection && (
-                      <button
-                        className="text-button"
-                        onClick={() => {
-                          setReportText(
-                            (old) =>
-                              `${old.trim() ? old.trim() + "\n" : ""}https://www.warcraftlogs.com/reports/${demoCode}`,
-                          );
-                        }}
-                      >
-                        Try a sample link <ArrowUpRight size={13} />
-                      </button>
-                    )}
-                    <button
-                      className="button primary compact"
-                      onClick={addReports}
-                      disabled={
-                        !ready.length ||
-                        parsed.some((p) => p.state === "invalid")
-                      }
-                    >
-                      <Plus size={15} /> Add{" "}
-                      {ready.length > 1 ? `${ready.length} reports` : "report"}
-                    </button>
-                  </div>
-                </div>
-              </section>
-              <section className="card reports-card">
-                <div className="table-heading">
-                  <div>
-                    <h2>
-                      Your reports{" "}
-                      <span className="count-pill">
-                        {inputs.reports.length}
-                      </span>
-                    </h2>
-                    <p>Include the logs you want Pebble to use.</p>
-                  </div>
-                  <span className="small muted">All dates in Pacific time</span>
-                </div>
-                <div className="table-scroll">
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>Report</th>
-                        <th>Raid night</th>
-                        <th>Status</th>
-                        <th className="align-right">Include</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {inputs.reports.map((r) => {
-                        const enabled = includeEdits[r.code] ?? r.enabled;
-                        return (
-                          <tr
-                            key={r.code}
-                            className={enabled ? "" : "excluded-row"}
-                          >
-                            <td>
-                              <div className="report-cell">
-                                <span
-                                  className={`report-icon ${!r.fetched ? "unfetched" : ""}`}
-                                >
-                                  <FileText size={18} />
-                                </span>
-                                <div>
-                                  <a
-                                    href={`https://www.warcraftlogs.com/reports/${r.code}`}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                  >
-                                    {r.fetched ? r.title : r.code}
-                                    <ExternalLink size={12} />
-                                  </a>
-                                  <span className="report-code">
-                                    {r.fetched
-                                      ? r.code
-                                      : "Metadata appears after the next run"}
-                                  </span>
-                                </div>
-                              </div>
-                            </td>
-                            <td>
-                              {r.fetched ? (
-                                <>
-                                  <span className="cell-title">
-                                    {formatDate(r.night)}
-                                  </span>
-                                  <span className="cell-subtitle">
-                                    {new Intl.DateTimeFormat("en-US", {
-                                      weekday: "long",
-                                      timeZone: "UTC",
-                                    }).format(new Date(`${r.night}T12:00:00Z`))}
-                                  </span>
-                                </>
-                              ) : (
-                                <span className="muted">—</span>
-                              )}
-                            </td>
-                            <td>
-                              <Badge
-                                tone={
-                                  !enabled
-                                    ? "neutral"
-                                    : !r.fetched
-                                      ? "amber"
-                                      : "green"
-                                }
-                              >
-                                {!enabled
-                                  ? "Excluded"
-                                  : !r.fetched
-                                    ? "Not fetched"
-                                    : "Processed"}
-                              </Badge>
-                            </td>
-                            <td className="align-right">
-                              <button
-                                className={`switch ${enabled ? "on" : ""}`}
-                                role="switch"
-                                aria-checked={enabled}
-                                aria-label={`Include ${r.code}`}
-                                onClick={() =>
-                                  setIncludeEdits((old) => {
-                                    if (!Object.keys(old).length)
-                                      inclusionVersions.current = {
-                                        ...connection?.versions,
-                                      };
-                                    const next = { ...old };
-                                    if (!enabled === r.enabled)
-                                      delete next[r.code];
-                                    else next[r.code] = !enabled;
-                                    return next;
-                                  })
-                                }
-                              >
-                                <span />
-                              </button>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-                {Object.keys(includeEdits).length > 0 && (
-                  <div className="inclusion-save">
-                    <span className="small">
-                      {Object.keys(includeEdits).length} unsaved selection
-                      change{Object.keys(includeEdits).length === 1 ? "" : "s"}
-                    </span>
-                    <div className="button-row">
-                      <button
-                        className="button ghost compact"
-                        onClick={() => setIncludeEdits({})}
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        className="button primary compact"
-                        onClick={saveInclusion}
-                      >
-                        Save selection
-                      </button>
-                    </div>
-                  </div>
-                )}
-                <div className="table-footnote">
-                  <Info size={14} /> Excluded reports stay here. They won’t
-                  contribute to the next run.
-                </div>
-              </section>
+              <ReportsPanel
+                reports={inputs.reports}
+                editor={reportEditor}
+                demo={!connection}
+              />
             </>
           )}
           {page === "overrides" && (
