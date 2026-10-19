@@ -32,6 +32,10 @@ npm test
 npm run build
 ```
 
+The web rollout tracker (#14) contains the implementation backlog
+and acceptance status. Architecture references cover stack/workflow (#2),
+Firestore/security (#3), and officer/public UX (#4).
+
 ## Sample mode
 
 Open http://127.0.0.1:5173/?demo=1 for the original standalone sample prototype.

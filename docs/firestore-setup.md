@@ -1,6 +1,6 @@
 # Firestore and local worker setup
 
-See [the implementation plan](web-app-implementation.md) for current status,
+See the web rollout tracker (#14) for current status,
 remaining deployment host deployment work, and spreadsheet parity.
 
 ## Current environment
@@ -108,7 +108,7 @@ claimed by the worker or remove the user's Google/Firebase account.
 Automated acceptance covers hook/component state cleanup, late callbacks/actions,
 re-grant, auth changes and server-side revocation rules. Real second-officer Google
 onboarding/revocation, popup errors and hosted-domain acceptance remain pending;
-see [AUTH-1 status](web-app-implementation.md#auth-1-officer-access-and-login).
+see AUTH-1 status (#8).
 
 ## Initialize a different project or season
 
