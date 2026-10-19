@@ -303,7 +303,7 @@ export function validateAdjustment(
         half.minutes! <= 0 ||
         half.minutes! > (half.mode === "unavailableFor" ? 720 : bound))
     )
-      return `${label}: enter whole minutes between 1 and ${bound}.`;
+      return `${label}: enter whole minutes between 1 and ${half.mode === "unavailableFor" ? 720 : bound}.`;
   }
   return null;
 }

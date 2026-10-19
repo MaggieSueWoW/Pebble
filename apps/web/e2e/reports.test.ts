@@ -1,4 +1,4 @@
-import { test, expect, type Page } from "@playwright/test";
+import { test, expect } from "@playwright/test";
 import {
   initializeTestEnvironment,
   type RulesTestEnvironment,
@@ -12,6 +12,7 @@ import {
   Timestamp,
 } from "firebase/firestore";
 import { readFileSync } from "node:fs";
+import { officer } from "./officer";
 const projectId = "demo-pebble-reports",
   season = "seasons/test-reports";
 const a = "AAAAAAAAAAAAAAAA",
@@ -32,32 +33,6 @@ const seedReport = (code: string, enabled: boolean, version = 1, notes = "") =>
       updatedAt: Timestamp.now(),
     });
   });
-async function officer(page: Page) {
-  await page.goto("/");
-  const popupPromise = page.waitForEvent("popup");
-  await page.getByRole("button", { name: "Officer sign-in" }).click();
-  const popup = await popupPromise;
-  await popup.waitForLoadState("load");
-  await popup.getByRole("button", { name: "Add new account" }).click();
-  await popup
-    .locator("#email-input")
-    .fill(`officer-${Date.now()}@example.test`);
-  await popup.locator("#display-name-input").fill("Example Officer");
-  await popup.locator("#sign-in").click();
-  const notice = page.getByText(/This account does not have officer access/);
-  await expect(notice).toBeVisible();
-  const uid = (await notice.innerText()).split("Firebase UID:")[1].trim();
-  await admin(async (ctx) => {
-    await setDoc(doc(ctx.firestore(), `officers/${uid}`), { enabled: true });
-  });
-  await page
-    .getByRole("navigation")
-    .getByRole("button", { name: /^Reports/ })
-    .click();
-  await expect(
-    page.getByRole("heading", { name: "Add a report" }),
-  ).toBeVisible();
-}
 test.beforeAll(async () => {
   if (!projectId.startsWith("demo-"))
     throw new Error("Browser tests require a demo project");
@@ -96,7 +71,7 @@ test.afterAll(async () => {
 test("validates batches, adds once, re-enables, and saves/cancels selections", async ({
   page,
 }) => {
-  await officer(page);
+  await officer(page, env);
   const input = page.getByRole("textbox", { name: "Warcraft Logs reports" });
   await input.fill(`${c}\ninvalid`);
   await expect(input).toHaveAttribute("aria-invalid", "true");
@@ -147,7 +122,7 @@ test("validates batches, adds once, re-enables, and saves/cancels selections", a
 test("holds a pending save, preserves newer text, and blocks navigation/run", async ({
   page,
 }) => {
-  await officer(page);
+  await officer(page, env);
   let release!: () => void;
   let intercepted!: () => void;
   const requested = new Promise<void>((resolve) => {
@@ -191,7 +166,7 @@ test("holds a pending save, preserves newer text, and blocks navigation/run", as
 test("retains failed saves and version conflicts until cancel/retry", async ({
   page,
 }) => {
-  await officer(page);
+  await officer(page, env);
   await page.getByRole("switch", { name: `Include ${a}` }).click();
   await seedReport(a, true, 2, "Concurrent edit");
   await page
@@ -241,7 +216,7 @@ test("protects drafts with a keyboard-accessible dialog at a narrow viewport", a
   page,
 }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await officer(page);
+  await officer(page, env);
   const input = page.getByRole("textbox", { name: "Warcraft Logs reports" });
   await input.fill(c);
   await page

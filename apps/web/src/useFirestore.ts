@@ -44,7 +44,7 @@ export type LiveConnection = {
   resultsPending: boolean;
   resultsError: string;
   retryResults: () => void;
-  saveInputs: (next: Inputs, expected?: Versions) => Promise<void>;
+  saveInputs: (next: Inputs, expected?: Versions) => Promise<Versions>;
   requestRun: () => Promise<void>;
   signIn: () => Promise<void>;
   signOut: () => Promise<void>;
@@ -435,13 +435,13 @@ export function useFirestore(): {
         if (!old || stableJSON(t) !== stableJSON(dataOnly(old)))
           changes.push({ path: `nightOverrides/${night}`, value: t });
       }
-      if (!changes.length) return;
+      if (!changes.length) return versions;
       if (changes.length > 100)
         throw new Error("Save at most 100 changes at a time.");
       setBusy(true);
       setError("");
       try {
-        await runTransaction(db!, async (transaction) => {
+        return await runTransaction(db!, async (transaction) => {
           assertAccess();
           const snapshots = await Promise.all(
             changes.map((c) =>
@@ -449,12 +449,14 @@ export function useFirestore(): {
             ),
           );
           assertAccess();
+          const acknowledged: Versions = { ...versions };
           changes.forEach((c, i) => {
             const actual = snapshots[i].data()?.version ?? 0;
             if (actual !== (expected[c.path] ?? 0))
               throw new Error(
                 "Another officer changed this input. Cancel your edits to reload, then try again.",
               );
+            acknowledged[c.path] = actual + 1;
             transaction.set(snapshots[i].ref, {
               ...c.value,
               version: actual + 1,
@@ -462,6 +464,7 @@ export function useFirestore(): {
               updatedAt: serverTimestamp(),
             });
           });
+          return acknowledged;
         });
       } catch (e) {
         if (accessSession === session.current) fail(e as Error);

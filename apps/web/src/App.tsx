@@ -42,12 +42,8 @@ import {
   signature,
   stableJSON,
   timingSpans,
-  validateAdjustment,
   wallTime,
-  type Adjustment,
-  type Availability,
   type Inputs,
-  type Mode,
   type Page,
   type Saved,
   type Timing,
@@ -55,6 +51,8 @@ import {
 
 import { useReportEditor } from "./useReportEditor";
 import { ReportsPanel } from "./ReportsPanel";
+import { AvailabilityEditor } from "./AvailabilityEditor";
+import { useAvailabilityEditor } from "./useAvailabilityEditor";
 
 const STORAGE = "pebble-prototype-v1";
 const formatRunDate = (iso: string) =>
@@ -183,66 +181,6 @@ function ConfirmDiscard({
     </dialog>
   );
 }
-function AvailabilityField({
-  label,
-  value,
-  onChange,
-  max,
-}: {
-  label: string;
-  value: Availability;
-  onChange: (a: Availability) => void;
-  max: number;
-}) {
-  return (
-    <div className="field">
-      <label>
-        {label}
-        <select
-          value={value.mode}
-          onChange={(e) =>
-            onChange(
-              ["partial", "unavailableFor"].includes(e.target.value)
-                ? { mode: e.target.value as Mode, minutes: max }
-                : { mode: e.target.value as Mode },
-            )
-          }
-        >
-          <option value="automatic">Automatic</option>
-          <option value="available">Available</option>
-          <option value="unavailable">Unavailable</option>
-          <option value="partial">Partial availability</option>
-          <option value="unavailableFor">Unavailable for…</option>
-        </select>
-      </label>
-      {["partial", "unavailableFor"].includes(value.mode) && (
-        <label className="minutes-label">
-          {value.mode === "unavailableFor"
-            ? "Unavailable minutes"
-            : "Available minutes"}{" "}
-          <input
-            type="number"
-            min="1"
-            max={value.mode === "unavailableFor" ? 720 : max}
-            value={value.minutes ?? ""}
-            onChange={(e) =>
-              onChange({
-                mode: value.mode,
-                minutes:
-                  e.target.value === "" ? undefined : Number(e.target.value),
-              })
-            }
-          />
-          <span className="muted small">
-            {value.mode === "unavailableFor"
-              ? "Pebble caps this adjustment to the raid half."
-              : `Up to ${max} minutes in this half`}
-          </span>
-        </label>
-      )}
-    </div>
-  );
-}
 export default function App({ connection }: { connection?: LiveConnection }) {
   const [demoSaved, setSaved] = useState<Saved>(
     () => connection?.saved ?? loadSaved(),
@@ -251,12 +189,17 @@ export default function App({ connection }: { connection?: LiveConnection }) {
   const { inputs, results, history } = saved;
   const canManage = !connection || connection.officer;
   const players = connection?.players ?? samplePlayers;
-  const today = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "America/Los_Angeles",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(new Date());
+  const todayParts = Object.fromEntries(
+    new Intl.DateTimeFormat("en-US", {
+      timeZone: "America/Los_Angeles",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    })
+      .formatToParts(new Date())
+      .map(({ type, value }) => [type, value]),
+  );
+  const today = `${todayParts.year}-${todayParts.month}-${todayParts.day}`;
   const nightOptions = connection
     ? connection.nights.length
       ? connection.nights
@@ -269,17 +212,8 @@ export default function App({ connection }: { connection?: LiveConnection }) {
     "availability",
   );
   const [selected, setSelected] = useState(firstPlayer);
-  const [editVersions, setEditVersions] = useState<Versions>(
-    connection?.versions ?? {},
-  );
   const [timingVersions, setTimingVersions] = useState<Versions>(
     connection?.versions ?? {},
-  );
-  const [edit, setEdit] = useState<Adjustment>(() =>
-    structuredClone(
-      inputs.adjustments[adjustmentKey(nightOptions[0], firstPlayer)] ??
-        emptyAdjustment(),
-    ),
   );
   const [timingEdit, setTimingEdit] = useState<Timing>(() =>
     structuredClone(inputs.timings[nightOptions[0]] ?? blankTiming()),
@@ -304,9 +238,6 @@ export default function App({ connection }: { connection?: LiveConnection }) {
   const toastTimer = useRef<ReturnType<typeof setTimeout> | undefined>(
     undefined,
   );
-  const lastAdjustment =
-    inputs.adjustments[adjustmentKey(night, selected)] ?? emptyAdjustment();
-  const editDirty = stableJSON(edit) !== stableJSON(lastAdjustment);
   const timingDirty =
     stableJSON(timingEdit) !==
     stableJSON(inputs.timings[night] ?? blankTiming());
@@ -341,29 +272,6 @@ export default function App({ connection }: { connection?: LiveConnection }) {
     Boolean(connection?.busy),
     connection ? "" : nightOptions[0],
   );
-  const unsaved =
-    reportEditor.dirty || reportEditor.saving || editDirty || timingDirty;
-  const unprocessed = connection
-    ? connection.unprocessed
-    : results.signature !== signature(inputs);
-  const included = inputs.reports.filter((r) => r.enabled);
-  const visiblePlayers = players.filter((p) =>
-    `${p.name} ${p.className}`.toLowerCase().includes(search.toLowerCase()),
-  );
-  const p = players.find((p) => p.id === selected) ?? {
-    id: "",
-    name: "Select a player",
-    className: "",
-    role: "",
-    color: "#b9c7d8",
-    pre: 0,
-    post: 0,
-  };
-  const detected = (n: string): Timing =>
-    connection
-      ? (results.nights.find((item) => item.night === n)?.timing ??
-        blankTiming())
-      : defaultTiming(n);
   let span: { pre: number; post: number } = { pre: 90, post: 80 };
   try {
     const liveNight = results.nights.find((n) => n.night === night) as
@@ -381,7 +289,53 @@ export default function App({ connection }: { connection?: LiveConnection }) {
   } catch {
     /* The saved timing error is surfaced by the run. */
   }
-  const adjustmentError = validateAdjustment(edit, span.pre, span.post);
+  const availabilityKey = adjustmentKey(night, selected);
+  const availabilityPath = `availabilityOverrides/${night}_${selected}`;
+  const availabilityEditor = useAvailabilityEditor(
+    availabilityKey,
+    inputs.adjustments[availabilityKey] ?? emptyAdjustment(),
+    connection?.versions[availabilityPath] ?? 0,
+    span,
+    async (key, adjustment, expected) => {
+      const slash = key.indexOf("/");
+      const path = `availabilityOverrides/${key.slice(0, slash)}_${key.slice(slash + 1)}`;
+      if (connection) {
+        const acknowledged = await connection.saveInputs(
+          { reports: [], adjustments: { [key]: adjustment }, timings: {} },
+          { [path]: expected },
+        );
+        return acknowledged[path] ?? 0;
+      }
+      setSaved((old) => ({
+        ...old,
+        inputs: {
+          ...old.inputs,
+          adjustments: { ...old.inputs.adjustments, [key]: adjustment },
+        },
+      }));
+      return expected + 1;
+    },
+    Boolean(connection?.busy),
+    players.some((player) => player.id === selected),
+  );
+  const unsaved =
+    reportEditor.dirty ||
+    reportEditor.saving ||
+    availabilityEditor.dirty ||
+    availabilityEditor.saving ||
+    timingDirty;
+  const unprocessed = connection
+    ? connection.unprocessed
+    : results.signature !== signature(inputs);
+  const included = inputs.reports.filter((r) => r.enabled);
+  const visiblePlayers = players.filter((p) =>
+    `${p.name} ${p.className}`.toLowerCase().includes(search.toLowerCase()),
+  );
+  const detected = (n: string): Timing =>
+    connection
+      ? (results.nights.find((item) => item.night === n)?.timing ??
+        blankTiming())
+      : defaultTiming(n);
   let timingError: string | null = null;
   try {
     if (connection) {
@@ -531,15 +485,14 @@ export default function App({ connection }: { connection?: LiveConnection }) {
     }
   }
   function clearEdits() {
-    setEditVersions(connection?.versions ?? {});
     setTimingVersions(connection?.versions ?? {});
     reportEditor.reset();
-    setEdit(structuredClone(lastAdjustment));
+    availabilityEditor.cancel();
     setTimingEdit(structuredClone(inputs.timings[night] ?? blankTiming()));
   }
   function guard(action: () => void) {
-    if (reportEditor.saving) {
-      notify("Wait for the report save to finish.");
+    if (reportEditor.saving || availabilityEditor.saving) {
+      notify("Wait for the save to finish.");
       return;
     }
     if (unsaved) setPendingAction(() => action);
@@ -552,14 +505,7 @@ export default function App({ connection }: { connection?: LiveConnection }) {
   function chooseNight(next: string) {
     guard(() => {
       setNight(next);
-      setEditVersions(connection?.versions ?? {});
       setTimingVersions(connection?.versions ?? {});
-      setEdit(
-        structuredClone(
-          inputs.adjustments[adjustmentKey(next, selected)] ??
-            emptyAdjustment(),
-        ),
-      );
       setTimingEdit(structuredClone(inputs.timings[next] ?? blankTiming()));
     });
   }
@@ -567,12 +513,6 @@ export default function App({ connection }: { connection?: LiveConnection }) {
     if (id === selected) return;
     guard(() => {
       setSelected(id);
-      setEditVersions(connection?.versions ?? {});
-      setEdit(
-        structuredClone(
-          inputs.adjustments[adjustmentKey(night, id)] ?? emptyAdjustment(),
-        ),
-      );
     });
   }
   async function startRun() {
@@ -586,28 +526,6 @@ export default function App({ connection }: { connection?: LiveConnection }) {
       return;
     }
     setActive({ id: crypto.randomUUID(), status: "queued", stage: 0 });
-  }
-  async function saveAdjustment() {
-    if (adjustmentError || !selected) return;
-    if (
-      !(await updateInputs(
-        {
-          ...inputs,
-          adjustments: {
-            ...inputs.adjustments,
-            [adjustmentKey(night, selected)]: structuredClone(edit),
-          },
-        },
-        editVersions,
-      ))
-    )
-      return;
-    const path = `availabilityOverrides/${night}_${selected}`;
-    setEditVersions({
-      ...connection?.versions,
-      [path]: (editVersions[path] ?? 0) + 1,
-    });
-    notify(`Saved ${p.name}’s availability. Run Pebble to update results.`);
   }
   async function saveTiming() {
     if (timingError) return;
@@ -784,7 +702,7 @@ export default function App({ connection }: { connection?: LiveConnection }) {
                   setSaved(freshState());
                   setNight(nightOptions[0]);
                   setSelected("Example");
-                  setEdit(emptyAdjustment());
+                  availabilityEditor.cancel();
                   setTimingEdit(blankTiming());
                   setResultNight("season");
                   setFailNext(false);
@@ -1070,7 +988,7 @@ export default function App({ connection }: { connection?: LiveConnection }) {
                     {[
                       ...new Set([
                         ...nightOptions,
-                        ...inputs.reports.map((r) => r.night),
+                        ...inputs.reports.map((r) => r.night).filter(Boolean),
                         night,
                       ]),
                     ]
@@ -1192,97 +1110,11 @@ export default function App({ connection }: { connection?: LiveConnection }) {
                       completed run.
                     </div>
                   </section>
-                  <section className="card adjustment-card">
-                    <div className="editor-heading">
-                      <span
-                        className="class-mark large"
-                        style={{ color: p.color, background: `${p.color}12` }}
-                      >
-                        {p.name.slice(0, 1)}
-                      </span>
-                      <div>
-                        <h2 style={{ color: p.color }}>{p.name}</h2>
-                        <p>
-                          {p.className} · {p.role}
-                        </p>
-                      </div>
-                      {editDirty && <Badge tone="amber">Unsaved</Badge>}
-                    </div>
-                    <p className="editor-intro">
-                      Tell Pebble when this player was available. Automatic uses
-                      the bot’s normal inference.
-                    </p>
-                    <AvailabilityField
-                      label="Before break"
-                      value={edit.pre}
-                      max={span.pre}
-                      onChange={(pre) => setEdit((old) => ({ ...old, pre }))}
-                    />
-                    <AvailabilityField
-                      label="After break"
-                      value={edit.post}
-                      max={span.post}
-                      onChange={(post) => setEdit((old) => ({ ...old, post }))}
-                    />
-                    <div className="field">
-                      <label>
-                        Notes{" "}
-                        <span className="optional">optional · private</span>
-                        <textarea
-                          rows={2}
-                          maxLength={500}
-                          placeholder="Anything helpful to remember…"
-                          value={edit.notes}
-                          onChange={(e) =>
-                            setEdit((old) => ({
-                              ...old,
-                              notes: e.target.value,
-                            }))
-                          }
-                        />
-                      </label>
-                    </div>
-                    {adjustmentError && (
-                      <p role="alert" className="field-error">
-                        <CircleAlert size={14} />
-                        {adjustmentError}
-                      </p>
-                    )}
-                    <div className="editor-actions">
-                      <button
-                        className="button primary"
-                        onClick={saveAdjustment}
-                        disabled={
-                          !editDirty ||
-                          Boolean(adjustmentError) ||
-                          !selected ||
-                          Boolean(connection?.busy)
-                        }
-                      >
-                        <Check size={15} /> Save adjustment
-                      </button>
-                      <button
-                        className="button secondary"
-                        disabled={!editDirty}
-                        onClick={() => {
-                          setEdit(structuredClone(lastAdjustment));
-                          setEditVersions(connection?.versions ?? {});
-                        }}
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                    <button
-                      className="text-button reset-link"
-                      onClick={() => setEdit(emptyAdjustment())}
-                    >
-                      <RotateCcw size={13} /> Reset to automatic
-                    </button>
-                    <Notice>
-                      Save first, then Run Pebble. Current results stay the same
-                      until the run completes.
-                    </Notice>
-                  </section>
+                  <AvailabilityEditor
+                    player={players.find((player) => player.id === selected)}
+                    editor={availabilityEditor}
+                    span={span}
+                  />
                 </div>
               ) : (
                 <section className="card timing-card">
@@ -1511,18 +1343,8 @@ export default function App({ connection }: { connection?: LiveConnection }) {
                                           : resultNight;
                                       setNight(n);
                                       setSelected(row.id);
-                                      setEditVersions(
-                                        connection?.versions ?? {},
-                                      );
                                       setTimingVersions(
                                         connection?.versions ?? {},
-                                      );
-                                      setEdit(
-                                        structuredClone(
-                                          inputs.adjustments[
-                                            adjustmentKey(n, row.id)
-                                          ] ?? emptyAdjustment(),
-                                        ),
                                       );
                                       setTimingEdit(
                                         structuredClone(
