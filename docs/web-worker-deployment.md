@@ -120,9 +120,9 @@ awaits the agreed cutover decision.
 ## Deployment verification — October 19, 2026
 
 The isolated worker is running from image
-`pebble-web:9ef9a1d3074833665f3dcea95e778d58d63087e6`. Later documentation-only
-commits do not change that deployed Python source. The verified Mac worker exited
-before the container started. Remote runtime checks passed for Mongo, Redis,
+`pebble-web:9ef9a1d3074833665f3dcea95e778d58d63087e6`. Subsequent deployment-tooling
+and documentation changes do not change that deployed Python source. The verified
+Mac worker exited before the container started. Remote runtime checks passed for Mongo, Redis,
 Firestore, read-only credential/config mounts and shared-lock permissions. The
 image default is UID 10001; deployment uses the private files' non-root owner.
 
