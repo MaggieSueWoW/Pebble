@@ -57,7 +57,8 @@ scripts/web-worker.sh deploy/private/deploy.env build
 scripts/web-worker.sh deploy/private/deploy.env check
 ```
 
-Build requires a clean committed checkout. `check` starts a temporary dependency
+Build requires a clean committed checkout. `check` verifies the local image's full
+commit tag, source label and Linux/amd64 platform, then starts a temporary dependency
 probe, with no heartbeat, claim or recovery. It checks Mongo, Redis, Firestore
 season read access, WCL secret presence, mounted file permissions and writable
 locks. It does not prove WCL report access or a successful calculation.
@@ -82,7 +83,9 @@ scripts/web-worker.sh deploy/private/deploy.env logs
 ```
 
 For updates, build the next commit, change the image tag, run `check`, then
-`update`. Updates stop the old web container before starting its replacement.
+`update`. Updates repeat the image/runtime checks before stopping the healthy
+web container, then stop it before starting its replacement. A missing image,
+invalid mount, credential or dependency failure leaves the current worker running.
 Avoid updates during active runs. SIGTERM finishes the current computation;
 idle exit can take ten seconds. Compose allows 30 minutes before SIGKILL. This
 is an operational bound, not a guarantee for arbitrary report sets. Forced

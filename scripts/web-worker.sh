@@ -8,20 +8,24 @@ if [[ $# != 2 ]]; then
 fi
 deploy_env=$1
 action=$2
-compose=(docker compose --env-file "$deploy_env" -f docker-compose.web.yaml)
-case "$action" in
-  build)
-    if [[ -n $(git status --porcelain --untracked-files=normal) ]]; then
-      echo "Commit changes first so the image tag identifies its source." >&2
-      exit 1
-    fi
-    revision=$(git rev-parse HEAD)
-    docker build --platform linux/amd64 --label "org.opencontainers.image.revision=$revision" \
-      -t "pebble-web:$revision" .
-    ;;
-  check)
-    # No worker, heartbeat, recovery or service writes.
-    "${compose[@]}" run --rm --no-deps -T --entrypoint python web-worker - <<'PY'
+compose=(docker compose --project-name pebble-web --env-file "$deploy_env" -f docker-compose.web.yaml)
+
+check_runtime() {
+  local image revision metadata
+  image=$("${compose[@]}" config --images)
+  if [[ ! $image =~ ^pebble-web:([0-9a-f]{40})$ ]]; then
+    echo "Select a full commit-tagged pebble-web image before deployment." >&2
+    return 1
+  fi
+  revision=${BASH_REMATCH[1]}
+  metadata=$(docker image inspect "$image" --format \
+    '{{index .Config.Labels "org.opencontainers.image.revision"}} {{.Os}}/{{.Architecture}}')
+  if [[ $metadata != "$revision linux/amd64" ]]; then
+    echo "Image source revision or platform does not match the selected release." >&2
+    return 1
+  fi
+  # No worker, heartbeat, recovery or service writes. Never pull a missing image.
+  "${compose[@]}" run --rm --no-deps --pull never -T --entrypoint python web-worker - <<'PY'
 import os
 from pathlib import Path
 from pymongo import MongoClient
@@ -44,12 +48,26 @@ probe.write_text('ok')
 probe.unlink()
 print('Read-only dependency/auth checks and runtime permissions passed')
 PY
+}
+
+case "$action" in
+  build)
+    if [[ -n $(git status --porcelain --untracked-files=normal) ]]; then
+      echo "Commit changes first so the image tag identifies its source." >&2
+      exit 1
+    fi
+    revision=$(git rev-parse HEAD)
+    docker build --platform linux/amd64 --label "org.opencontainers.image.revision=$revision" \
+      -t "pebble-web:$revision" .
     ;;
+  check) check_runtime ;;
   update)
     if [[ ${PEBBLE_WEB_SINGLETON_CONFIRMED:-} != yes ]]; then
       echo "Stop every other web worker for this project/season, then set PEBBLE_WEB_SINGLETON_CONFIRMED=yes." >&2
       exit 1
     fi
+    # A bad release must not take the healthy worker offline.
+    check_runtime
     "${compose[@]}" stop web-worker
     "${compose[@]}" up -d --no-deps --no-build --pull never web-worker
     ;;
