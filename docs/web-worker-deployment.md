@@ -113,3 +113,25 @@ editing authority and reconcile web-only reports, roster, availability, night
 overrides and calculation settings before switching. Do not overwrite web edits
 with another import or assume Sheets received them. Old bot/credential retirement
 awaits the agreed cutover decision.
+
+## Deployment verification — October 19, 2026
+
+The isolated worker is running from image
+`pebble-web:9ef9a1d3074833665f3dcea95e778d58d63087e6`. Later documentation-only
+commits do not change that deployed Python source. The verified Mac worker exited
+before the container started. Remote runtime checks passed for Mongo, Redis,
+Firestore, read-only credential/config mounts and shared-lock permissions. The
+image default is UID 10001; deployment uses the private files' non-root owner.
+
+A real Run Pebble request was queued through the officer UI while the new
+container was stopped. After start it showed Fetching reports progress and
+succeeded at 4:15 PM Pacific, publishing a complete result. Run ID:
+`fd6e0052-d778-4774-866d-92dbbdffcff3`. Idle heartbeats advanced by 60.066 seconds
+after restart; a direct container-side read confirmed freshness and no active run.
+The legacy container ID and original start time were unchanged. The Python suite
+passed 213 tests with two emulator-dependent skips; Compose validation, shell
+syntax and image config/credential exclusion checks also passed.
+
+OPS-1 remains open for the broader BOT-1 fault/forced-shutdown and DATA-1/AUTH-1
+acceptance dependencies. No live inputs were changed to induce failures, no old
+service account was removed, and Sheets retirement remains a separate decision.
