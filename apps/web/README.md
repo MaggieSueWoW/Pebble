@@ -45,3 +45,22 @@ production Python fairness engine remains authoritative in the connected app.
 
 Roster and calculation settings have validated Firestore schemas and an import
 command; dedicated browser editors for them remain future work.
+
+## Reports browser acceptance
+
+With Chrome, Java 21+ and the Firebase CLI installed (validated with CLI 15.22.4):
+
+```sh
+npm run test:browser
+```
+
+This starts a separate Vite server on port 5174 and Auth/Firestore emulators on
+9199/8180 using `firebase.browser.json`. It always uses the
+`demo-pebble-reports` project and synthetic officers/reports, overriding local
+Firebase configuration. It clears only that isolated emulator's Firestore data;
+keep these ports free. No worker is started, and tests assert that no runs were
+queued. Failure traces stay in ignored `test-results/`.
+
+Coverage includes report validation/deduplication, add/re-enable, selection
+save/cancel, delayed and denied saves, concurrent version conflicts, draft
+navigation protection, keyboard dialog focus and narrow-screen overflow.

@@ -305,3 +305,7 @@ config-web.yaml
 config-web-admin.yaml
 .firebase/
 deploy/private/
+
+# Browser acceptance artifacts
+apps/web/test-results/
+apps/web/playwright-report/

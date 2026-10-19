@@ -497,7 +497,7 @@ describe("run submission", () => {
         }) as HTMLButtonElement
       ).disabled,
     ).toBe(true);
-    expect(screen.getByRole("status").textContent).toContain(
+    expect(screen.getByRole("status", { name: "" }).textContent).toContain(
       "Waiting for the server to confirm",
     );
     await act(async () => {
@@ -864,14 +864,14 @@ describe("public result loading", () => {
         },
       },
     );
-    expect(screen.getByRole("status").textContent).toContain(
+    expect(screen.getByRole("status", { name: "" }).textContent).toContain(
       "Loading latest results",
     );
     expect(screen.queryByText("Results updated")).toBeNull();
     const pending = deferred<Snapshot>();
     mock.getDoc.mockReturnValueOnce(pending.promise);
     send("publicSeasons/test", { latestRunId: "new" });
-    expect(screen.getByRole("status").textContent).toContain(
+    expect(screen.getByRole("status", { name: "" }).textContent).toContain(
       "Loading latest results",
     );
     await act(async () => {
@@ -881,7 +881,7 @@ describe("public result loading", () => {
     send("seasons/test/runs/new", {
       inputVersions: { "reports/aB3dE6gH9jK2mN5p": 2 },
     });
-    expect(screen.getByRole("status").textContent).toContain(
+    expect(screen.getByRole("status", { name: "" }).textContent).toContain(
       "Changes ready for the next run",
     );
     expect(screen.queryByText("Loading latest results…")).toBeNull();
