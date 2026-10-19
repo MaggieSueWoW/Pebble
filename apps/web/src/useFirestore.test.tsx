@@ -381,6 +381,54 @@ describe("officer access lifecycle", () => {
     expect(result.current.connection.error).toBe("");
   });
 
+  it("returns saved versions and writes only the supplied availability override", async () => {
+    const { result } = renderHook(useFirestore);
+    login();
+    grant();
+    loadPrivate();
+    const set = vi.fn();
+    mock.transaction.mockImplementationOnce(async (_db, callback) =>
+      callback({
+        get: async (ref: { path: string }) => ({
+          ...snap({ version: 2 }),
+          ref,
+        }),
+        set,
+      }),
+    );
+    let acknowledged!: Record<string, number>;
+    await act(async () => {
+      acknowledged = await result.current.connection.saveInputs(
+        {
+          reports: [],
+          timings: {},
+          adjustments: {
+            "2026-10-15/secret": {
+              pre: { mode: "available" },
+              post: { mode: "automatic" },
+              notes: "Only this override",
+            },
+          },
+        },
+        { "availabilityOverrides/2026-10-15_secret": 2 },
+      );
+    });
+    expect(acknowledged["availabilityOverrides/2026-10-15_secret"]).toBe(3);
+    expect(set).toHaveBeenCalledTimes(1);
+    expect(set.mock.calls[0][0].path).toBe(
+      "seasons/test/availabilityOverrides/2026-10-15_secret",
+    );
+    expect(set.mock.calls[0][1].version).toBe(3);
+    expect(result.current.connection.busy).toBe(false);
+    const noChanges = await result.current.connection.saveInputs({
+      reports: [],
+      timings: {},
+      adjustments: {},
+    });
+    expect(noChanges).toEqual(result.current.connection.versions);
+    expect(mock.transaction).toHaveBeenCalledTimes(1);
+  });
+
   it("stops an in-flight save before transaction writes and ignores its stale failure", async () => {
     const { result } = renderHook(useFirestore);
     login();
@@ -391,7 +439,7 @@ describe("officer access lifecycle", () => {
     mock.transaction.mockImplementationOnce(async (_db, callback) =>
       callback({ get: () => read.promise, set }),
     );
-    let save!: Promise<void>;
+    let save!: Promise<unknown>;
     act(() => {
       save = result.current.connection.saveInputs({
         ...result.current.connection.saved.inputs,
