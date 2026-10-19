@@ -1,0 +1,414 @@
+import { test, expect, type Page } from "@playwright/test";
+import {
+  initializeTestEnvironment,
+  type RulesTestEnvironment,
+} from "@firebase/rules-unit-testing";
+import {
+  collection,
+  doc,
+  getDoc,
+  getDocs,
+  setDoc,
+  Timestamp,
+} from "firebase/firestore";
+import { readFileSync } from "node:fs";
+import { officer } from "./officer";
+const projectId = "demo-pebble-reports",
+  season = "seasons/test-reports";
+const first = "2026-10-14",
+  second = "2026-10-15";
+const path = `${season}/availabilityOverrides/${first}_player-a`;
+let env: RulesTestEnvironment;
+const admin = (
+  fn: Parameters<RulesTestEnvironment["withSecurityRulesDisabled"]>[0],
+) => env.withSecurityRulesDisabled(fn);
+const meta = (version: number) => ({
+  version,
+  updatedBy: "fixture",
+  updatedAt: Timestamp.now(),
+});
+async function override(notes: string, version = 1, pre = "automatic") {
+  await admin(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), path), {
+      nightId: first,
+      playerId: "player-a",
+      pre: { mode: pre },
+      post: { mode: "automatic" },
+      notes,
+      ...meta(version),
+    });
+  });
+}
+async function open(page: Page) {
+  await officer(page, env);
+  await page
+    .getByRole("navigation")
+    .getByRole("button", { name: "Overrides", exact: true })
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "Who was available?" }),
+  ).toBeVisible();
+  await expect(page.getByLabel("Choose another raid date")).toHaveValue(
+    /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/,
+  );
+  await page.getByLabel("Choose another raid date").fill(first);
+  await expect(
+    page.getByRole("heading", { name: "Example Alpha", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("textbox", { name: "Availability notes" }),
+  ).toHaveValue("Saved Alpha");
+}
+const notes = (page: Page) =>
+  page.getByRole("textbox", { name: "Availability notes" });
+const saveButton = (page: Page) =>
+  page.getByRole("button", { name: "Save adjustment", exact: true });
+const status = (page: Page) =>
+  page.getByRole("status", { name: "Availability changes" });
+async function unchanged() {
+  await admin(async (ctx) => {
+    const db = ctx.firestore();
+    expect(
+      (await getDoc(doc(db, `${season}/reports/AAAAAAAAAAAAAAAA`))).data()
+        ?.version,
+    ).toBe(7);
+    expect(
+      (await getDoc(doc(db, `${season}/nightOverrides/${first}`))).data()
+        ?.version,
+    ).toBe(4);
+    const otherPlayer = (
+      await getDoc(doc(db, `${season}/availabilityOverrides/${first}_player-b`))
+    ).data()!;
+    expect(otherPlayer.version).toBe(5);
+    expect(otherPlayer.notes).toBe("Other player");
+    const otherNight = (
+      await getDoc(
+        doc(db, `${season}/availabilityOverrides/${second}_player-a`),
+      )
+    ).data()!;
+    expect(otherNight.version).toBe(6);
+    expect(otherNight.notes).toBe("Other night");
+    expect((await getDocs(collection(db, `${season}/runs`))).size).toBe(0);
+  });
+}
+test.beforeAll(async () => {
+  env = await initializeTestEnvironment({
+    projectId,
+    firestore: {
+      host: "127.0.0.1",
+      port: 8180,
+      rules: readFileSync(
+        new URL("../../../firebase/firestore.rules", import.meta.url),
+        "utf8",
+      ),
+    },
+  });
+});
+test.beforeEach(async () => {
+  await env.clearFirestore();
+  await override("Saved Alpha");
+  await admin(async (ctx) => {
+    const db = ctx.firestore();
+    for (const [id, name] of [
+      ["player-a", "Example Alpha"],
+      ["player-b", "Example Beta"],
+    ]) {
+      await setDoc(doc(db, `${season}/players/${id}`), {
+        name,
+        className: "Mage",
+        role: "Damage",
+        active: true,
+        joinDate: "",
+        leaveDate: "",
+        ...meta(1),
+      });
+    }
+    await setDoc(doc(db, `${season}/reports/AAAAAAAAAAAAAAAA`), {
+      enabled: true,
+      notes: "Report baseline",
+      ...meta(7),
+    });
+    await setDoc(doc(db, `${season}/nightOverrides/${first}`), {
+      start: "",
+      breakStart: "",
+      breakEnd: "",
+      end: "",
+      notes: "Timing baseline",
+      ...meta(4),
+    });
+    await setDoc(doc(db, `${season}/availabilityOverrides/${first}_player-b`), {
+      nightId: first,
+      playerId: "player-b",
+      pre: { mode: "unavailable" },
+      post: { mode: "available" },
+      notes: "Other player",
+      ...meta(5),
+    });
+    await setDoc(
+      doc(db, `${season}/availabilityOverrides/${second}_player-a`),
+      {
+        nightId: second,
+        playerId: "player-a",
+        pre: { mode: "available" },
+        post: { mode: "automatic" },
+        notes: "Other night",
+        ...meta(6),
+      },
+    );
+    await setDoc(doc(db, "bot/status"), { lastHeartbeatAt: Timestamp.now() });
+  });
+});
+test.afterEach(unchanged);
+test.afterAll(async () => {
+  await env?.cleanup();
+});
+test("validates modes/minutes and saves, cancels, and resets only the selected override", async ({
+  page,
+}) => {
+  await open(page);
+  await page
+    .getByRole("combobox", { name: "Before break", exact: true })
+    .selectOption("partial");
+  const minutes = page.getByRole("spinbutton", {
+    name: "Before break available minutes",
+  });
+  for (const value of ["0", "1.5", "721"]) {
+    await minutes.fill(value);
+    await expect(minutes).toHaveAttribute("aria-invalid", "true");
+    await expect(saveButton(page)).toBeDisabled();
+    await expect(
+      page.getByRole("alert").filter({ hasText: "Before break" }),
+    ).toBeVisible();
+  }
+  await minutes.fill("60");
+  await page
+    .getByRole("combobox", { name: "After break", exact: true })
+    .selectOption("unavailableFor");
+  const absent = page.getByRole("spinbutton", {
+    name: "After break unavailable minutes",
+  });
+  await absent.fill("721");
+  await expect(
+    page.getByRole("alert").filter({ hasText: "between 1 and 720" }),
+  ).toBeVisible();
+  await absent.fill("10");
+  await notes(page).fill("Saved partial availability");
+  await saveButton(page).click();
+  await expect(status(page)).toContainText("Availability saved");
+  await expect(saveButton(page)).toBeDisabled();
+  await admin(async (ctx) => {
+    const saved = (await getDoc(doc(ctx.firestore(), path))).data()!;
+    expect(saved.pre).toEqual({ mode: "partial", minutes: 60 });
+    expect(saved.post).toEqual({ mode: "unavailableFor", minutes: 10 });
+    expect(saved.version).toBe(2);
+  });
+  await notes(page).fill("Discard me");
+  await page.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(notes(page)).toHaveValue("Saved partial availability");
+  await page.getByRole("button", { name: "Reset to automatic" }).click();
+  await expect(
+    page.getByRole("combobox", { name: "Before break", exact: true }),
+  ).toHaveValue("automatic");
+  await expect(
+    page.getByRole("button", { name: "Run Pebble", exact: true }),
+  ).toBeDisabled();
+  await admin(async (ctx) => {
+    expect((await getDoc(doc(ctx.firestore(), path))).data()?.version).toBe(2);
+  });
+  await page.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(minutes).toHaveValue("60");
+  await page.getByRole("button", { name: "Reset to automatic" }).click();
+  await saveButton(page).click();
+  await expect(status(page)).toContainText("Availability saved");
+  await expect(saveButton(page)).toBeDisabled();
+  await expect(status(page)).toContainText("Availability saved");
+  await admin(async (ctx) => {
+    const saved = (await getDoc(doc(ctx.firestore(), path))).data()!;
+    expect(saved.pre).toEqual({ mode: "automatic" });
+    expect(saved.post).toEqual({ mode: "automatic" });
+    expect(saved.notes).toBe("");
+    expect(saved.version).toBe(3);
+  });
+});
+test("preserves newer field edits through a held save and guards navigation and repeated actions", async ({
+  page,
+}) => {
+  await open(page);
+  let release!: () => void, intercepted!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const requested = new Promise<void>((resolve) => {
+    intercepted = resolve;
+  });
+  await page.route(/\/documents:commit(?:\?|$)/, async (route) => {
+    intercepted();
+    await gate;
+    await route.continue();
+  });
+  await notes(page).fill("Submitted notes");
+  await saveButton(page).click();
+  await requested;
+  await expect(status(page)).toContainText("Saving availability");
+  await expect(saveButton(page)).toBeDisabled();
+  await expect(
+    page.getByRole("button", { name: "Cancel", exact: true }),
+  ).toBeDisabled();
+  await expect(
+    page.getByRole("button", { name: "Reset to automatic" }),
+  ).toBeDisabled();
+  await notes(page).fill("Newer notes");
+  await page
+    .getByRole("combobox", { name: "After break", exact: true })
+    .selectOption("unavailable");
+  await page.getByRole("button", { name: /Example Beta/ }).click();
+  await page.getByLabel("Choose another raid date").fill(second);
+  await page.getByRole("tab", { name: "Raid timing" }).click();
+  await page
+    .getByRole("navigation")
+    .getByRole("button", { name: /^Reports/ })
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "Example Alpha", exact: true }),
+  ).toBeVisible();
+  await expect(page.getByLabel("Choose another raid date")).toHaveValue(first);
+  await expect(page.getByRole("dialog")).not.toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Run Pebble", exact: true }),
+  ).toBeDisabled();
+  release();
+  await expect(status(page)).toContainText("Availability saved");
+  await expect(notes(page)).toHaveValue("Newer notes");
+  await expect(saveButton(page)).toBeEnabled();
+  await page.unroute(/\/documents:commit(?:\?|$)/);
+  await saveButton(page).click();
+  await expect(status(page)).toContainText("Availability saved");
+  await expect(saveButton(page)).toBeDisabled();
+  await admin(async (ctx) => {
+    const saved = (await getDoc(doc(ctx.firestore(), path))).data()!;
+    expect(saved.version).toBe(3);
+    expect(saved.notes).toBe("Newer notes");
+    expect(saved.post.mode).toBe("unavailable");
+  });
+});
+test("retains conflicts/denied writes, refreshes clean snapshots, and retries with current versions", async ({
+  page,
+}) => {
+  await open(page);
+  await notes(page).fill("Local draft");
+  await override("Remote while editing", 2, "available");
+  await saveButton(page).click();
+  await expect(
+    page.getByRole("alert").filter({ hasText: "Another officer changed" }),
+  ).toBeVisible();
+  await expect(notes(page)).toHaveValue("Local draft");
+  await page.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(notes(page)).toHaveValue("Remote while editing");
+  await expect(
+    page.getByRole("combobox", { name: "Before break", exact: true }),
+  ).toHaveValue("available");
+  await override("Remote while pristine", 3, "available");
+  await expect(notes(page)).toHaveValue("Remote while pristine");
+  await expect(saveButton(page)).toBeDisabled();
+  await notes(page).fill("Retry draft");
+  await page.route(/\/documents:commit(?:\?|$)/, (route) =>
+    route.fulfill({
+      status: 403,
+      contentType: "application/json",
+      body: JSON.stringify({
+        error: {
+          code: 403,
+          status: "PERMISSION_DENIED",
+          message: "Test availability save denied",
+        },
+      }),
+    }),
+  );
+  await saveButton(page).click();
+  await expect(
+    page.getByRole("alert").filter({ hasText: /denied|permissions/i }),
+  ).toBeVisible();
+  await expect(notes(page)).toHaveValue("Retry draft");
+  await page.unroute(/\/documents:commit(?:\?|$)/);
+  await saveButton(page).click();
+  await expect(status(page)).toContainText("Availability saved");
+  await expect(saveButton(page)).toBeDisabled();
+  await admin(async (ctx) => {
+    const saved = (await getDoc(doc(ctx.firestore(), path))).data()!;
+    expect(saved.version).toBe(4);
+    expect(saved.notes).toBe("Retry draft");
+  });
+  // A concurrent writer can independently save exactly the draft's desired value.
+  await page
+    .getByRole("combobox", { name: "Before break", exact: true })
+    .selectOption("automatic");
+  await notes(page).fill("Same value");
+  await override("Same value", 5);
+  await expect(
+    page.getByRole("button", { name: /Example Alpha/ }),
+  ).toContainText("Automatic");
+  await saveButton(page).click();
+  await expect(status(page)).toContainText("Availability saved");
+  await expect(saveButton(page)).toBeDisabled();
+  await notes(page).fill("After matching remote save");
+  await saveButton(page).click();
+  await expect(status(page)).toContainText("Availability saved");
+  await expect(saveButton(page)).toBeDisabled();
+  await admin(async (ctx) => {
+    expect((await getDoc(doc(ctx.firestore(), path))).data()?.version).toBe(6);
+  });
+});
+test("protects player/night/tab/page drafts and supports keyboard navigation on a narrow screen", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await open(page);
+  const before = page.getByRole("combobox", {
+    name: "Before break",
+    exact: true,
+  });
+  await before.selectOption("available");
+  await before.focus();
+  await page.keyboard.press("Tab");
+  await expect(
+    page.getByRole("combobox", { name: "After break", exact: true }),
+  ).toBeFocused();
+  await notes(page).focus();
+  await page.keyboard.press("ControlOrMeta+A");
+  await page.keyboard.type("Keyboard draft");
+  await page.keyboard.press("Tab");
+  await expect(saveButton(page)).toBeFocused();
+  await expect(before).toHaveValue("available");
+  for (const leave of [
+    () => page.getByRole("button", { name: /Example Beta/ }).click(),
+    () => page.getByLabel("Choose another raid date").fill(second),
+    () => page.getByRole("tab", { name: "Raid timing" }).click(),
+    () =>
+      page
+        .getByRole("navigation")
+        .getByRole("button", { name: /^Results/ })
+        .click(),
+  ]) {
+    await leave();
+    await expect(page.getByRole("dialog")).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Keep editing" }),
+    ).toBeFocused();
+    await page.keyboard.press("Escape");
+    await expect(before).toHaveValue("available");
+  }
+  await page.getByRole("button", { name: /Example Beta/ }).click();
+  await page.getByRole("button", { name: "Discard edits" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Example Beta", exact: true }),
+  ).toBeVisible();
+  await expect(notes(page)).toHaveValue("Other player");
+  await page.getByRole("button", { name: /Example Alpha/ }).click();
+  await page.getByLabel("Choose another raid date").fill(second);
+  await expect(notes(page)).toHaveValue("Other night");
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth,
+    ),
+  ).toBe(true);
+});

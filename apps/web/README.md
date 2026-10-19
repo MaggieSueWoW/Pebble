@@ -46,7 +46,7 @@ production Python fairness engine remains authoritative in the connected app.
 Roster and calculation settings have validated Firestore schemas and an import
 command; dedicated browser editors for them remain future work.
 
-## Reports browser acceptance
+## Officer workflow browser acceptance
 
 With Chrome, Java 21+ and the Firebase CLI installed (validated with CLI 15.22.4):
 
@@ -64,3 +64,15 @@ queued. Failure traces stay in ignored `test-results/`.
 Coverage includes report validation/deduplication, add/re-enable, selection
 save/cancel, delayed and denied saves, concurrent version conflicts, draft
 navigation protection, keyboard dialog focus and narrow-screen overflow.
+Availability coverage adds
+mode/minute validation, save/cancel/reset, delayed/denied saves, version conflicts,
+newer edits during saves, and player/night/tab/page navigation. Each availability
+case verifies unrelated reports, timings and player/night overrides stay unchanged.
+
+
+Timing coverage adds save/cancel/reset, blank and detected values, ordering and
+paired break validation, delayed/denied commits, version conflicts, newer edits,
+and night/tab/page navigation. It also checks Pacific daylight-saving validation,
+wall-time presentation in a non-Pacific browser timezone, narrow-screen keyboard
+operation and standalone sample mode. Timing cases verify reports, availability,
+other nights and the empty run queue stay unchanged.
