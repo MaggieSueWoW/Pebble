@@ -1,4 +1,4 @@
-import type { LiveConnection, Versions } from "./useFirestore";
+import type { LiveConnection } from "./useFirestore";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   Activity,
@@ -40,19 +40,19 @@ import {
   nightOptions as sampleNights,
   players as samplePlayers,
   signature,
-  stableJSON,
   timingSpans,
-  wallTime,
   type Inputs,
   type Page,
   type Saved,
-  type Timing,
 } from "./model";
 
 import { useReportEditor } from "./useReportEditor";
 import { ReportsPanel } from "./ReportsPanel";
 import { AvailabilityEditor } from "./AvailabilityEditor";
 import { useAvailabilityEditor } from "./useAvailabilityEditor";
+import { TimingEditor } from "./TimingEditor";
+import { useTimingEditor } from "./useTimingEditor";
+import { blankTiming } from "./timing";
 
 const STORAGE = "pebble-prototype-v1";
 const formatRunDate = (iso: string) =>
@@ -76,13 +76,6 @@ function loadSaved(): Saved {
   }
   return freshState();
 }
-const blankTiming = (): Timing => ({
-  start: "",
-  breakStart: "",
-  breakEnd: "",
-  end: "",
-  notes: "",
-});
 const steps = [
   "Queued",
   "Validating inputs",
@@ -212,12 +205,6 @@ export default function App({ connection }: { connection?: LiveConnection }) {
     "availability",
   );
   const [selected, setSelected] = useState(firstPlayer);
-  const [timingVersions, setTimingVersions] = useState<Versions>(
-    connection?.versions ?? {},
-  );
-  const [timingEdit, setTimingEdit] = useState<Timing>(() =>
-    structuredClone(inputs.timings[nightOptions[0]] ?? blankTiming()),
-  );
   const [search, setSearch] = useState("");
   const [resultNight, setResultNight] = useState("season");
   const [expandedPlayer, setExpandedPlayer] = useState<string | null>(null);
@@ -238,9 +225,6 @@ export default function App({ connection }: { connection?: LiveConnection }) {
   const toastTimer = useRef<ReturnType<typeof setTimeout> | undefined>(
     undefined,
   );
-  const timingDirty =
-    stableJSON(timingEdit) !==
-    stableJSON(inputs.timings[night] ?? blankTiming());
   const reportEditor = useReportEditor(
     inputs.reports,
     connection?.versions ?? {},
@@ -318,12 +302,42 @@ export default function App({ connection }: { connection?: LiveConnection }) {
     Boolean(connection?.busy),
     players.some((player) => player.id === selected),
   );
+  const detectedTiming = connection
+    ? (results.nights.find((item) => item.night === night)?.timing ??
+      blankTiming())
+    : defaultTiming(night);
+  const timingEditor = useTimingEditor(
+    night,
+    inputs.timings[night] ?? blankTiming(),
+    connection?.versions[`nightOverrides/${night}`] ?? 0,
+    detectedTiming,
+    async (key, timing, expected) => {
+      if (connection) {
+        const versions = await connection.saveInputs(
+          { reports: [], adjustments: {}, timings: { [key]: timing } },
+          { [`nightOverrides/${key}`]: expected },
+        );
+        return versions[`nightOverrides/${key}`] ?? 0;
+      }
+      setSaved((old) => ({
+        ...old,
+        inputs: {
+          ...old.inputs,
+          timings: { ...old.inputs.timings, [key]: timing },
+        },
+      }));
+      return expected + 1;
+    },
+    Boolean(connection?.busy),
+    !connection,
+  );
   const unsaved =
     reportEditor.dirty ||
     reportEditor.saving ||
     availabilityEditor.dirty ||
     availabilityEditor.saving ||
-    timingDirty;
+    timingEditor.dirty ||
+    timingEditor.saving;
   const unprocessed = connection
     ? connection.unprocessed
     : results.signature !== signature(inputs);
@@ -331,30 +345,6 @@ export default function App({ connection }: { connection?: LiveConnection }) {
   const visiblePlayers = players.filter((p) =>
     `${p.name} ${p.className}`.toLowerCase().includes(search.toLowerCase()),
   );
-  const detected = (n: string): Timing =>
-    connection
-      ? (results.nights.find((item) => item.night === n)?.timing ??
-        blankTiming())
-      : defaultTiming(n);
-  let timingError: string | null = null;
-  try {
-    if (connection) {
-      const values = ["start", "breakStart", "breakEnd", "end"]
-        .map(
-          (k) =>
-            timingEdit[k as keyof Timing] || detected(night)[k as keyof Timing],
-        )
-        .filter(Boolean);
-      if (Boolean(timingEdit.breakStart) !== Boolean(timingEdit.breakEnd))
-        throw new Error("Set both break boundaries or leave both automatic.");
-      if (values.some((v, i) => i > 0 && v <= values[i - 1]))
-        throw new Error(
-          "Timing must follow start, break start, break end, end.",
-        );
-    } else timingSpans(night, timingEdit);
-  } catch (e) {
-    timingError = (e as Error).message;
-  }
 
   function notify(text: string, error = false) {
     clearTimeout(toastTimer.current);
@@ -474,24 +464,17 @@ export default function App({ connection }: { connection?: LiveConnection }) {
     return () => timers.forEach(clearTimeout);
   }, [active?.id, active?.status]);
 
-  async function updateInputs(next: Inputs, expected?: Versions) {
-    try {
-      if (connection) await connection.saveInputs(next, expected);
-      else setSaved((old) => ({ ...old, inputs: next }));
-      return true;
-    } catch (error) {
-      notify((error as Error).message, true);
-      return false;
-    }
-  }
   function clearEdits() {
-    setTimingVersions(connection?.versions ?? {});
     reportEditor.reset();
     availabilityEditor.cancel();
-    setTimingEdit(structuredClone(inputs.timings[night] ?? blankTiming()));
+    timingEditor.cancel();
   }
   function guard(action: () => void) {
-    if (reportEditor.saving || availabilityEditor.saving) {
+    if (
+      reportEditor.saving ||
+      availabilityEditor.saving ||
+      timingEditor.saving
+    ) {
       notify("Wait for the save to finish.");
       return;
     }
@@ -505,8 +488,6 @@ export default function App({ connection }: { connection?: LiveConnection }) {
   function chooseNight(next: string) {
     guard(() => {
       setNight(next);
-      setTimingVersions(connection?.versions ?? {});
-      setTimingEdit(structuredClone(inputs.timings[next] ?? blankTiming()));
     });
   }
   function choosePlayer(id: string) {
@@ -526,25 +507,6 @@ export default function App({ connection }: { connection?: LiveConnection }) {
       return;
     }
     setActive({ id: crypto.randomUUID(), status: "queued", stage: 0 });
-  }
-  async function saveTiming() {
-    if (timingError) return;
-    if (
-      !(await updateInputs(
-        {
-          ...inputs,
-          timings: { ...inputs.timings, [night]: structuredClone(timingEdit) },
-        },
-        timingVersions,
-      ))
-    )
-      return;
-    const path = `nightOverrides/${night}`;
-    setTimingVersions({
-      ...connection?.versions,
-      [path]: (timingVersions[path] ?? 0) + 1,
-    });
-    notify("Timing saved. Run Pebble to update results.");
   }
   const runButton = canManage ? (
     <button
@@ -703,7 +665,7 @@ export default function App({ connection }: { connection?: LiveConnection }) {
                   setNight(nightOptions[0]);
                   setSelected("Example");
                   availabilityEditor.cancel();
-                  setTimingEdit(blankTiming());
+                  timingEditor.cancel();
                   setResultNight("season");
                   setFailNext(false);
                   setOnline(true);
@@ -1117,124 +1079,11 @@ export default function App({ connection }: { connection?: LiveConnection }) {
                   />
                 </div>
               ) : (
-                <section className="card timing-card">
-                  <div className="section-title">
-                    <span className="icon-tile">
-                      <Clock3 size={20} />
-                    </span>
-                    <div>
-                      <h2>A little timing correction</h2>
-                      <p>
-                        Leave a field empty to use the detected time. All times
-                        are Pacific.
-                      </p>
-                    </div>
-                  </div>
-                  <div className="timeline">
-                    <span>
-                      Raid start
-                      <strong>{wallTime(detected(night).start)}</strong>
-                    </span>
-                    <div className="timeline-track">
-                      <i />
-                      <b />
-                      <i />
-                    </div>
-                    <span>
-                      Raid end
-                      <strong>{wallTime(detected(night).end)}</strong>
-                    </span>
-                  </div>
-                  <div className="timing-fields">
-                    {(
-                      [
-                        { key: "start", label: "Mythic start" },
-                        { key: "breakStart", label: "Break start" },
-                        { key: "breakEnd", label: "Break end" },
-                        { key: "end", label: "Mythic end" },
-                      ] as const
-                    ).map((item) => (
-                      <div className="field" key={item.key}>
-                        <label>
-                          {item.label}
-                          <input
-                            type="datetime-local"
-                            value={timingEdit[item.key]}
-                            onInput={(e) => {
-                              const value = e.currentTarget.value;
-                              setTimingEdit((old) => ({
-                                ...old,
-                                [item.key]: value,
-                              }));
-                            }}
-                          />
-                        </label>
-                        <span className="muted small">
-                          Detected: {formatDate(night)} ·{" "}
-                          {wallTime(detected(night)[item.key])}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="field">
-                    <label>
-                      Notes <span className="optional">optional · private</span>
-                      <textarea
-                        rows={2}
-                        maxLength={500}
-                        placeholder="Anything useful about this night…"
-                        value={timingEdit.notes}
-                        onChange={(e) =>
-                          setTimingEdit((old) => ({
-                            ...old,
-                            notes: e.target.value,
-                          }))
-                        }
-                      />
-                    </label>
-                  </div>
-                  {timingError && (
-                    <p role="alert" className="field-error">
-                      <CircleAlert size={14} />
-                      {timingError}
-                    </p>
-                  )}
-                  <div className="card-action-row">
-                    <button
-                      className="text-button"
-                      onClick={() => setTimingEdit(blankTiming())}
-                    >
-                      <RotateCcw size={14} /> Reset to automatic
-                    </button>
-                    <div className="button-row">
-                      <button
-                        className="button secondary"
-                        disabled={!timingDirty}
-                        onClick={() => {
-                          setTimingVersions(connection?.versions ?? {});
-                          setTimingEdit(
-                            structuredClone(
-                              inputs.timings[night] ?? blankTiming(),
-                            ),
-                          );
-                        }}
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        className="button primary"
-                        disabled={
-                          !timingDirty ||
-                          Boolean(timingError) ||
-                          Boolean(connection?.busy)
-                        }
-                        onClick={saveTiming}
-                      >
-                        <Check size={15} /> Save timing
-                      </button>
-                    </div>
-                  </div>
-                </section>
+                <TimingEditor
+                  night={night}
+                  detected={detectedTiming}
+                  editor={timingEditor}
+                />
               )}
             </>
           )}
@@ -1343,14 +1192,6 @@ export default function App({ connection }: { connection?: LiveConnection }) {
                                           : resultNight;
                                       setNight(n);
                                       setSelected(row.id);
-                                      setTimingVersions(
-                                        connection?.versions ?? {},
-                                      );
-                                      setTimingEdit(
-                                        structuredClone(
-                                          inputs.timings[n] ?? blankTiming(),
-                                        ),
-                                      );
                                       setOverrideTab("availability");
                                       setPage("overrides");
                                     });
