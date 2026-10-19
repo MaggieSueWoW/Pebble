@@ -9,6 +9,10 @@ Firestore and security contracts (#3), and
 officer/public UX (#4). These reference issues include design targets;
 the tracker records what is implemented and what remains.
 
+Web-app work integrates into `codex/pebble-web-app`; keep `main` unchanged until
+that work is complete. The existing Pebble/Sheets bot on deployment host must remain
+undisturbed during implementation; deployment and cutover remain future work.
+
 The [web app](apps/web/README.md) in `apps/web` connects directly to Firestore
 with Google officer login. A local Python worker handles Run Pebble and publishes
 complete results automatically. See [setup instructions](docs/firestore-setup.md).
