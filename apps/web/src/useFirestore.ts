@@ -3,8 +3,7 @@ import { onAuthStateChanged, type User } from "firebase/auth";
 import {
   collection,
   doc,
-  getDoc,
-  getDocs,
+  getDocFromServer,
   limit,
   onSnapshot,
   orderBy,
@@ -23,6 +22,7 @@ import {
   type Results,
   type Saved,
 } from "./model";
+import { usePublicResults } from "./usePublicResults";
 
 export type Versions = Record<string, number>;
 export type LiveConnection = {
@@ -40,18 +40,15 @@ export type LiveConnection = {
   error: string;
   busy: boolean;
   hasResults: boolean;
+  submitting: boolean;
+  resultsPending: boolean;
+  resultsError: string;
+  retryResults: () => void;
   saveInputs: (next: Inputs, expected?: Versions) => Promise<void>;
   requestRun: () => Promise<void>;
   signIn: () => Promise<void>;
   signOut: () => Promise<void>;
 };
-const emptyResults = (): Results => ({
-  completedAt: new Date().toISOString(),
-  signature: "",
-  nights: [],
-  players: [],
-  reportCount: 0,
-});
 const names = [
   "reports",
   "players",
@@ -84,16 +81,25 @@ export function useFirestore(): {
   >({});
   const [loaded, setLoaded] = useState<string[]>([]);
   const [runs, setRuns] = useState<DocumentData[]>([]);
-  const [results, setResults] = useState<Results>(emptyResults);
-  const [hasResults, setHasResults] = useState(false);
-  const [publicReady, setPublicReady] = useState(false);
-  const [resultRun, setResultRun] = useState("");
+  const publicResults = usePublicResults();
+  const { results } = publicResults;
+  const resultRun = results.signature;
+  const hasResults = Boolean(resultRun);
   const [heartbeat, setHeartbeat] = useState(0);
   const [now, setNow] = useState(Date.now());
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [consumed, setConsumed] = useState<Versions>({});
-  const [pendingId, setPendingId] = useState<string | null>(null);
+  const submission = useRef<{
+    id: string;
+    promise: Promise<void> | null;
+    confirmed: boolean;
+  } | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [submittedRun, setSubmittedRun] = useState<{
+    id: string;
+    data: DocumentData | null;
+  } | null>(null);
   const [accessGeneration, setAccessGeneration] = useState(0);
   const [authGeneration, setAuthGeneration] = useState(0);
   const session = useRef(0);
@@ -115,7 +121,9 @@ export function useFirestore(): {
     setRuns([]);
     setConsumed({});
     setHeartbeat(0);
-    setPendingId(null);
+    submission.current = null;
+    setSubmitting(false);
+    setSubmittedRun(null);
     setBusy(false);
     setError("");
   }, []);
@@ -222,7 +230,11 @@ export function useFirestore(): {
         ),
         (snapshot) => {
           if (current())
-            setRuns(snapshot.docs.map((d) => ({ ...d.data(), id: d.id })));
+            setRuns(
+              snapshot.docs
+                .filter((d) => !d.metadata?.hasPendingWrites)
+                .map((d) => ({ ...d.data(), id: d.id })),
+            );
         },
         privateFail,
       ),
@@ -248,56 +260,40 @@ export function useFirestore(): {
     };
   }, [officer, user, accessGeneration, fail, clearPrivate]);
   useEffect(() => {
-    let generation = 0;
-    return onSnapshot(
-      doc(db!, "publicSeasons", seasonId),
-      async (snapshot) => {
-        const own = ++generation;
-        const id = snapshot.data()?.latestRunId;
-        if (!id) {
-          setResults(emptyResults());
-          setHasResults(false);
-          setResultRun("");
-          setPublicReady(true);
-          return;
-        }
-        try {
-          const base = doc(db!, "seasons", seasonId, "results", id);
-          const [root, playerDocs, nightDocs] = await Promise.all([
-            getDoc(base),
-            getDocs(collection(base, "players")),
-            getDocs(collection(base, "nights")),
-          ]);
-          if (own !== generation) return;
-          if (!root.exists() || root.data().complete !== true)
-            throw new Error("Latest results are not complete.");
-          setResults({
-            completedAt: time(root.data().completedAt),
-            signature: id,
-            reportCount: root.data().reportCount,
-            players: playerDocs.docs.map((d) => d.data()) as Results["players"],
-            nights: nightDocs.docs
-              .map((d) => d.data())
-              .sort((a, b) =>
-                b.night.localeCompare(a.night),
-              ) as Results["nights"],
-          });
-          setResultRun(id);
-          setHasResults(true);
-          setPublicReady(true);
-        } catch (e) {
-          if (own === generation) {
-            fail(e as Error);
-            setPublicReady(true);
-          }
-        }
+    if (!officer || !submittedRun || !authorized.current) return;
+    const own = session.current;
+    const id = submittedRun.id;
+    let alive = true;
+    const stop = onSnapshot(
+      doc(db!, "seasons", seasonId, "runs", id),
+      (snapshot) => {
+        if (!alive || own !== session.current || !authorized.current) return;
+        if (!snapshot.exists() || snapshot.metadata.hasPendingWrites) return;
+        const data = snapshot.data();
+        setSubmittedRun({ id, data });
+        if (
+          ["succeeded", "failed"].includes(data.status) &&
+          submission.current?.id === id
+        )
+          submission.current = null;
       },
       (e) => {
+        if (!alive || own !== session.current || !authorized.current) return;
+        if (e.code === "permission-denied") clearPrivate();
+        else {
+          // Keep the ID for a safe retry if this listener has terminated.
+          if (submission.current?.id === id)
+            submission.current.confirmed = false;
+          setSubmittedRun(null);
+        }
         fail(e);
-        setPublicReady(true);
       },
     );
-  }, [fail]);
+    return () => {
+      alive = false;
+      stop();
+    };
+  }, [officer, accessGeneration, submittedRun?.id, fail, clearPrivate]);
   useEffect(() => {
     setConsumed({});
     if (!officer || !resultRun || !authorized.current) return;
@@ -478,13 +474,21 @@ export function useFirestore(): {
   );
   async function requestRun() {
     assertAccess();
+    const prior = submission.current;
+    if (prior?.promise) return prior.promise;
+    if (prior?.confirmed) return;
+    const pending = prior ?? {
+      id: crypto.randomUUID(),
+      promise: null,
+      confirmed: false,
+    };
+    submission.current = pending;
+    setSubmitting(true);
     setBusy(true);
     setError("");
-    const id = pendingId || crypto.randomUUID();
-    setPendingId(id);
-    try {
-      const ref = doc(db!, "seasons", seasonId, "runs", id);
-      const existing = await getDoc(ref);
+    const operation = (async () => {
+      const ref = doc(db!, "seasons", seasonId, "runs", pending.id);
+      const existing = await getDocFromServer(ref);
       assertAccess();
       if (!existing.exists())
         await setDoc(ref, {
@@ -492,17 +496,39 @@ export function useFirestore(): {
           requestedBy: user!.uid,
           requestedAt: serverTimestamp(),
         });
-      if (accessSession === session.current) setPendingId(null);
+      assertAccess();
+      pending.confirmed = true;
+      setSubmittedRun({ id: pending.id, data: null });
+    })();
+    pending.promise = operation;
+    try {
+      await operation;
     } catch (e) {
       if (accessSession === session.current) fail(e as Error);
       throw e;
     } finally {
-      if (accessSession === session.current) setBusy(false);
+      pending.promise = null;
+      if (accessSession === session.current) {
+        setSubmitting(false);
+        setBusy(false);
+      }
     }
   }
-  const activeRun = [...runs]
+  const visibleRuns = submittedRun?.data
+    ? [
+        { ...submittedRun.data, id: submittedRun.id },
+        ...runs.filter((r) => r.id !== submittedRun.id),
+      ].sort((a, b) => time(b.requestedAt).localeCompare(time(a.requestedAt)))
+    : runs;
+  const activeRun = [...visibleRuns]
     .reverse()
     .find((r) => ["queued", "running"].includes(r.status));
+  const unseenSuccess = visibleRuns.some(
+    (r) =>
+      r.status === "succeeded" &&
+      r.id !== resultRun &&
+      (!hasResults || time(r.completedAt) > results.completedAt),
+  );
   const stages = [
     "Queued",
     "Validating inputs",
@@ -513,7 +539,7 @@ export function useFirestore(): {
   const saved: Saved = {
     inputs,
     results,
-    history: runs
+    history: visibleRuns
       .filter((r) => r.status === "succeeded" || r.status === "failed")
       .map((r) => ({
         id: r.id,
@@ -521,12 +547,16 @@ export function useFirestore(): {
         status: r.status,
         message:
           r.error ||
-          (r.warnings?.length ? r.warnings.join(" · ") : "Results updated"),
+          (r.warnings?.length
+            ? r.warnings.join(" · ")
+            : "Computation completed"),
       })),
   };
   return {
     loading:
-      !authReady || !publicReady || (officer && loaded.length < names.length),
+      !authReady ||
+      !publicResults.ready ||
+      (officer && loaded.length < names.length),
     connection: {
       saved,
       players: allPlayers,
@@ -549,6 +579,10 @@ export function useFirestore(): {
       error,
       busy,
       hasResults,
+      submitting: submitting || Boolean(submittedRun && !submittedRun.data),
+      resultsPending: publicResults.loading || unseenSuccess,
+      resultsError: publicResults.error,
+      retryResults: publicResults.retry,
       saveInputs,
       requestRun,
       signIn,

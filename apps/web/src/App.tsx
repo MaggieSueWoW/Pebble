@@ -646,7 +646,11 @@ export default function App({ connection }: { connection?: LiveConnection }) {
       className="button primary run-button"
       onClick={startRun}
       disabled={
-        Boolean(active) || unsaved || Boolean(connection?.busy) || !canManage
+        Boolean(active) ||
+        unsaved ||
+        Boolean(connection?.busy) ||
+        Boolean(connection?.submitting) ||
+        !canManage
       }
       title={
         unsaved
@@ -656,7 +660,7 @@ export default function App({ connection }: { connection?: LiveConnection }) {
             : "Compute and update results"
       }
     >
-      {active ? (
+      {active || connection?.submitting ? (
         <LoaderCircle size={16} className="spin" />
       ) : (
         <Play size={15} fill="currentColor" />
@@ -665,7 +669,9 @@ export default function App({ connection }: { connection?: LiveConnection }) {
         ? active.status === "queued"
           ? "Run queued"
           : "Running Pebble"
-        : "Run Pebble"}
+        : connection?.submitting
+          ? "Submitting run…"
+          : "Run Pebble"}
     </button>
   ) : (
     <button
@@ -690,6 +696,10 @@ export default function App({ connection }: { connection?: LiveConnection }) {
         ),
     );
   const lastFailed = history[0]?.status === "failed";
+  const waitingForResults = Boolean(
+    connection?.submitting || connection?.resultsPending,
+  );
+  const resultLoadFailed = Boolean(connection?.resultsError);
   return (
     <div className="app-shell">
       <aside className="sidebar">
@@ -874,11 +884,22 @@ export default function App({ connection }: { connection?: LiveConnection }) {
               {connection.user.uid}
             </Notice>
           )}
-          {connection && !connection.hasResults && (
-            <Notice>
-              No results yet. An officer can add reports and Run Pebble.
+          {connection?.resultsError && (
+            <Notice tone="amber">
+              <span role="alert">{connection.resultsError}</span>{" "}
+              <button className="text-button" onClick={connection.retryResults}>
+                Retry loading results
+              </button>
             </Notice>
           )}
+          {connection &&
+            !connection.hasResults &&
+            !connection.resultsPending &&
+            !connection.resultsError && (
+              <Notice>
+                No results yet. An officer can add reports and Run Pebble.
+              </Notice>
+            )}
           <div className="page-heading">
             <div>
               <div className="eyebrow accent">
@@ -919,13 +940,15 @@ export default function App({ connection }: { connection?: LiveConnection }) {
             )}
           </div>
           <div
-            className={`run-strip ${active ? "is-running" : ""} ${lastFailed && !active ? "has-error" : ""}`}
+            className={`run-strip ${active || waitingForResults ? "is-running" : ""} ${(lastFailed || resultLoadFailed) && !active ? "has-error" : ""}`}
             role="status"
           >
-            <div className={`strip-icon ${active ? "running-icon" : ""}`}>
-              {active ? (
+            <div
+              className={`strip-icon ${active || waitingForResults ? "running-icon" : ""}`}
+            >
+              {active || (waitingForResults && !resultLoadFailed) ? (
                 <LoaderCircle size={19} className="spin" />
-              ) : lastFailed ? (
+              ) : lastFailed || resultLoadFailed ? (
                 <CircleAlert size={19} />
               ) : unprocessed ? (
                 <Clock3 size={19} />
@@ -939,28 +962,43 @@ export default function App({ connection }: { connection?: LiveConnection }) {
                   ? active.status === "queued" && !online
                     ? "Queued · waiting for your local bot"
                     : steps[active.stage] + "…"
-                  : lastFailed
-                    ? "Last run didn’t finish"
-                    : unsaved
-                      ? "You have unsaved edits"
-                      : unprocessed
-                        ? "Changes ready for the next run"
-                        : connection && !connection.hasResults
-                          ? "No completed runs yet"
-                          : "You’re all caught up"}
+                  : connection?.submitting
+                    ? "Submitting run…"
+                    : connection?.resultsError
+                      ? "Latest results are unavailable"
+                      : connection?.resultsPending
+                        ? "Loading latest results…"
+                        : lastFailed
+                          ? "Last run didn’t finish"
+                          : unsaved
+                            ? "You have unsaved edits"
+                            : unprocessed
+                              ? "Changes ready for the next run"
+                              : connection && !connection.hasResults
+                                ? "No completed runs yet"
+                                : connection &&
+                                    history[0]?.status === "succeeded"
+                                  ? "Results updated"
+                                  : "You’re all caught up"}
               </strong>
               <span>
                 {active
                   ? "Your last completed results stay visible while Pebble works."
-                  : lastFailed
-                    ? "Previous results are still available. You can run Pebble again."
-                    : unsaved
-                      ? "Save or discard your edits before running Pebble."
-                      : unprocessed
-                        ? "Saved inputs have changed. Run Pebble to update the results."
-                        : connection && !connection.hasResults
-                          ? "Add reports and Run Pebble to create the first result set."
-                          : `Last completed ${formatTime(results.completedAt)} PT · ${formatRunDate(results.completedAt)}`}
+                  : connection?.submitting
+                    ? "Waiting for the server to confirm your request."
+                    : connection?.resultsError || connection?.resultsPending
+                      ? connection.hasResults
+                        ? "Showing the previous completed results until the latest set loads."
+                        : "The latest result set has not loaded yet."
+                      : lastFailed
+                        ? "Previous results are still available. You can run Pebble again."
+                        : unsaved
+                          ? "Save or discard your edits before running Pebble."
+                          : unprocessed
+                            ? "Saved inputs have changed. Run Pebble to update the results."
+                            : connection && !connection.hasResults
+                              ? "Add reports and Run Pebble to create the first result set."
+                              : `Last completed ${formatTime(results.completedAt)} PT · ${formatRunDate(results.completedAt)}`}
               </span>
             </div>
             {runButton}
@@ -1774,9 +1812,10 @@ export default function App({ connection }: { connection?: LiveConnection }) {
                   )}
                 </div>
                 <div className="table-footnote">
-                  <CheckCheck size={14} /> Latest completed run ·{" "}
-                  {formatTime(results.completedAt)} PT. Results update
-                  automatically after a successful run.
+                  <CheckCheck size={14} />{" "}
+                  {connection && !connection.hasResults
+                    ? "No completed result set loaded."
+                    : `${connection && (connection.resultsPending || connection.resultsError) ? "Previous completed results" : "Latest completed run"} · ${formatTime(results.completedAt)} PT. Results update automatically after a successful run.`}
                 </div>
               </section>
               {!connection && (
@@ -1812,7 +1851,9 @@ export default function App({ connection }: { connection?: LiveConnection }) {
                     <div>
                       <strong>
                         {h.status === "succeeded"
-                          ? "Results updated"
+                          ? connection
+                            ? "Computation completed"
+                            : "Results updated"
                           : "Run failed"}
                       </strong>
                       <p>{h.message}</p>
