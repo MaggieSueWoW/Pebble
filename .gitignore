@@ -302,4 +302,5 @@ node_modules/
 .env.*.local
 .pebble-service-account.json
 config-web.yaml
+config-web-admin.yaml
 .firebase/

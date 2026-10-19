@@ -816,7 +816,9 @@ export default function App({ connection }: { connection?: LiveConnection }) {
               {connection
                 ? connection.officer
                   ? "Officer"
-                  : "Public results"
+                  : connection.user
+                    ? "Officer access is not enabled"
+                    : "Public results"
                 : "Officer · Demo session"}
             </span>
             {connection?.user && (

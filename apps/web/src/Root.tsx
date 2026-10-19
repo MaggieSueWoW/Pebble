@@ -14,7 +14,7 @@ function Connected() {
     );
   return (
     <App
-      key={`${connection.user?.uid || "public"}:${connection.officer}`}
+      key={`${connection.user?.uid || "public"}:${connection.officer}:${connection.accessGeneration}`}
       connection={connection}
     />
   );

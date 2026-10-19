@@ -59,6 +59,57 @@ MongoDB computation data uses a dedicated season database derived from the confi
 base name, keeping it separate from the Sheets pipeline. Redis caches WCL calls.
 Input snapshots remain private in local MongoDB; run records include input versions.
 
+## Officer onboarding and revocation
+
+Use a separate administrator identity with Firestore IAM write access to manage
+`officers/{uid}`. Browser officer membership does not grant that authority, and
+browser rules deny membership writes, including self-enrollment. The CLI uses
+trusted server credentials and bypasses browser rules. Keep the administrator
+credential separate from the worker credential; review its IAM scope with OPS-1.
+The examples below use a private `config-web-admin.yaml` configured with the target
+`firestore.project_id` and the administrator's `credentials_file` (or administrator
+Application Default Credentials). Never commit that config or its credentials.
+Check any `FIREBASE_PROJECT_ID` override before running the command. Membership is
+project-wide, not limited to the config's season.
+
+1. Have the new officer sign in with the intended Google account once. A signed-in
+   non-officer sees an access notice and their Firebase UID in the app. Verify the
+   account and UID against Firebase Authentication in the target project's console;
+   use the Firebase UID, not their email address or Google account ID.
+2. Enable membership using the administrator config:
+
+   ```sh
+   .venv/bin/python -m pebble.cli web set-officer --config config-web-admin.yaml --uid FIREBASE_AUTH_UID --enabled
+   ```
+
+3. The open app should load officer inputs automatically. Verify the officer can
+   save an intended input change and queue a run; use a demo project for acceptance
+   checks that should not change live inputs.
+4. Revoke access with the same UID and target project:
+
+   ```sh
+   .venv/bin/python -m pebble.cli web set-officer --config config-web-admin.yaml --uid FIREBASE_AUTH_UID --disabled
+   ```
+
+5. With that account still signed in and a draft open, confirm the app switches to
+   public results, removes the private forms/history and discards the draft without
+   a refresh. Private server reads/writes and new queued requests must be denied.
+   Completed public results must still work for this user and a signed-out user.
+   Re-enable only if intended; the app loads fresh inputs without restoring drafts.
+
+The app clears private state when it observes membership loss or a private
+permission-denied error. Membership-listener errors also close officer editing and
+show an error; refresh to reconnect if that listener has terminated. Account changes
+and sign-out invalidate prior callbacks and pending save/run UI state. An already
+submitted write is governed by server rules, and the worker rechecks membership
+before claiming a queued run. Revoking membership does not cancel a run already
+claimed by the worker or remove the user's Google/Firebase account.
+
+Automated acceptance covers hook/component state cleanup, late callbacks/actions,
+re-grant, auth changes and server-side revocation rules. Real second-officer Google
+onboarding/revocation, popup errors and hosted-domain acceptance remain pending;
+see [AUTH-1 status](web-app-implementation.md#auth-1-officer-access-and-login).
+
 ## Initialize a different project or season
 
 Create a Firebase project and web app, enable Google sign-in and Firestore, and
@@ -74,15 +125,8 @@ firebase deploy --only firestore --project YOUR_PROJECT_ID
 .venv/bin/python -m pebble.cli web init-season --config config-web.yaml --name 'Midnight S2'
 ```
 
-Have the officer sign in once, find their Firebase Authentication UID in the
-console, then use administrator credentials to enable membership:
-
-```sh
-.venv/bin/python -m pebble.cli web set-officer --config config-web.yaml --uid FIREBASE_AUTH_UID
-```
-
-Add `--disabled` to revoke access. Browsers cannot grant themselves membership.
-Run claims recheck that the requesting officer is enabled.
+Officer membership is administered separately from browser sign-in; see
+[onboarding and revocation](#officer-onboarding-and-revocation) above.
 
 To import existing Sheets inputs without changing the Sheet:
 

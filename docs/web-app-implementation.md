@@ -36,7 +36,7 @@ product and data contracts, and [setup](firestore-setup.md) contains current com
 | Area | Implemented baseline | Remaining limitation |
 | --- | --- | --- |
 | Frontend | Reports, inclusion toggles, availability and night-timing overrides, Run Pebble, live stage strip, run history, public season/night results and player expansion | Roster/settings editors, weekly/attendance views, fuller explanations and browser regression coverage |
-| Login | Google popup login, own membership listener, officer-only editing, sign-out, anonymous results | Officer onboarding/offboarding procedure, access-revocation UI cleanup, production domain/browser checks |
+| Login | Google popup login, own membership listener, officer-only editing, sign-out, anonymous results; access-loss cleanup and stale-callback guards with regression tests; grant/revoke runbook | Real second-officer onboarding/revocation and production domain/browser checks |
 | Firestore | Strict input rules, version checks, server timestamps/UID attribution, create-only queued runs, queue index, public complete-only results | Broader rule/schema parity coverage, retention/size review, hosted app deployment and migration rehearsal |
 | Worker | Shared Python fairness engine, consistent input snapshots, WCL/Redis reuse, isolated web Mongo materializations, transactional claims, serial drain, listener/retry, restart recovery | Remote service packaging, dependency outage and shutdown hardening, deployment-level singleton guarantee |
 | Publication | Stage output under a new run ID; final transaction marks complete, moves public pointer, marks success | Interrupted-upload cleanup policy and larger-season load checks |
@@ -134,7 +134,8 @@ rankings also apply their own membership eligibility checks.
 
 ## Work packages and ownership
 
-All packages below are outstanding. Priority **P0** blocks operational cutover;
+Packages below retain outstanding acceptance work; AUTH-1 has the completed subset
+recorded below. Priority **P0** blocks operational cutover;
 **P1** completes normal officer use and core spreadsheet parity; **P2** restores
 secondary planning/convenience features. Each package can be assigned separately.
 An assignee should update its status, acceptance evidence, and follow-up items in
@@ -242,11 +243,52 @@ membership/output/status, and successful output remains internally consistent.
 
 ### AUTH-1 Officer access and login
 
+Status: **access-loss cleanup chunk implemented and tested October 19, 2026;
+AUTH-1 remains open for real-account and hosted acceptance.**
+
+Completed in this chunk:
+
+- Observed membership revocation, missing membership, membership-listener errors,
+  sign-out and account changes clear private inputs/notes, roster, history,
+  versions, consumed input versions, bot heartbeat and pending submission state.
+  Private permission-denied errors also close the officer session. Public
+  completed results remain available.
+- Private listeners unsubscribe on access loss. Session guards reject old
+  listener callbacks, save/run actions and asynchronous completions; these cannot
+  restore private data, surface an old private error, or clear a newer request's
+  busy state. Saves recheck access after transaction reads and on retries; run
+  submission rechecks after its lookup. Server rules still decide any write
+  already sent before revocation; the worker rechecks queued requesters at claim.
+- The app remounts for each access generation, discarding unsaved forms even when
+  access changes are batched. Re-grants load fresh inputs; old callbacks and
+  pending request IDs remain invalid. Signed-in non-officers see their access
+  state and UID for administrator onboarding.
+- The [setup runbook](firestore-setup.md#officer-onboarding-and-revocation) records
+  administrator authority, explicit grant/revoke commands and acceptance steps.
+
+Verification: 21 frontend tests passed (nine existing model tests and 12 new
+hook/component lifecycle regressions using mocked Firebase callbacks); all seven
+Firestore rules tests passed on isolated `demo-pebble-auth1` at `127.0.0.1:8180`.
+The added rules regression uses the same authenticated client before/after revoke,
+checks server-side private read/write denial and public results for revoked,
+non-officer and anonymous readers, then checks re-grant. Rules tests accept
+`FIRESTORE_EMULATOR_HOST` and `PEBBLE_RULES_TEST_PROJECT` for isolated execution.
+The production TypeScript/Vite build and `git diff --check` passed; the existing
+large-bundle warning remains. No live memberships, rules, data or workers changed.
+
+Remaining acceptance: onboard and revoke a real second Google officer; verify
+popup blocked/cancelled, wrong-account recovery, real session refresh and queued
+request revocation end to end; check production authorized domains/consent and
+hosted signed-out/signed-in flows after WEB-1; review worker/admin least privilege
+and credential mounts with OPS-1. The automated UI tests run in jsdom, not a real
+browser; the rules tests use authenticated test contexts, not Google sign-in.
+The full AUTH-1 requirements remain below.
+
 - Keep UID membership and Google login. Document add/revoke steps and the separate
   authority required for officer administration; do not permit self-enrollment.
-- On revocation clear private input/run data and stale editable forms immediately,
-  including outstanding listeners. Current subscription teardown alone should not
-  be treated as proof that already-loaded private state has been cleared.
+- Implemented in this chunk: clear private input/run data and stale editable forms
+  when revocation is observed, including outstanding listeners and stale callbacks.
+  Confirm the behavior in the real-account browser acceptance above.
 - Test signed-out, signed-in non-officer, officer, wrong account, popup blocked or
   cancelled, session refresh, revoked access during editing, and revoked queued
   request. The worker already rechecks the requester before claiming a run.

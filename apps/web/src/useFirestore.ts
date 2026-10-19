@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { onAuthStateChanged, type User } from "firebase/auth";
 import {
   collection,
@@ -31,6 +31,7 @@ export type LiveConnection = {
   nights: string[];
   user: User | null;
   officer: boolean;
+  accessGeneration: number;
   label: string;
   online: boolean;
   active: { id: string; status: "queued" | "running"; stage: number } | null;
@@ -92,46 +93,101 @@ export function useFirestore(): {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [consumed, setConsumed] = useState<Versions>({});
+  const [pendingId, setPendingId] = useState<string | null>(null);
+  const [accessGeneration, setAccessGeneration] = useState(0);
+  const [authGeneration, setAuthGeneration] = useState(0);
+  const session = useRef(0);
+  const authorized = useRef(false);
+  const authSession = useRef(0);
+  const stopConsumed = useRef<(() => void) | null>(null);
+  const stopPrivate = useRef<(() => void) | null>(null);
+  const clearPrivate = useCallback(() => {
+    session.current += 1;
+    authorized.current = false;
+    stopPrivate.current?.();
+    stopPrivate.current = null;
+    stopConsumed.current?.();
+    stopConsumed.current = null;
+    setAccessGeneration(session.current);
+    setOfficer(false);
+    setDocuments({});
+    setLoaded([]);
+    setRuns([]);
+    setConsumed({});
+    setHeartbeat(0);
+    setPendingId(null);
+    setBusy(false);
+    setError("");
+  }, []);
   const fail = useCallback((e: { message: string }) => setError(e.message), []);
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 15000);
     return () => clearInterval(timer);
   }, []);
-  useEffect(
-    () =>
-      onAuthStateChanged(auth!, (next) => {
-        setUser(next);
-        setOfficer(false);
-        setAuthReady(!next);
-        setDocuments({});
-        setLoaded([]);
-        setRuns([]);
-        setConsumed({});
-        setError("");
-      }),
-    [],
-  );
+  useEffect(() => {
+    const stop = onAuthStateChanged(auth!, (next) => {
+      authSession.current += 1;
+      setAuthGeneration(authSession.current);
+      clearPrivate();
+      setUser(next);
+      setAuthReady(!next);
+    });
+    return () => {
+      stop();
+      authSession.current += 1;
+      session.current += 1;
+      authorized.current = false;
+      stopPrivate.current?.();
+      stopConsumed.current?.();
+    };
+  }, [clearPrivate]);
   useEffect(() => {
     if (!user) return;
-    return onSnapshot(
+    let alive = true;
+    const own = authSession.current;
+    // Re-grants belong to the same auth session, but load fresh private data.
+    const stop = onSnapshot(
       doc(db!, "officers", user.uid),
       (snapshot) => {
-        setOfficer(snapshot.exists() && snapshot.data().enabled === true);
+        if (!alive || own !== authSession.current) return;
+        const enabled = snapshot.exists() && snapshot.data().enabled === true;
+        if (!enabled) {
+          clearPrivate();
+        } else {
+          authorized.current = true;
+          setOfficer(true);
+        }
         setAuthReady(true);
       },
       (e) => {
+        if (!alive || own !== authSession.current) return;
+        clearPrivate();
         fail(e);
         setAuthReady(true);
       },
     );
-  }, [user, fail]);
+    return () => {
+      alive = false;
+      stop();
+    };
+  }, [user, authGeneration, fail, clearPrivate]);
   useEffect(() => {
-    if (!officer) return;
+    if (!officer || !authorized.current) return;
+    const own = session.current;
+    let alive = true;
+    const current = () =>
+      alive && authorized.current && own === session.current;
+    const privateFail = (e: { message: string; code?: string }) => {
+      if (!current()) return;
+      if (e.code === "permission-denied") clearPrivate();
+      fail(e);
+    };
     const subs = names.map((name) => {
       if (name === "settings")
         return onSnapshot(
           doc(db!, "seasons", seasonId, "settings", "calculation"),
           (snapshot) => {
+            if (!current()) return;
             setDocuments((old) => ({
               ...old,
               settings: Object.fromEntries(
@@ -140,11 +196,12 @@ export function useFirestore(): {
             }));
             setLoaded((old) => (old.includes(name) ? old : [...old, name]));
           },
-          fail,
+          privateFail,
         );
       return onSnapshot(
         collection(db!, "seasons", seasonId, name),
         (snapshot) => {
+          if (!current()) return;
           setDocuments((old) => ({
             ...old,
             [name]: Object.fromEntries(
@@ -153,7 +210,7 @@ export function useFirestore(): {
           }));
           setLoaded((old) => (old.includes(name) ? old : [...old, name]));
         },
-        fail,
+        privateFail,
       );
     });
     subs.push(
@@ -163,21 +220,33 @@ export function useFirestore(): {
           orderBy("requestedAt", "desc"),
           limit(20),
         ),
-        (snapshot) =>
-          setRuns(snapshot.docs.map((d) => ({ ...d.data(), id: d.id }))),
-        fail,
+        (snapshot) => {
+          if (current())
+            setRuns(snapshot.docs.map((d) => ({ ...d.data(), id: d.id })));
+        },
+        privateFail,
       ),
     );
     subs.push(
       onSnapshot(
         doc(db!, "bot", "status"),
-        (snapshot) =>
-          setHeartbeat(snapshot.data()?.lastHeartbeatAt?.toMillis() || 0),
-        fail,
+        (snapshot) => {
+          if (current())
+            setHeartbeat(snapshot.data()?.lastHeartbeatAt?.toMillis() || 0);
+        },
+        privateFail,
       ),
     );
-    return () => subs.forEach((stop) => stop());
-  }, [officer, fail]);
+    const stop = () => {
+      alive = false;
+      subs.forEach((unsubscribe) => unsubscribe());
+    };
+    stopPrivate.current = stop;
+    return () => {
+      stop();
+      if (stopPrivate.current === stop) stopPrivate.current = null;
+    };
+  }, [officer, user, accessGeneration, fail, clearPrivate]);
   useEffect(() => {
     let generation = 0;
     return onSnapshot(
@@ -231,13 +300,32 @@ export function useFirestore(): {
   }, [fail]);
   useEffect(() => {
     setConsumed({});
-    if (!officer || !resultRun) return;
-    return onSnapshot(
+    if (!officer || !resultRun || !authorized.current) return;
+    const own = session.current;
+    let alive = true;
+    const current = () =>
+      alive && authorized.current && own === session.current;
+    const stop = onSnapshot(
       doc(db!, "seasons", seasonId, "runs", resultRun),
-      (snapshot) => setConsumed(snapshot.data()?.inputVersions ?? {}),
-      fail,
+      (snapshot) => {
+        if (current()) setConsumed(snapshot.data()?.inputVersions ?? {});
+      },
+      (e) => {
+        if (!current()) return;
+        if (e.code === "permission-denied") clearPrivate();
+        fail(e);
+      },
     );
-  }, [officer, resultRun, fail]);
+    const cleanup = () => {
+      alive = false;
+      stop();
+    };
+    stopConsumed.current = cleanup;
+    return () => {
+      cleanup();
+      if (stopConsumed.current === cleanup) stopConsumed.current = null;
+    };
+  }, [officer, user, accessGeneration, resultRun, fail, clearPrivate]);
   const versions = useMemo(
     () =>
       Object.fromEntries(
@@ -307,9 +395,21 @@ export function useFirestore(): {
         color: publicPlayers.find((r) => r.id === p.id)?.color ?? p.color,
       }))
     : publicPlayers.map((p) => ({ ...p, pre: 0, post: 0 }));
+  const accessSession = session.current;
+  const assertAccess = useCallback(() => {
+    if (
+      !user ||
+      !officer ||
+      !authorized.current ||
+      accessSession !== session.current
+    )
+      throw new Error(
+        "Officer access changed. Sign in with an enabled officer account.",
+      );
+  }, [user, officer, accessSession]);
   const saveInputs = useCallback(
     async (next: Inputs, expected = versions) => {
-      if (!user || !officer) throw new Error("Officer sign-in required.");
+      assertAccess();
       const changes: { path: string; value: DocumentData }[] = [];
       for (const report of next.reports) {
         const old = documents.reports?.[report.code];
@@ -346,11 +446,13 @@ export function useFirestore(): {
       setError("");
       try {
         await runTransaction(db!, async (transaction) => {
+          assertAccess();
           const snapshots = await Promise.all(
             changes.map((c) =>
               transaction.get(doc(db!, `seasons/${seasonId}/${c.path}`)),
             ),
           );
+          assertAccess();
           changes.forEach((c, i) => {
             const actual = snapshots[i].data()?.version ?? 0;
             if (actual !== (expected[c.path] ?? 0))
@@ -360,23 +462,22 @@ export function useFirestore(): {
             transaction.set(snapshots[i].ref, {
               ...c.value,
               version: actual + 1,
-              updatedBy: user.uid,
+              updatedBy: user!.uid,
               updatedAt: serverTimestamp(),
             });
           });
         });
       } catch (e) {
-        fail(e as Error);
+        if (accessSession === session.current) fail(e as Error);
         throw e;
       } finally {
-        setBusy(false);
+        if (accessSession === session.current) setBusy(false);
       }
     },
-    [documents, versions, user, officer, fail],
+    [documents, versions, user, assertAccess, accessSession, fail],
   );
-  const [pendingId, setPendingId] = useState<string | null>(null);
   async function requestRun() {
-    if (!user || !officer) throw new Error("Officer sign-in required.");
+    assertAccess();
     setBusy(true);
     setError("");
     const id = pendingId || crypto.randomUUID();
@@ -384,18 +485,19 @@ export function useFirestore(): {
     try {
       const ref = doc(db!, "seasons", seasonId, "runs", id);
       const existing = await getDoc(ref);
+      assertAccess();
       if (!existing.exists())
         await setDoc(ref, {
           status: "queued",
-          requestedBy: user.uid,
+          requestedBy: user!.uid,
           requestedAt: serverTimestamp(),
         });
-      setPendingId(null);
+      if (accessSession === session.current) setPendingId(null);
     } catch (e) {
-      fail(e as Error);
+      if (accessSession === session.current) fail(e as Error);
       throw e;
     } finally {
-      setBusy(false);
+      if (accessSession === session.current) setBusy(false);
     }
   }
   const activeRun = [...runs]
@@ -431,6 +533,7 @@ export function useFirestore(): {
       nights: results.nights.map((n) => n.night),
       user,
       officer,
+      accessGeneration,
       label: seasonLabel,
       online: now - heartbeat < 150000,
       active: activeRun
