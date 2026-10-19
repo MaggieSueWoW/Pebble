@@ -39,6 +39,9 @@ and `docker-compose.web.yaml`. It builds from the feature branch and mounts priv
 configuration and Firestore credentials at runtime. The legacy `docker-compose.yaml`
 is deliberately unchanged; do not use it to deploy the web worker.
 
+The [worker reliability guide](docs/worker-reliability.md) describes shutdown,
+recovery, processing deadlines and the disposable lifecycle/fault-test harness.
+
 A Docker image is provided for running the loop in a container. Build and run it with:
 
 ```bash
