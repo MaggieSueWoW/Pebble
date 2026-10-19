@@ -47,11 +47,11 @@ copies of private configuration and credentials. Containers are not backups.
 
 ## Build, check, handoff and update
 
-Select the intended Docker context explicitly; these examples use the current
-deployment host context `chookity` without changing the global selection:
+Select the intended Docker context explicitly without changing the global
+selection:
 
 ```sh
-export DOCKER_CONTEXT=chookity
+export DOCKER_CONTEXT=YOUR_DEPLOYMENT_CONTEXT
 scripts/web-worker.sh deploy/private/deploy.env build
 # Set PEBBLE_WEB_IMAGE in deploy.env to pebble-web:<git rev-parse HEAD>.
 scripts/web-worker.sh deploy/private/deploy.env check
