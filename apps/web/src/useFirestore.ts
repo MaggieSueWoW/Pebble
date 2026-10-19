@@ -3,14 +3,12 @@ import { onAuthStateChanged, type User } from "firebase/auth";
 import {
   collection,
   doc,
-  getDocFromServer,
   limit,
   onSnapshot,
   orderBy,
   query,
   runTransaction,
   serverTimestamp,
-  setDoc,
   type DocumentData,
 } from "firebase/firestore";
 import { auth, db, logOut, seasonId, seasonLabel, signIn } from "./firebase";
@@ -491,14 +489,17 @@ export function useFirestore(): {
     setError("");
     const operation = (async () => {
       const ref = doc(db!, "seasons", seasonId, "runs", pending.id);
-      const existing = await getDocFromServer(ref);
-      assertAccess();
-      if (!existing.exists())
-        await setDoc(ref, {
-          status: "queued",
-          requestedBy: user!.uid,
-          requestedAt: serverTimestamp(),
-        });
+      await runTransaction(db!, async (transaction) => {
+        assertAccess();
+        const existing = await transaction.get(ref);
+        assertAccess();
+        if (!existing.exists())
+          transaction.set(ref, {
+            status: "queued",
+            requestedBy: user!.uid,
+            requestedAt: serverTimestamp(),
+          });
+      });
       assertAccess();
       pending.confirmed = true;
       setSubmittedRun({ id: pending.id, data: null });
