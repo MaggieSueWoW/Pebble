@@ -2,6 +2,12 @@
 
 This document is for Codex agents contributing to the project. It captures coding style, libraries, and best practices.
 
+## Privacy
+
+- Keep personal names, email addresses, usernames, local home paths, and private
+  account/project identifiers out of documentation, issues, and pull-request text.
+  Use generic examples and repository-local issue references instead.
+
 ## Language & Tools
 
 - **Python** (3.12+ preferred)
