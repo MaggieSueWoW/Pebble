@@ -1136,6 +1136,23 @@ export default function App({ connection }: { connection?: LiveConnection }) {
           )}
           {page === "results" && (!connection || connection.hasResults) && (
             <>
+              {Boolean(results.warnings?.length) && (
+                <section
+                  className="notice amber"
+                  aria-labelledby="result-warnings-title"
+                >
+                  <Info size={16} aria-hidden="true" />
+                  <div>
+                    <h2 id="result-warnings-title">Result warnings</h2>
+                    <p>From the displayed completed run.</p>
+                    <ul>
+                      {results.warnings?.map((warning, index) => (
+                        <li key={index}>{warning}</li>
+                      ))}
+                    </ul>
+                  </div>
+                </section>
+              )}
               <div className="stats-grid">
                 <Stat
                   icon={<Clock3 size={20} />}

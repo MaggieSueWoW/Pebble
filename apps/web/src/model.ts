@@ -69,6 +69,7 @@ export type NightResult = {
   reports: number;
 };
 export type Results = {
+  warnings?: string[];
   completedAt: string;
   signature: string;
   nights: NightResult[];

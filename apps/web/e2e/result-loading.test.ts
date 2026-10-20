@@ -36,6 +36,7 @@ async function seedResult(
   night: string,
   complete = true,
   reports = 2,
+  warnings?: string[],
 ) {
   await admin(async (ctx) => {
     const db = ctx.firestore(),
@@ -56,6 +57,7 @@ async function seedResult(
     batch.set(doc(db, `${season}/results/${id}`), {
       complete,
       reportCount: reports,
+      ...(warnings ? { warnings } : {}),
       completedAt: Timestamp.now(),
     });
     batch.set(doc(db, `${season}/results/${id}/players/player-a`), row);
@@ -417,4 +419,91 @@ test("public first-load failure exposes retry without trapping the app on Connec
     page.getByText("First Loaded Player", { exact: true }),
   ).toBeVisible();
   await expect(page.getByRole("alert")).toHaveCount(0);
+});
+
+test("keeps officer warnings with displayed rows during loading and clears them with a clean result", async ({
+  page,
+}) => {
+  await admin(async (ctx) => {
+    await setDoc(
+      doc(ctx.firestore(), `${season}/results/baseline`),
+      {
+        warnings: [
+          "Baseline source warning",
+          "2026-10-14: no Mythic encounters; no bench totals for this night",
+        ],
+      },
+      { merge: true },
+    );
+  });
+  await resultsPage(page);
+  const region = page.getByRole("region", { name: "Result warnings" });
+  await expect(
+    region.getByRole("heading", { name: "Result warnings" }),
+  ).toBeVisible();
+  await expect(region.getByRole("listitem")).toHaveCount(2);
+  const held = await holdReads(page, "delayed");
+  await seedResult("delayed", "Delayed Player", nights.delayed, true, 2, [
+    "New source warning",
+  ]);
+  await publish("delayed");
+  await expect.poll(() => held.hits).toBeGreaterThan(0);
+  await expect(status(page)).toContainText("Loading latest results");
+  await expect(region).toContainText("Baseline source warning");
+  await expect(
+    page.getByText("New source warning", { exact: true }),
+  ).toHaveCount(0);
+  held.release();
+  await expect(page.getByText("Delayed Player", { exact: true })).toBeVisible();
+  await expect(region.getByRole("listitem")).toHaveText(["New source warning"]);
+  await seedResult("latest", "Latest Player", nights.latest);
+  await publish("latest");
+  await expect(page.getByText("Latest Player", { exact: true })).toBeVisible();
+  await expect(region).toHaveCount(0);
+});
+
+test("public warnings survive a failed load and change on keyboard retry at narrow width", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await admin(async (ctx) => {
+    await setDoc(
+      doc(ctx.firestore(), `${season}/results/baseline`),
+      { warnings: ["Baseline source warning"] },
+      { merge: true },
+    );
+  });
+  await resultsPage(page, false);
+  const region = page.getByRole("region", { name: "Result warnings" });
+  await expect(region).toContainText("Baseline source warning");
+  const warning =
+    "2026-10-16: unknown characters: Example One, Example Two, Example Three, Example Four";
+  await seedResult("staging", "Staging Player", nights.latest, false, 2, [
+    warning,
+  ]);
+  await publish("staging");
+  await expect(page.getByRole("alert")).toContainText(
+    "Couldn’t load the latest results",
+  );
+  await expect(region).toContainText("Baseline source warning");
+  await expect(page.getByText(warning, { exact: true })).toHaveCount(0);
+  await expect(
+    page.getByText("Baseline Player", { exact: true }),
+  ).toBeVisible();
+  await admin(async (ctx) => {
+    await setDoc(
+      doc(ctx.firestore(), `${season}/results/staging`),
+      { complete: true },
+      { merge: true },
+    );
+  });
+  await page.getByRole("button", { name: "Retry loading results" }).focus();
+  await page.keyboard.press("Enter");
+  await expect(page.getByText("Staging Player", { exact: true })).toBeVisible();
+  await expect(region.getByRole("listitem")).toHaveText([warning]);
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth,
+    ),
+  ).toBe(true);
 });

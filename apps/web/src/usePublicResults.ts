@@ -15,6 +15,7 @@ const emptyResults = (): Results => ({
   nights: [],
   players: [],
   reportCount: 0,
+  warnings: [],
 });
 
 /** Load each public result set together, retaining the previous view on failure. */
@@ -64,6 +65,7 @@ export function usePublicResults() {
             completedAt,
             signature: id,
             reportCount: root.data().reportCount,
+            warnings: root.data().warnings ?? [],
             players: playerDocs.docs.map((d) => d.data()) as Results["players"],
             nights: nightDocs.docs
               .map((d) => d.data())
