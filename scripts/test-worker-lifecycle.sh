@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
 # Disposable services only: no production mounts, credentials, networks or ports.
 set -euo pipefail
-if [[ $# != 2 || ! -r $2 ]]; then
-  echo "Usage: $0 DOCKER_CONTEXT FIRESTORE_EMULATOR_JAR" >&2
+if [[ $# -lt 2 || ! -r $2 ]]; then
+  echo "Usage: $0 DOCKER_CONTEXT FIRESTORE_EMULATOR_JAR [PYTEST_ARGS...]" >&2
   exit 2
 fi
 context=$1
 emulator_jar=$(cd "$(dirname "$2")" && pwd)/$(basename "$2")
+shift 2
 cd "$(dirname "$0")/.."
 docker_cmd=(docker --context "$context")
 prefix="pebble-bot1-$(date +%s)-$$"
@@ -53,7 +54,7 @@ runner=$("${docker_cmd[@]}" create --name "$prefix-runner" --network "container:
   -e PEBBLE_TEST_MONGO_URI=mongodb://127.0.0.1:27017 \
   -e PEBBLE_TEST_REDIS_URL=redis://127.0.0.1:6379/0 \
   -e PYTHONPATH=/app --entrypoint python "$test_image" \
-  -m pytest -q /tmp/tests/test_web_worker.py /tmp/tests/test_web_worker_faults.py /tmp/tests/test_web_worker_lifecycle.py --tb=short -p no:cacheprovider)
+  -m pytest -q /tmp/tests/test_web_worker.py /tmp/tests/test_web_worker_faults.py /tmp/tests/test_web_worker_lifecycle.py --tb=short -p no:cacheprovider "$@")
 created+=("$runner")
 "${docker_cmd[@]}" cp tests "$runner:/tmp/tests"
 "${docker_cmd[@]}" start -a "$runner"

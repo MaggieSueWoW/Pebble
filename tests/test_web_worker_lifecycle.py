@@ -457,11 +457,12 @@ def test_permanent_wcl_failure_is_actionable_and_sanitized(isolated):
 
 def test_redis_credentials_fail_with_cache_diagnostic_without_wcl_or_retry(isolated):
     isolated.config["redis"]["url"] = isolated.config["redis"]["url"].replace(
-        "redis://", "redis://:fake-test-password@", 1
+        "redis://", "redis://missing-test-user:fake-test-password@", 1
     )
     isolated.start()
     ref = isolated.queue("cache-access-denied")
-    wait_for(lambda: isolated.status("cache-access-denied") == "failed")
+    wait_for(lambda: isolated.status("cache-access-denied") in {"failed", "succeeded"})
+    assert isolated.status("cache-access-denied") == "failed", isolated.log_text()
     assert "Redis access denied" in ref.get().to_dict()["error"]
     assert "WCL" not in ref.get().to_dict()["error"]
     assert "fake-test-password" not in isolated.log_text()

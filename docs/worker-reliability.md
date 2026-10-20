@@ -70,6 +70,8 @@ needed. The tested emulator is `cloud-firestore-emulator-v1.21.0.jar` with Java 
 
 ```sh
 scripts/test-worker-lifecycle.sh "$TEST_DOCKER_CONTEXT" "$FIRESTORE_EMULATOR_JAR"
+# Optional pytest filters rerun a specific case in a fresh isolated stack:
+scripts/test-worker-lifecycle.sh "$TEST_DOCKER_CONTEXT" "$FIRESTORE_EMULATOR_JAR" -k redis_credentials
 ```
 
 The script builds unique test images from the current Python source and creates
