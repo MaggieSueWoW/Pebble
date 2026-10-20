@@ -2,12 +2,20 @@
 // Read-only HTTP checks. This does not sign in, change data or queue a run.
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
+import { validateConfig } from "./web-release.mjs";
 
-const [origin, revision] = process.argv.slice(2);
-if (!origin || !/^[0-9a-f]{40}$/.test(revision ?? ""))
+const [origin, revision, configFile, ...extra] = process.argv.slice(2);
+if (
+  !origin ||
+  !/^[0-9a-f]{40}$/.test(revision ?? "") ||
+  !configFile ||
+  extra.length
+)
   throw new Error(
-    "Usage: node scripts/check-web-host.mjs ORIGIN EXPECTED_REVISION",
+    "Usage: node scripts/check-web-host.mjs ORIGIN EXPECTED_REVISION PRIVATE_CONFIG",
   );
+const config = validateConfig(JSON.parse(readFileSync(configFile, "utf8")));
 const base = new URL(origin);
 assert(
   base.pathname === "/" && !base.search && !base.hash,
@@ -42,6 +50,16 @@ assert.match(metadata.headers.get("cache-control") ?? "", /no-cache/);
 const manifest = await metadata.json();
 assert.equal(manifest.revision, revision, "Wrong frontend revision");
 const hash = (bytes) => createHash("sha256").update(bytes).digest("hex");
+assert.equal(
+  manifest.environment,
+  config.environment,
+  "Wrong frontend environment",
+);
+assert.equal(
+  manifest.configHash,
+  hash(JSON.stringify(config)),
+  "Wrong frontend Firebase/site/season configuration",
+);
 assert.equal(hash(html), manifest.files["index.html"], "Stale entrypoint");
 const asset = html.match(/(?:src|href)="([^\"]*\/assets\/[^\"]+\.js)"/)?.[1];
 assert(asset, "No hashed JavaScript asset in entrypoint");
@@ -56,5 +74,5 @@ assert.equal(
   "Stale or modified asset",
 );
 console.log(
-  "HTTPS/local host, SPA route, revision and entrypoint/asset cache headers passed. Auth and worker acceptance are separate.",
+  "HTTPS/local host, SPA route, revision, target config and entrypoint/asset cache headers passed. Auth and worker acceptance are separate.",
 );

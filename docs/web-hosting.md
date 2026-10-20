@@ -78,7 +78,7 @@ artifact and config as an additional recovery option. Then release and verify:
 
 ```sh
 node scripts/web-release.mjs deploy/private/web-release.json deploy
-node scripts/check-web-host.mjs https://HOSTED_ORIGIN EXPECTED_FULL_COMMIT
+node scripts/check-web-host.mjs https://HOSTED_ORIGIN EXPECTED_FULL_COMMIT deploy/private/web-release.json
 ```
 
 The preview/deploy commands first verify the site belongs to the explicit project.
@@ -91,7 +91,7 @@ inventing a rollback target. For later releases, restore a retained version to t
 
 ```sh
 firebase hosting:clone SITE_ID@PREVIOUS_VERSION_ID SITE_ID:live --project PROJECT_ID
-node scripts/check-web-host.mjs https://HOSTED_ORIGIN PREVIOUS_FULL_COMMIT
+node scripts/check-web-host.mjs https://HOSTED_ORIGIN PREVIOUS_FULL_COMMIT deploy/private/previous-web-release.json
 ```
 
 Do not create a backup preview channel through `hosting:clone` as part of this
@@ -129,7 +129,9 @@ roll back data schemas, rules, indexes, officer membership or a worker. Do not r
 Record the Hosting version/channel, source commit, environment, authorized hostname,
 prior version/rollback target and HTTP/cache check results privately. Issue summaries must
 omit private identifiers. `check-web-host.mjs` only makes HTTP GET requests; it does
-not sign in, edit inputs or submit a worker request.
+not sign in, edit inputs or submit a worker request. Supply the intended release's
+public config file so the check rejects a different Firebase/site/season build of
+the same source commit. For rollback, use the previous release's recorded config.
 
 In Chrome, verify the shareable HTTPS URL and a deep link load without local files.
 Confirm `/release.json` matches the intended source, a reload loads the new bundle,

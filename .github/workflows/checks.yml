@@ -61,7 +61,7 @@ jobs:
             }));'
           node scripts/web-release.mjs deploy/private/web-check.json build
       - name: Check SPA and cache headers with Hosting emulator
-        run: firebase emulators:exec --only hosting --project demo-pebble-hosting --config firebase.json "node scripts/check-web-host.mjs http://127.0.0.1:5080 $(git rev-parse HEAD)"
+        run: firebase emulators:exec --only hosting --project demo-pebble-hosting --config firebase.json "node scripts/check-web-host.mjs http://127.0.0.1:5080 $(git rev-parse HEAD) deploy/private/web-check.json"
       - run: cd apps/web && npx playwright install --with-deps chrome
       - run: npm --prefix apps/web run test:browser
       - uses: actions/upload-artifact@v7

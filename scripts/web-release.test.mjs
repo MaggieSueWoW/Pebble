@@ -10,6 +10,9 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createHash } from "node:crypto";
+import { createServer } from "node:http";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import {
   validateConfig,
   publicEnv,
@@ -128,4 +131,63 @@ test("publishing rejects a Hosting site outside the selected project", () => {
     },
   ])
     assert.throws(() => verifySite(config, result));
+});
+
+test("HTTP smoke rejects the same source built for a different target", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "pebble-host-check-"));
+  const revision = "a".repeat(40);
+  const html = '<script src="/assets/index-hash.js"></script>';
+  const js = 'console.log("public");';
+  const manifest = {
+    revision,
+    environment: config.environment,
+    configHash: hash(JSON.stringify(config)),
+    files: { "index.html": hash(html), "assets/index-hash.js": hash(js) },
+  };
+  const server = createServer((request, response) => {
+    const asset = request.url === "/assets/index-hash.js";
+    response.setHeader(
+      "Cache-Control",
+      asset ? "public,max-age=31536000,immutable" : "no-cache",
+    );
+    response.setHeader(
+      "Content-Type",
+      asset ? "application/javascript" : "text/html",
+    );
+    response.end(
+      request.url === "/release.json"
+        ? JSON.stringify(manifest)
+        : asset
+          ? js
+          : html,
+    );
+  });
+  try {
+    await new Promise((resolve, reject) => {
+      server.once("error", reject);
+      server.listen(0, "127.0.0.1", resolve);
+    });
+    const configFile = join(dir, "config.json");
+    writeFileSync(configFile, JSON.stringify(config));
+    const args = [
+      "scripts/check-web-host.mjs",
+      `http://127.0.0.1:${server.address().port}`,
+      revision,
+      configFile,
+    ];
+    const runCheck = () => promisify(execFile)(process.execPath, args);
+    await runCheck();
+    for (const change of [
+      { projectId: "other-project" },
+      { siteId: "other-site" },
+      { seasonId: "another" },
+      { environment: "live" },
+    ]) {
+      writeFileSync(configFile, JSON.stringify({ ...config, ...change }));
+      await assert.rejects(runCheck(), /Wrong frontend/);
+    }
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
