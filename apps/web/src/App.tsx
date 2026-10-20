@@ -807,13 +807,16 @@ export default function App({ connection }: { connection?: LiveConnection }) {
             )}
           </div>
           <div
-            className={`run-strip ${active || waitingForResults ? "is-running" : ""} ${(lastFailed || resultLoadFailed) && !active ? "has-error" : ""}`}
+            className={`run-strip ${active || connection?.submitting || waitingForResults ? "is-running" : ""} ${(lastFailed || resultLoadFailed) && !active && !connection?.submitting ? "has-error" : ""}`}
             role="status"
+            aria-label="Run status"
           >
             <div
-              className={`strip-icon ${active || waitingForResults ? "running-icon" : ""}`}
+              className={`strip-icon ${active || connection?.submitting || waitingForResults ? "running-icon" : ""}`}
             >
-              {active || (waitingForResults && !resultLoadFailed) ? (
+              {active ||
+              connection?.submitting ||
+              (waitingForResults && !resultLoadFailed) ? (
                 <LoaderCircle size={19} className="spin" />
               ) : lastFailed || resultLoadFailed ? (
                 <CircleAlert size={19} />
