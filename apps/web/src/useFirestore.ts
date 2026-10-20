@@ -37,6 +37,8 @@ import {
   type CharacterValue,
 } from "./characters";
 
+import type { RecordedNightDiagnostics } from "./resultProvenance";
+
 export type Versions = Record<string, number>;
 export type LiveConnection = {
   saved: Saved;
@@ -77,6 +79,7 @@ export type LiveConnection = {
   queueError: string;
   retryQueue: () => void;
   resultSources: { code: string; title: string }[];
+  resultDiagnostics: Record<string, RecordedNightDiagnostics>;
   resultsPending: boolean;
   resultsError: string;
   retryResults: () => void;
@@ -143,7 +146,8 @@ export function useFirestore(): {
     run: string;
     versions: Versions;
     sources: { code: string; title: string }[];
-  }>({ run: "", versions: {}, sources: [] });
+    diagnostics: Record<string, RecordedNightDiagnostics>;
+  }>({ run: "", versions: {}, sources: [], diagnostics: {} });
   const submission = useRef<{
     id: string;
     promise: Promise<void> | null;
@@ -174,7 +178,7 @@ export function useFirestore(): {
     setLoaded([]);
     setRuns([]);
     setQueue({ ready: false, error: "", runs: [] });
-    setConsumed({ run: "", versions: {}, sources: [] });
+    setConsumed({ run: "", versions: {}, sources: [], diagnostics: {} });
     setHeartbeat(0);
     submission.current = null;
     setSubmitting(false);
@@ -450,7 +454,7 @@ export function useFirestore(): {
     };
   }, [officer, accessGeneration, submittedRun?.id, fail, accessFailed]);
   useEffect(() => {
-    setConsumed({ run: "", versions: {}, sources: [] });
+    setConsumed({ run: "", versions: {}, sources: [], diagnostics: {} });
     if (!officer || !resultRun || !authorized.current) return;
     const own = session.current;
     let alive = true;
@@ -465,6 +469,7 @@ export function useFirestore(): {
           setConsumed({
             run: resultRun,
             versions: snapshot.data()?.inputVersions ?? {},
+            diagnostics: snapshot.data()?.nightDiagnostics ?? {},
             sources: Object.entries(summaries)
               .map(([code, summary]) => ({
                 code,
@@ -925,6 +930,8 @@ export function useFirestore(): {
       retryQueue: () => setQueueAttempt((old) => old + 1),
       resultSources:
         officer && consumed.run === resultRun ? consumed.sources : [],
+      resultDiagnostics:
+        officer && consumed.run === resultRun ? consumed.diagnostics : {},
       resultsPending: publicResults.loading || unseenSuccess,
       resultsError: publicResults.error,
       retryResults: publicResults.retry,

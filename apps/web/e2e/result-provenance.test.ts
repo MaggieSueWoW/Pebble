@@ -1,0 +1,150 @@
+import { test, expect } from "@playwright/test";
+import {
+  initializeTestEnvironment,
+  assertFails,
+  type RulesTestEnvironment,
+} from "@firebase/rules-unit-testing";
+import { doc, getDoc, setDoc, Timestamp, writeBatch } from "firebase/firestore";
+import { readFileSync } from "node:fs";
+import { officer } from "./officer";
+
+let env: RulesTestEnvironment;
+const season = "seasons/test-reports",
+  night = "2026-10-15";
+test.beforeAll(async () => {
+  env = await initializeTestEnvironment({
+    projectId: "demo-pebble-reports",
+    firestore: {
+      host: "127.0.0.1",
+      port: 8180,
+      rules: readFileSync(
+        new URL("../../../firebase/firestore.rules", import.meta.url),
+        "utf8",
+      ),
+    },
+  });
+});
+test.afterAll(async () => env.cleanup());
+test("public recorded explanations and officer-only diagnostics survive selection and clear on sign-out", async ({
+  page,
+}) => {
+  await env.clearFirestore();
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    const db = ctx.firestore(),
+      batch = writeBatch(db),
+      at = Timestamp.now();
+    const row = {
+      id: "example",
+      name: "Example Player",
+      className: "Mage",
+      role: "Damage",
+      color: "#b9c7d8",
+      played: 60,
+      bench: 30,
+      preBench: 10,
+      postBench: 20,
+      overridden: true,
+      nights: 1,
+    };
+    batch.set(doc(db, `${season}/results/ready`), {
+      complete: true,
+      completedAt: at,
+      reportCount: 1,
+    });
+    batch.set(doc(db, `${season}/results/ready/players/example`), row);
+    batch.set(doc(db, `${season}/results/ready/nights/${night}`), {
+      night,
+      duration: 180,
+      reports: 1,
+      timing: {
+        start: `${night}T19:00`,
+        breakStart: `${night}T20:00`,
+        breakEnd: `${night}T20:15`,
+        end: `${night}T22:00`,
+        notes: "",
+      },
+      players: [
+        {
+          ...row,
+          availability: {
+            pre: { available: true, mode: "partial" },
+            post: { available: false, mode: "automatic" },
+            source: "override",
+          },
+        },
+      ],
+    });
+    batch.set(doc(db, `${season}/runs/ready`), {
+      status: "succeeded",
+      requestedBy: "fixture",
+      requestedAt: at,
+      completedAt: at,
+      inputVersions: {},
+      nightDiagnostics: {
+        [night]: {
+          reportCount: 1,
+          mythicFights: 4,
+          unmappedCharacters: 2,
+          breakMinutes: 15,
+          timing: { start: "configured", end: "detected", break: "override" },
+        },
+      },
+    });
+    batch.set(doc(db, "publicSeasons/test-reports"), { latestRunId: "ready" });
+    await batch.commit();
+  });
+  await assertFails(
+    getDoc(
+      doc(env.unauthenticatedContext().firestore(), `${season}/runs/ready`),
+    ),
+  );
+  await assertFails(
+    getDoc(
+      doc(
+        env.authenticatedContext("non-officer").firestore(),
+        `${season}/runs/ready`,
+      ),
+    ),
+  );
+  await page.goto(`/?view=results&period=${night}&player=example`);
+  const explanation = page.getByRole("region", {
+    name: "Recorded availability explanation",
+  });
+  await expect(explanation).toContainText("Partial availability");
+  await expect(explanation).toContainText("Unavailable flag");
+  await expect(
+    page.getByLabel("Officer night diagnostics", { exact: true }),
+  ).toHaveCount(0);
+  await officer(page, env);
+  await page
+    .getByRole("navigation")
+    .getByRole("button", { name: "Results", exact: true })
+    .click();
+  await page
+    .getByRole("combobox", { name: "Result period" })
+    .selectOption(night);
+  const diagnostics = page.getByLabel("Officer night diagnostics", {
+    exact: true,
+  });
+  await expect(diagnostics).toBeVisible();
+  await diagnostics.locator("summary").focus();
+  await page.keyboard.press("Enter");
+  await expect(diagnostics).toContainText("Configured default");
+  await expect(diagnostics).toContainText("Officer timing override");
+  await expect(diagnostics.locator("dd").nth(2)).toHaveText("2");
+  await page
+    .getByRole("combobox", { name: "Result period" })
+    .selectOption("season");
+  await expect(diagnostics).toHaveCount(0);
+  await page
+    .getByRole("combobox", { name: "Result period" })
+    .selectOption(night);
+  await expect(diagnostics).toBeVisible();
+  await page
+    .getByRole("button", { name: "Sign out to switch accounts" })
+    .click();
+  await expect(diagnostics).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Details for Example Player" }),
+  ).toBeVisible();
+});

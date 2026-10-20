@@ -1,3 +1,5 @@
+import type { RecordedAvailability } from "./resultProvenance";
+
 export type Page = "reports" | "overrides" | "results" | "roster" | "settings";
 export type Mode =
   "automatic" | "available" | "unavailable" | "partial" | "unavailableFor";
@@ -49,6 +51,8 @@ export function playerDetails(player: {
 }
 
 export type PlayerResult = {
+  /** Captured nightly calculation provenance; omitted on aggregates/older results. */
+  availability?: RecordedAvailability;
   name?: string;
   className?: string;
   role?: string;

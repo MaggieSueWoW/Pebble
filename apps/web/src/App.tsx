@@ -49,6 +49,7 @@ import {
 } from "./model";
 
 import { resultLink, useResultNavigation } from "./useResultNavigation";
+import { NightDiagnostics } from "./NightDiagnostics";
 import { ResultRow } from "./ResultRow";
 import { useReportEditor } from "./useReportEditor";
 import { ReportsPanel } from "./ReportsPanel";
@@ -1507,6 +1508,17 @@ export default function App({ connection }: { connection?: LiveConnection }) {
                     time.
                   </p>
                 )}
+                {canManage &&
+                  connection &&
+                  !selectedWeek &&
+                  visibleResultNight !== "season" && (
+                    <NightDiagnostics
+                      night={visibleResultNight}
+                      diagnostic={
+                        connection.resultDiagnostics[visibleResultNight]
+                      }
+                    />
+                  )}
                 <div className="table-scroll">
                   <table>
                     <thead>

@@ -64,6 +64,7 @@ function connection(players: Player[] = []): LiveConnection {
     queueError: "",
     retryQueue: vi.fn(),
     resultSources: [],
+    resultDiagnostics: {},
     resultsPending: false,
     resultsError: "",
     retryResults: vi.fn(),

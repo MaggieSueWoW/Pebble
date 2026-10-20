@@ -1,3 +1,4 @@
+import { AvailabilityExplanation } from "./AvailabilityExplanation";
 import { useId } from "react";
 import { ArrowRight, ChevronDown, ChevronRight, Settings2 } from "lucide-react";
 import {
@@ -115,6 +116,9 @@ export function ResultRow({
                     : "Automatically inferred"}
                 </strong>
               </span>
+            )}
+            {"availability" in row && row.availability && (
+              <AvailabilityExplanation availability={row.availability} />
             )}
             {onEdit && (
               <button className="text-button" onClick={onEdit}>
