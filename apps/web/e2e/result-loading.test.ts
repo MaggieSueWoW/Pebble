@@ -274,6 +274,7 @@ test("public read denial preserves prior results and keyboard retry recovers on 
   await page.getByRole("button", { name: "Retry loading results" }).focus();
   await page.keyboard.press("Enter");
   await expect(page.getByText("Staging Player", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1 })).toBeFocused();
   await expect(page.getByRole("alert")).toHaveCount(0);
   expect(
     await page.evaluate(
@@ -959,3 +960,146 @@ test("public warnings do not expose private source metadata", async ({
     page.getByText("Officer source metadata", { exact: true }),
   ).toHaveCount(0);
 });
+
+test("keyboard details, validation and labelled discard work across narrow workflow pages", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await resultsPage(page);
+  const noOverflow = async () =>
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= window.innerWidth,
+      ),
+    ).toBe(true);
+  const details = page.getByRole("button", {
+    name: "Details for Baseline Player",
+  });
+  const target = await details.getAttribute("aria-controls");
+  expect(target).toBeTruthy();
+  const breakdown = page.getByRole("region", {
+    name: "Availability breakdown for Baseline Player",
+  });
+  await expect(breakdown).toBeHidden();
+  await details.focus();
+  await page.keyboard.press("Space");
+  await expect(breakdown).toBeVisible();
+  await expect(breakdown).toHaveAttribute("id", target!);
+  await noOverflow();
+  await page.keyboard.press("Enter");
+  await expect(breakdown).toBeHidden();
+  await expect(details).toBeFocused();
+  await page.keyboard.press("Enter");
+  await page.getByRole("button", { name: "Edit availability" }).click();
+  await page
+    .getByRole("combobox", { name: "Before break", exact: true })
+    .selectOption("partial");
+  const minutes = page.getByRole("spinbutton", {
+    name: "Before break available minutes",
+  });
+  await minutes.fill("0");
+  await expect(minutes).toHaveAttribute("aria-invalid", "true");
+  await expect(minutes).toHaveAttribute(
+    "aria-describedby",
+    /availability-validation/,
+  );
+  await expect(page.locator("#availability-validation")).toBeVisible();
+  await noOverflow();
+  await page.getByRole("tab", { name: "Raid timing" }).click();
+  const dialog = page.getByRole("dialog", { name: "Keep your changes?" });
+  await expect(dialog).toBeVisible();
+  await expect(dialog).toHaveAttribute(
+    "aria-describedby",
+    "discard-description",
+  );
+  await expect(
+    page.getByRole("button", { name: "Keep editing" }),
+  ).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(dialog).toBeHidden();
+  await expect(minutes).toHaveValue("0");
+  await page.getByRole("button", { name: "Cancel", exact: true }).click();
+  await page.getByRole("tab", { name: "Raid timing" }).click();
+  await expect(
+    page.getByRole("tabpanel", { name: "Raid timing" }),
+  ).toBeVisible();
+  await noOverflow();
+  await page
+    .getByRole("navigation")
+    .getByRole("button", { name: /^Reports/ })
+    .click();
+  const reportInput = page.getByRole("textbox", {
+    name: "Warcraft Logs reports",
+  });
+  await reportInput.fill("invalid");
+  await expect(reportInput).toHaveAttribute(
+    "aria-describedby",
+    /report-validation/,
+  );
+  await expect(page.locator("#report-validation")).toContainText("invalid");
+  await noOverflow();
+  const runStatus = status(page);
+  await expect(runStatus).toHaveAttribute("aria-atomic", "true");
+  await expect(runStatus.getByRole("button")).toHaveCount(0);
+});
+
+test("officer-access retry recovers heading focus after a denied membership listener", async ({
+  page,
+}) => {
+  const original = readFileSync(
+    new URL("../../../firebase/firestore.rules", import.meta.url),
+    "utf8",
+  );
+  await resultsPage(page);
+  const uid = await adminUid();
+  const denied = original.replace(
+    "allow get: if request.auth != null && uid == request.auth.uid;",
+    "allow get: if false;",
+  );
+  expect(denied).not.toBe(original);
+  try {
+    await setDemoRules(denied);
+    await admin(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), `officers/${uid}`), {
+        enabled: true,
+        revision: 1,
+      });
+    });
+    await expect(
+      page.getByRole("button", { name: "Retry officer access" }),
+    ).toBeVisible();
+    await expect(
+      page.getByText("Baseline Player", { exact: true }),
+    ).toBeVisible();
+    await setDemoRules(original);
+    await page.getByRole("button", { name: "Retry officer access" }).focus();
+    await page.keyboard.press("Enter");
+    await expect(page.getByRole("heading", { level: 1 })).toBeFocused();
+    await expect(
+      page.getByRole("heading", { name: "Add a report" }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Retry officer access" }),
+    ).toHaveCount(0);
+  } finally {
+    await setDemoRules(original);
+  }
+});
+
+async function adminUid() {
+  let uid = "";
+  await admin(async (ctx) => {
+    const officers = await getDocs(collection(ctx.firestore(), "officers"));
+    uid = officers.docs.find((d) => d.data().enabled)?.id ?? "";
+  });
+  expect(uid).not.toBe("");
+  return uid;
+}
+
+async function setDemoRules(rules: string) {
+  const temporary = await initializeTestEnvironment({
+    projectId: "demo-pebble-reports",
+    firestore: { host: "127.0.0.1", port: 8180, rules },
+  });
+  await temporary.cleanup();
+}

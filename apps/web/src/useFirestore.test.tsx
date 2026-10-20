@@ -263,6 +263,27 @@ it("maps recorded report check timestamps and follows the newest available summa
 });
 
 describe("officer access lifecycle", () => {
+  it("restores heading focus after officer-access retry remounts the workspace", async () => {
+    render(<Root />);
+    login();
+    grant();
+    loadPrivate();
+    await publicResults();
+    act(() =>
+      latest("officers/officer").error(new Error("Lookup unavailable")),
+    );
+    const retry = screen.getByRole("button", { name: "Retry officer access" });
+    retry.focus();
+    fireEvent.click(retry);
+    grant();
+    loadPrivate();
+    await waitFor(() =>
+      expect(document.activeElement).toBe(
+        document.getElementById("page-title"),
+      ),
+    );
+  });
+
   it("keeps an empty officer roster separate from historical public result players", async () => {
     mock.getDocs.mockImplementation(async (ref: { path: string }) =>
       snap(
@@ -793,11 +814,13 @@ describe("run submission", () => {
     expect(
       screen
         .getByRole("status", { name: "Run status" })
+        .closest(".run-strip")!
         .classList.contains("is-running"),
     ).toBe(true);
     expect(
       screen
         .getByRole("status", { name: "Run status" })
+        .closest(".run-strip")!
         .classList.contains("has-error"),
     ).toBe(false);
     await act(async () => {
