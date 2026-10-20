@@ -68,7 +68,8 @@ workflow tests create only their expected synthetic requests in this demo
 project. Failure traces stay in ignored `test-results/`.
 
 Auth coverage adds onboarding, session refresh, revocation during editing,
-re-grant without stale drafts, sign-out and popup blocked/cancelled recovery. It
+re-grant without stale drafts, sign-out, popup blocked/cancelled recovery, and
+account switching through cancellation and an unsaved-draft guard. It
 uses emulated Google accounts; real Google consent and hosted-domain acceptance
 are separate checks recorded with AUTH-1 (#8).
 

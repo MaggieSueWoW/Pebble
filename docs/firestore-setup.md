@@ -104,8 +104,9 @@ project-wide, not limited to the config's season.
 
 The app clears private state when it observes membership loss or a private
 permission-denied error. Membership and private-input listener errors close
-officer editing and show an authored recovery message. Initial Auth, server membership and private
-input loading each have a 15-second deadline, so a stalled connection returns to
+officer editing and show an authored recovery message. Initial Auth, server
+membership and private input loading each have a 15-second deadline, so a stalled
+connection returns to
 public results instead of leaving a permanent connecting screen. A cached enabled
 membership alone cannot grant access. Use **Retry officer access** to attach fresh
 listeners; old callbacks cannot restore the previous session. Account changes
