@@ -53,7 +53,7 @@ function AvailabilityField({
             aria-label={`${label} ${value.mode === "unavailableFor" ? "unavailable" : "available"} minutes`}
             type="number"
             aria-invalid={invalid}
-            aria-describedby={helpId}
+            aria-describedby={`${helpId}${invalid ? " availability-validation" : ""}`}
             min="1"
             max={limit}
             value={value.minutes ?? ""}
@@ -185,7 +185,7 @@ export function AvailabilityEditor({
         </label>
       </div>
       {adjustmentError && (
-        <p role="alert" className="field-error">
+        <p id="availability-validation" role="alert" className="field-error">
           <CircleAlert size={14} />
           {adjustmentError}
         </p>

@@ -159,3 +159,16 @@ an older displayed result. Missing titles fall back to codes and missing metadat
 omits the list. Public readers retain warning text without private source links.
 Acceptance checks replacement/loading, stale history, fallback labels, public
 visibility, keyboard link focus and narrow layout without contacting Warcraft Logs.
+
+
+Accessibility/error coverage links both result-detail buttons to stable hidden
+breakdown content and labels the discard dialog. Report and availability validation
+is associated with its field; Run status announces only its changing copy, outside
+the action buttons. Disappearing result/queue retries recover heading focus when
+focus would otherwise be on the page body; officer-access retry restores focus
+after the workspace reloads. Keyboard and narrow-layout scenarios exercise details,
+validation, dialogs and retry recovery. Temporary permission denial is restricted
+to the demo emulator, with its original rules restored afterward.
+
+These automated checks verify DOM/accessibility semantics, browser focus and
+keyboard behavior. Actual screen-reader listening remains part of final acceptance.

@@ -1,9 +1,18 @@
+import { useEffect, useRef } from "react";
 import App from "./App";
 import { configured } from "./firebase";
 import { useFirestore } from "./useFirestore";
 
 function Connected() {
   const { connection, loading } = useFirestore();
+  const focusAfterAccess = useRef(false);
+  useEffect(() => {
+    if (!loading && focusAfterAccess.current) {
+      if (document.activeElement === document.body)
+        document.getElementById("page-title")?.focus({ preventScroll: true });
+      focusAfterAccess.current = false;
+    }
+  }, [loading, connection.accessGeneration]);
   if (loading)
     return (
       <main className="setup-screen">
@@ -15,7 +24,13 @@ function Connected() {
   return (
     <App
       key={`${connection.user?.uid || "public"}:${connection.officer}:${connection.accessGeneration}`}
-      connection={connection}
+      connection={{
+        ...connection,
+        retryAccess: () => {
+          focusAfterAccess.current = true;
+          connection.retryAccess();
+        },
+      }}
     />
   );
 }
