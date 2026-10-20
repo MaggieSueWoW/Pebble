@@ -81,6 +81,7 @@ node scripts/web-release.mjs deploy/private/web-release.json deploy
 node scripts/check-web-host.mjs https://HOSTED_ORIGIN EXPECTED_FULL_COMMIT
 ```
 
+The preview/deploy commands first verify the site belongs to the explicit project.
 The deploy command stages only the verified static files and a Hosting-only config,
 passes an explicit project and site, and invokes `firebase deploy --only hosting`.
 It does not deploy Firestore rules/indexes or change Auth domains. Before the first

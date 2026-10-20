@@ -167,6 +167,18 @@ export function firebaseArgs(action, config, configPath, channel) {
   ];
 }
 
+export function verifySite(config, response) {
+  if (
+    response.status !== "success" ||
+    !response.result?.sites?.some(
+      (site) => site.name.split("/").at(-1) === config.siteId,
+    )
+  )
+    throw new Error(
+      "Hosting site is not in the explicitly selected Firebase project",
+    );
+}
+
 function requireClean() {
   if (git("status", "--porcelain", "--untracked-files=normal"))
     throw new Error(
@@ -211,6 +223,20 @@ async function main() {
       join(stage, "firebase.json"),
       channel,
     );
+    const sites = JSON.parse(
+      execFileSync(
+        "firebase",
+        [
+          "hosting:sites:list",
+          "--project",
+          config.projectId,
+          "--json",
+          "--non-interactive",
+        ],
+        { cwd: root, encoding: "utf8" },
+      ),
+    );
+    verifySite(config, sites);
     rmSync(stage, { recursive: true, force: true });
     mkdirSync(stage, { recursive: true });
     cpSync(dist, join(stage, "public"), { recursive: true });

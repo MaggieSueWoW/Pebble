@@ -16,6 +16,7 @@ import {
   fileHashes,
   verifyArtifact,
   firebaseArgs,
+  verifySite,
 } from "./web-release.mjs";
 const config = {
   environment: "test",
@@ -111,4 +112,20 @@ test("release verification rejects modified, extra, secret and symlinked files a
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test("publishing rejects a Hosting site outside the selected project", () => {
+  verifySite(config, {
+    status: "success",
+    result: { sites: [{ name: "projects/example/sites/" + config.siteId }] },
+  });
+  for (const result of [
+    {},
+    { status: "error" },
+    {
+      status: "success",
+      result: { sites: [{ name: "projects/other/sites/wrong-site" }] },
+    },
+  ])
+    assert.throws(() => verifySite(config, result));
 });
