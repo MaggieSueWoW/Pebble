@@ -59,7 +59,7 @@ This starts a separate Vite server on port 5174 and Auth/Firestore emulators on
 `demo-pebble-reports` project and synthetic officers/reports, overriding local
 Firebase configuration. It clears only that isolated emulator's Firestore data;
 keep these ports free. No worker is started. Editor tests assert zero run requests;
-run-submission tests create only their expected synthetic requests in this demo
+workflow tests create only their expected synthetic requests in this demo
 project. Failure traces stay in ignored `test-results/`.
 
 Coverage includes report validation/deduplication, add/re-enable, selection
@@ -85,3 +85,12 @@ creation, offline heartbeat messaging, progress stages, terminal failure and
 tracking beyond the recent-history limit. Test fixtures advance the emulator queue
 and heartbeat; they never start or contact a worker. Previous completed results
 and unrelated input versions are checked throughout these cases.
+
+
+Result-loading coverage holds result reads, rejects incomplete output for officers
+and public readers, exercises retry (including first-load errors), and supersedes
+a delayed fetch with a newer publication. It checks that rows, result periods and
+totals stay consistent, and that an edit saved during computation still needs a
+new run after older captured input versions arrive. Queue/completion/publication
+transitions are synthetic emulator fixtures; one freshness case submits a single
+expected emulator request, with no worker process.
