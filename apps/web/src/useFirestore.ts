@@ -21,6 +21,11 @@ import {
   type Results,
   type Saved,
 } from "./model";
+import {
+  defaultCalculation,
+  validateCalculation,
+  type CalculationSettings,
+} from "./calculation";
 import { usePublicResults } from "./usePublicResults";
 
 import { validatePlayer, type RosterEntry, type RosterValue } from "./roster";
@@ -41,6 +46,11 @@ export type LiveConnection = {
   saveCharacter: (
     id: string,
     value: CharacterValue,
+    expected: number,
+  ) => Promise<number>;
+  calculation: CalculationSettings;
+  saveCalculation: (
+    value: CalculationSettings,
     expected: number,
   ) => Promise<number>;
   savePlayer: (
@@ -745,6 +755,38 @@ export function useFirestore(): {
       if (accessSession === session.current) setBusy(false);
     }
   }
+  async function saveCalculation(value: CalculationSettings, expected: number) {
+    assertAccess();
+    const invalid = validateCalculation(value);
+    if (invalid) throw new Error(invalid);
+    setBusy(true);
+    setError("");
+    try {
+      return await runTransaction(db!, async (transaction) => {
+        assertAccess();
+        const ref = doc(db!, "seasons", seasonId, "settings", "calculation");
+        const snapshot = await transaction.get(ref);
+        assertAccess();
+        const actual = snapshot.data()?.version ?? 0;
+        if (actual !== expected)
+          throw new Error(
+            "Another officer changed calculation settings. Cancel your edits to reload, then try again.",
+          );
+        transaction.set(ref, {
+          ...value,
+          version: actual + 1,
+          updatedBy: user!.uid,
+          updatedAt: serverTimestamp(),
+        });
+        return actual + 1;
+      });
+    } catch (e) {
+      if (accessSession === session.current) fail(e as Error);
+      throw e;
+    } finally {
+      if (accessSession === session.current) setBusy(false);
+    }
+  }
   async function requestRun() {
     assertAccess();
     const prior = submission.current;
@@ -848,6 +890,11 @@ export function useFirestore(): {
       roster: rosterEntries,
       characters: characterEntries,
       saveCharacter,
+      calculation: {
+        ...defaultCalculation(),
+        ...dataOnly(documents.settings?.calculation ?? {}),
+      } as CalculationSettings,
+      saveCalculation,
       savePlayer,
       nights: results.nights.map((n) => n.night),
       user,
