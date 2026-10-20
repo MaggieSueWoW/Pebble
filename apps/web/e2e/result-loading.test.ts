@@ -507,3 +507,134 @@ test("public warnings survive a failed load and change on keyboard retry at narr
     ),
   ).toBe(true);
 });
+
+async function reportNight(night: string) {
+  await admin(async (ctx) => {
+    await setDoc(
+      doc(ctx.firestore(), `${season}/runs/baseline`),
+      {
+        reportSummaries: {
+          [report]: {
+            night,
+            title: "Example report",
+            checkedAt: Timestamp.now(),
+          },
+        },
+      },
+      { merge: true },
+    );
+  });
+}
+const raidDate = (page: Page) => page.getByLabel("Choose another raid date");
+const raidPicker = (page: Page) =>
+  page.getByRole("combobox", { name: "Raid night", exact: true });
+async function overrides(page: Page) {
+  await officer(page, env);
+  await page
+    .getByRole("navigation")
+    .getByRole("button", { name: "Overrides", exact: true })
+    .click();
+}
+
+test("defaults to report-only dates, follows late metadata and retains explicit dates and drafts", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await admin(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), "publicSeasons/test-reports"), {});
+  });
+  await reportNight("2026-10-15");
+  await overrides(page);
+  await expect(raidDate(page)).toHaveValue("2026-10-15");
+  await reportNight("2026-10-16");
+  await expect(raidDate(page)).toHaveValue("2026-10-16");
+  const notes = page.getByRole("textbox", { name: "Availability notes" });
+  await notes.fill("Keep this night draft");
+  await reportNight("2026-10-17");
+  await expect(raidPicker(page).locator("option").first()).toHaveAttribute(
+    "value",
+    "2026-10-17",
+  );
+  await expect(raidDate(page)).toHaveValue("2026-10-16");
+  await expect(notes).toHaveValue("Keep this night draft");
+  await raidPicker(page).selectOption("2026-10-17");
+  await expect(page.getByRole("dialog")).toBeVisible();
+  await page.getByRole("button", { name: "Keep editing" }).focus();
+  await page.keyboard.press("Enter");
+  await expect(raidDate(page)).toHaveValue("2026-10-16");
+  await expect(notes).toHaveValue("Keep this night draft");
+  await raidPicker(page).selectOption("2026-10-17");
+  await page.getByRole("button", { name: "Discard edits" }).click();
+  await expect(raidDate(page)).toHaveValue("2026-10-17");
+  await expect(notes).toHaveValue("");
+  await raidDate(page).fill("2026-10-12");
+  await reportNight("2026-10-18");
+  await expect(raidPicker(page).locator("option").first()).toHaveAttribute(
+    "value",
+    "2026-10-18",
+  );
+  await expect(raidDate(page)).toHaveValue("2026-10-12");
+  await expect(raidPicker(page)).toHaveValue("2026-10-12");
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth,
+    ),
+  ).toBe(true);
+});
+
+test("keeps the default night during a held save and preserves its acknowledged context", async ({
+  page,
+}) => {
+  await overrides(page);
+  await expect(raidDate(page)).toHaveValue(nights.baseline);
+  const notes = page.getByRole("textbox", { name: "Availability notes" });
+  await notes.fill("Saved for the original night");
+  await reportNight(nights.latest);
+  await expect(raidPicker(page).locator("option").first()).toHaveAttribute(
+    "value",
+    nights.latest,
+  );
+  let release!: () => void, intercept!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const requested = new Promise<void>((resolve) => {
+    intercept = resolve;
+  });
+  releases.push(release);
+  await page.route(/\/documents:commit(?:\?|$)/, async (route) => {
+    intercept();
+    await gate;
+    await route.continue();
+  });
+  await page
+    .getByRole("button", { name: "Save adjustment", exact: true })
+    .click();
+  await requested;
+  // The SDK may defer incoming snapshots until this held commit completes.
+  await reportNight("2026-10-17");
+  await expect(raidDate(page)).toHaveValue(nights.baseline);
+  await raidPicker(page).selectOption(nights.latest);
+  await expect(
+    page.getByText("Wait for the save to finish.", { exact: true }),
+  ).toBeVisible();
+  await expect(raidDate(page)).toHaveValue(nights.baseline);
+  release();
+  await expect(
+    page.getByRole("status", { name: "Availability changes" }),
+  ).toContainText("Availability saved");
+  await expect(raidPicker(page).locator("option").first()).toHaveAttribute(
+    "value",
+    "2026-10-17",
+  );
+  await expect(raidDate(page)).toHaveValue(nights.baseline);
+  await admin(async (ctx) => {
+    const overrides = await getDocs(
+      collection(ctx.firestore(), `${season}/availabilityOverrides`),
+    );
+    expect(overrides.docs.map((d) => d.id)).toEqual([
+      `${nights.baseline}_player-a`,
+    ]);
+    expect(overrides.docs[0].data().notes).toBe("Saved for the original night");
+  });
+});

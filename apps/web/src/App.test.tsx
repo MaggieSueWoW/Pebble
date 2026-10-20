@@ -199,3 +199,115 @@ it.each([true, false])(
     expect(c.requestRun).not.toHaveBeenCalled();
   },
 );
+
+function dates(
+  c: LiveConnection,
+  resultDates: string[],
+  reportDates: string[] = [],
+): LiveConnection {
+  return {
+    ...c,
+    nights: resultDates,
+    saved: {
+      ...c.saved,
+      inputs: {
+        ...c.saved.inputs,
+        reports: reportDates.map((night, i) => ({
+          code: String.fromCharCode(65 + i).repeat(16),
+          enabled: true,
+          fetched: Boolean(night),
+          title: "Example report",
+          night,
+        })),
+      },
+    },
+  };
+}
+const raidDate = () =>
+  screen.getByLabelText("Choose another raid date") as HTMLInputElement;
+const raidPicker = () =>
+  screen.getByRole("combobox", { name: "Raid night" }) as HTMLSelectElement;
+
+it("defaults to the newest report/result date with one ordered deduplicated list", () => {
+  const c = dates(
+    connection([alpha]),
+    ["2026-10-14", "2026-10-15"],
+    ["", "2026-10-16", "2026-10-15"],
+  );
+  render(<App connection={c} />);
+  overrides();
+  expect(raidDate().value).toBe("2026-10-16");
+  expect([...raidPicker().options].map((o) => o.value)).toEqual([
+    "2026-10-16",
+    "2026-10-15",
+    "2026-10-14",
+  ]);
+  expect(c.saveInputs).not.toHaveBeenCalled();
+});
+
+it("starts on Pacific today, follows late metadata, then preserves an explicit custom date", () => {
+  vi.useFakeTimers();
+  vi.setSystemTime(new Date("2026-10-19T02:00:00Z"));
+  try {
+    const c = connection([alpha]);
+    const { rerender } = render(<App connection={c} />);
+    overrides();
+    expect(raidDate().value).toBe("2026-10-18");
+    rerender(<App connection={dates(c, [], ["2026-10-15"])} />);
+    expect(raidDate().value).toBe("2026-10-15");
+    rerender(<App connection={dates(c, ["2026-10-16"])} />);
+    expect(raidDate().value).toBe("2026-10-16");
+    fireEvent.input(raidDate(), { target: { value: "2026-10-12" } });
+    rerender(<App connection={dates(c, ["2026-10-17"])} />);
+    expect(raidDate().value).toBe("2026-10-12");
+    expect(raidPicker().value).toBe("2026-10-12");
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+it("keeps a picker choice after its metadata disappears", () => {
+  const c = dates(connection([alpha]), ["2026-10-16", "2026-10-15"]);
+  const { rerender } = render(<App connection={c} />);
+  overrides();
+  fireEvent.change(raidPicker(), { target: { value: "2026-10-15" } });
+  rerender(<App connection={dates(c, ["2026-10-17"])} />);
+  expect(raidDate().value).toBe("2026-10-15");
+  expect([...raidPicker().options].map((o) => o.value)).toEqual([
+    "2026-10-17",
+    "2026-10-15",
+  ]);
+});
+
+it("keeps the date of a draft after newer metadata and cancellation", () => {
+  const c = dates(connection([alpha]), ["2026-10-14"]);
+  const { rerender } = render(<App connection={c} />);
+  overrides();
+  fireEvent.change(notes(), { target: { value: "Night-bound draft" } });
+  rerender(<App connection={dates(c, ["2026-10-15"])} />);
+  expect(raidDate().value).toBe("2026-10-14");
+  expect(notes().value).toBe("Night-bound draft");
+  fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+  expect(raidDate().value).toBe("2026-10-14");
+  expect(notes().value).toBe("");
+});
+
+it("keeps a pending save on its date until acknowledgement and afterwards", async () => {
+  let finish!: (value: Record<string, number>) => void;
+  const c = dates(connection([alpha]), ["2026-10-14"]);
+  c.saveInputs = vi.fn(
+    () =>
+      new Promise<Record<string, number>>((resolve) => {
+        finish = resolve;
+      }),
+  );
+  const { rerender } = render(<App connection={c} />);
+  overrides();
+  fireEvent.change(notes(), { target: { value: "Save this night" } });
+  fireEvent.click(screen.getByRole("button", { name: "Save adjustment" }));
+  rerender(<App connection={dates(c, ["2026-10-15"])} />);
+  expect(raidDate().value).toBe("2026-10-14");
+  await act(async () => finish({ "availabilityOverrides/2026-10-14_a": 1 }));
+  expect(raidDate().value).toBe("2026-10-14");
+  expect(c.saveInputs).toHaveBeenCalledTimes(1);
+});

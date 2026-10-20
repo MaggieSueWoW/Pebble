@@ -195,13 +195,22 @@ export default function App({ connection }: { connection?: LiveConnection }) {
   );
   const today = `${todayParts.year}-${todayParts.month}-${todayParts.day}`;
   const nightOptions = connection
-    ? connection.nights.length
-      ? connection.nights
-      : [today]
+    ? [
+        ...new Set(
+          [
+            ...connection.nights,
+            ...inputs.reports.map((report) => report.night),
+          ].filter(Boolean),
+        ),
+      ]
+        .sort()
+        .reverse()
     : sampleNights;
+  const defaultNight = nightOptions[0] ?? today;
   const firstPlayer = players[0]?.id ?? "";
   const [page, setPage] = useState<Page>(canManage ? "reports" : "results");
-  const [night, setNight] = useState(nightOptions[0]);
+  const [night, setNight] = useState(defaultNight);
+  const nightChosen = useRef(false);
   const [overrideTab, setOverrideTab] = useState<"availability" | "timing">(
     "availability",
   );
@@ -255,7 +264,7 @@ export default function App({ connection }: { connection?: LiveConnection }) {
         }));
     },
     Boolean(connection?.busy),
-    connection ? "" : nightOptions[0],
+    connection ? "" : defaultNight,
   );
   let span: { pre: number; post: number } = { pre: 90, post: 80 };
   try {
@@ -353,6 +362,11 @@ export default function App({ connection }: { connection?: LiveConnection }) {
     availabilityEditor.saving ||
     timingEditor.dirty ||
     timingEditor.saving;
+  useEffect(() => {
+    // Follow arriving metadata only until the operator chooses or edits a date.
+    if (unsaved) nightChosen.current = true;
+    if (!nightChosen.current) setNight(defaultNight);
+  }, [defaultNight, unsaved]);
   const unprocessed = connection
     ? connection.unprocessed
     : results.signature !== signature(inputs);
@@ -501,7 +515,12 @@ export default function App({ connection }: { connection?: LiveConnection }) {
     if (next !== page) guard(() => setPage(next));
   }
   function chooseNight(next: string) {
+    if (next === night) {
+      nightChosen.current = true;
+      return;
+    }
     guard(() => {
+      nightChosen.current = true;
       setNight(next);
     });
   }
@@ -691,7 +710,8 @@ export default function App({ connection }: { connection?: LiveConnection }) {
               onClick={() =>
                 guard(() => {
                   setSaved(freshState());
-                  setNight(nightOptions[0]);
+                  nightChosen.current = false;
+                  setNight(defaultNight);
                   setSelected("Example");
                   availabilityEditor.cancel();
                   timingEditor.cancel();
@@ -990,13 +1010,7 @@ export default function App({ connection }: { connection?: LiveConnection }) {
                     value={night}
                     onChange={(e) => chooseNight(e.target.value)}
                   >
-                    {[
-                      ...new Set([
-                        ...nightOptions,
-                        ...inputs.reports.map((r) => r.night).filter(Boolean),
-                        night,
-                      ]),
-                    ]
+                    {[...new Set([...nightOptions, night])]
                       .sort()
                       .reverse()
                       .map((n) => (
@@ -1248,8 +1262,9 @@ export default function App({ connection }: { connection?: LiveConnection }) {
                                       const n =
                                         visibleResultNight === "season"
                                           ? (results.nights[0]?.night ??
-                                            nightOptions[0])
+                                            defaultNight)
                                           : visibleResultNight;
+                                      nightChosen.current = true;
                                       setNight(n);
                                       setSelected(row.id);
                                       setOverrideTab("availability");
