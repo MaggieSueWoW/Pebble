@@ -19,8 +19,22 @@ from pydantic import (
 from .config_loader import MongoConfig, RedisConfig, TimeConfig, WCLConfig
 
 ID = re.compile(r"^[A-Za-z0-9_-]{1,100}$")
+AVAILABILITY_ID = re.compile(r"^[A-Za-z0-9_-]{1,111}$")
 CODE = re.compile(r"^[A-Za-z0-9]{16}$")
 PT = ZoneInfo("America/Los_Angeles")
+
+
+def valid_input_id(collection: str, key: str) -> bool:
+    """Allow the date prefix in availability IDs without reducing player IDs."""
+    pattern = AVAILABILITY_ID if collection == "availabilityOverrides" else ID
+    return isinstance(key, str) and pattern.fullmatch(key) is not None
+
+
+def calendar_day(value: str) -> date:
+    """Require the canonical calendar format used by document IDs and ordering."""
+    if not re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}", value):
+        raise ValueError("Use YYYY-MM-DD for dates")
+    return date.fromisoformat(value)
 
 
 class InputDocument(BaseModel):
@@ -67,7 +81,7 @@ class PlayerInput(InputDocument):
             )
         for value in (self.joinDate, self.leaveDate):
             if value:
-                date.fromisoformat(value)
+                calendar_day(value)
         if self.joinDate and self.leaveDate and self.joinDate > self.leaveDate:
             raise ValueError("Join date must not follow leave date")
         return self
@@ -79,6 +93,14 @@ class CharacterInput(InputDocument):
     region: Literal["us", "eu", "kr", "tw", "cn"]
     playerId: Annotated[str, Field(min_length=1, max_length=100)]
 
+    @model_validator(mode="after")
+    def check_name(self):
+        if not self.name.isalpha() or self.realm != self.realm.strip():
+            raise ValueError(
+                "Use a character name without a realm suffix and trim the realm"
+            )
+        return self
+
 
 class Availability(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
@@ -87,6 +109,11 @@ class Availability(BaseModel):
 
     @model_validator(mode="after")
     def check_minutes(self):
+        if (
+            self.mode not in ("partial", "unavailableFor")
+            and "minutes" in self.model_fields_set
+        ):
+            raise ValueError("Only timed availability modes accept a minutes field")
         if (self.mode in ("partial", "unavailableFor")) != (self.minutes is not None):
             raise ValueError(
                 "Partial availability and timed unavailability require minutes"
@@ -149,11 +176,15 @@ INPUT_MODELS = {
 
 def validate_snapshot(raw: dict) -> dict:
     """Validate document schemas and relationships before contacting WCL."""
+    if not isinstance(raw, dict) or set(raw) - (set(INPUT_MODELS) | {"settings"}):
+        raise ValueError("Unknown input collection")
+    if set(raw.get("settings", {})) - {"calculation"}:
+        raise ValueError("Unknown calculation settings document")
     result = {}
     for collection, model in INPUT_MODELS.items():
         result[collection] = {}
         for key, value in raw.get(collection, {}).items():
-            if not ID.fullmatch(key):
+            if not valid_input_id(collection, key):
                 raise ValueError(f"Invalid {collection} document ID")
             result[collection][key] = model.model_validate(value)
     names = [p.name.casefold() for p in result["players"].values()]
@@ -166,12 +197,16 @@ def validate_snapshot(raw: dict) -> dict:
     for character in result["characters"].values():
         if character.playerId not in result["players"]:
             raise ValueError("Character mapping references an unknown player")
-        identity = (character.name.casefold(), character.realm.casefold())
+        identity = (
+            character.region,
+            character.name.casefold(),
+            character.realm.casefold(),
+        )
         if identity in aliases:
             raise ValueError("A character cannot have multiple main mappings")
         aliases[identity] = character.playerId
     for key, adjustment in result["availabilityOverrides"].items():
-        date.fromisoformat(adjustment.nightId)
+        calendar_day(adjustment.nightId)
         if (
             adjustment.playerId not in result["players"]
             or key != f"{adjustment.nightId}_{adjustment.playerId}"
@@ -180,7 +215,7 @@ def validate_snapshot(raw: dict) -> dict:
                 "Availability adjustment references an unknown player or mismatched ID"
             )
     for night, timing in result["nightOverrides"].items():
-        date.fromisoformat(night)
+        calendar_day(night)
         values = [
             wall_ms(timing.start),
             wall_ms(timing.breakStart),
@@ -194,6 +229,14 @@ def validate_snapshot(raw: dict) -> dict:
             raise ValueError("Timing must follow start, break start, break end, end")
         if explicit and explicit[-1] - explicit[0] > 12 * 60 * 60 * 1000:
             raise ValueError("Raid timing cannot span more than 12 hours")
+        for value in (timing.start, timing.breakStart, timing.breakEnd, timing.end):
+            if (
+                value
+                and not 0 <= (calendar_day(value[:10]) - calendar_day(night)).days <= 1
+            ):
+                raise ValueError(
+                    "Timing must belong to its raid night or the following day"
+                )
     return result
 
 
@@ -225,6 +268,8 @@ class CalculationInput(InputDocument):
 
     @model_validator(mode="after")
     def check_window(self):
+        if not self.breakWindowStart or not self.breakWindowEnd:
+            raise ValueError("Both calculation break window boundaries are required")
         for value in (
             self.breakWindowStart,
             self.breakWindowEnd,
@@ -234,6 +279,8 @@ class CalculationInput(InputDocument):
                 raise ValueError("Use HH:MM for calculation settings")
         if self.minBreakMinutes > self.maxBreakMinutes:
             raise ValueError("Minimum break duration exceeds maximum")
+        if self.breakWindowStart >= self.breakWindowEnd:
+            raise ValueError("Break window end must follow start")
         return self
 
     def time_config(self) -> TimeConfig:
