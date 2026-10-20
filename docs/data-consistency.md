@@ -86,12 +86,13 @@ Week statuses retain the established P/B/O order, including empty strings when
 that week has no applicable event. The nested minute values reflect eligible
 membership nights; they need not equal the season row's existing aggregate fields.
 
-An omitted `attendance` means the existing helper excluded that main (for example,
+For newly computed results, helper-ineligible rows omit `attendance` (for example,
 active membership ended before the latest observed night or starts afterward).
-It must not be displayed as zero attendance. Only helper-eligible mains already
-present in the season player output receive the field; nightly and weekly result
-documents do not change. Older published runs legitimately lack this additive
-field until a reviewed worker release and normal recomputation. No release or
+Absence alone must be shown as unavailable, not zero attendance or a guessed
+eligibility reason, because older results also lack this field. Only helper-eligible
+mains already present in the season player output receive the field; nightly and
+weekly result documents do not change. Older published runs legitimately lack
+this additive field until a reviewed worker release and normal recomputation. No release or
 live recomputation accompanies this source change. Notes and private attribution
 are never serialized. The existing atomic publication and size preflight apply to
 the entire nested attendance payload.
