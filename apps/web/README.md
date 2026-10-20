@@ -195,3 +195,11 @@ Weekly acceptance covers stored totals, historical/zero rows, safe metadata mapp
 weekly read failure/retry, officer/public access, keyboard details, narrow layout
 and atomic publication replacement. Attendance, possible time, weekly P/B/O, richer
 nightly explanations/diagnostics and shareable routes remain tracked in #11.
+
+
+Officer Settings edits the existing calculation parameters in Pacific time. Missing
+settings show the worker defaults; they are written only after an explicit edit
+and save. Saves use the document version, preserve stale drafts on conflicts and
+leave results unchanged until Run Pebble. Public and sample views do not expose
+this editor. Unit and isolated browser tests cover defaults, validation, guarded
+navigation, targeted saves, conflict recovery and narrow layouts.

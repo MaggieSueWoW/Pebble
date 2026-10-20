@@ -57,6 +57,9 @@ import { useAvailabilityEditor } from "./useAvailabilityEditor";
 import { TimingEditor } from "./TimingEditor";
 import { OverrideTabs } from "./OverrideTabs";
 import { useTimingEditor } from "./useTimingEditor";
+import { CalculationEditor } from "./CalculationEditor";
+import { useCalculationEditor } from "./useCalculationEditor";
+import { defaultCalculation } from "./calculation";
 import { RosterPanel } from "./RosterPanel";
 import { useRosterEditor } from "./useRosterEditor";
 import { blankTiming } from "./timing";
@@ -388,7 +391,20 @@ export default function App({ connection }: { connection?: LiveConnection }) {
     Boolean(connection?.busy),
     Boolean(connection?.officer),
   );
+  const calculationEditor = useCalculationEditor(
+    connection?.calculation ?? defaultCalculation(),
+    connection?.versions["settings/calculation"] ?? 0,
+    async (value, expected) => {
+      if (!connection)
+        throw new Error("Calculation settings require an officer connection.");
+      return connection.saveCalculation(value, expected);
+    },
+    Boolean(connection?.busy),
+    Boolean(connection?.officer),
+  );
   const unsaved =
+    calculationEditor.dirty ||
+    calculationEditor.saving ||
     rosterEditor.dirty ||
     rosterEditor.saving ||
     reportEditor.dirty ||
@@ -540,9 +556,11 @@ export default function App({ connection }: { connection?: LiveConnection }) {
     availabilityEditor.cancel();
     timingEditor.cancel();
     rosterEditor.cancel();
+    calculationEditor.cancel();
   }
   function guard(action: () => void) {
     if (
+      calculationEditor.saving ||
       rosterEditor.saving ||
       reportEditor.saving ||
       availabilityEditor.saving ||
@@ -716,7 +734,14 @@ export default function App({ connection }: { connection?: LiveConnection }) {
               { id: "overrides", name: "Overrides", icon: SlidersHorizontal },
               { id: "results", name: "Results", icon: BarChart3 },
               ...(connection?.officer
-                ? [{ id: "roster" as const, name: "Roster", icon: Users }]
+                ? [
+                    { id: "roster" as const, name: "Roster", icon: Users },
+                    {
+                      id: "settings" as const,
+                      name: "Settings",
+                      icon: SlidersHorizontal,
+                    },
+                  ]
                 : []),
             ] as const
           )
@@ -852,9 +877,11 @@ export default function App({ connection }: { connection?: LiveConnection }) {
                 ? "Reports"
                 : page === "overrides"
                   ? "Overrides"
-                  : page === "roster"
-                    ? "Roster"
-                    : "Results"}
+                  : page === "settings"
+                    ? "Settings"
+                    : page === "roster"
+                      ? "Roster"
+                      : "Results"}
             </strong>
           </div>
           <div className="topbar-right">
@@ -944,18 +971,22 @@ export default function App({ connection }: { connection?: LiveConnection }) {
                   ? "Raid reports"
                   : page === "overrides"
                     ? "Fine-tune the night"
-                    : page === "roster"
-                      ? "Your raid roster"
-                      : "Everyone’s time counts."}
+                    : page === "settings"
+                      ? "Calculation settings"
+                      : page === "roster"
+                        ? "Your raid roster"
+                        : "Everyone’s time counts."}
               </h1>
               <p>
                 {page === "reports"
                   ? "Bring the logs. Pebble handles the numbers."
                   : page === "overrides"
                     ? "A few adjustments, then back to the raid."
-                    : page === "roster"
-                      ? "Keep membership current, then recompute when ready."
-                      : "Played time, bench time, and the story behind the numbers."}
+                    : page === "settings"
+                      ? "Set the calculation parameters, then recompute when ready."
+                      : page === "roster"
+                        ? "Keep membership current, then recompute when ready."
+                        : "Played time, bench time, and the story behind the numbers."}
               </p>
             </div>
             {page === "results" ? (
@@ -1125,6 +1156,9 @@ export default function App({ connection }: { connection?: LiveConnection }) {
                 demo={!connection}
               />
             </>
+          )}
+          {page === "settings" && connection?.officer && (
+            <CalculationEditor editor={calculationEditor} />
           )}
           {page === "roster" && connection?.officer && (
             <RosterPanel

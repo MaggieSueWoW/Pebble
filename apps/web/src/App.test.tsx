@@ -10,6 +10,7 @@ import {
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import App from "./App";
 import { freshState, type Player } from "./model";
+import { defaultCalculation } from "./calculation";
 import type { LiveConnection } from "./useFirestore";
 
 const alpha: Player = {
@@ -38,6 +39,8 @@ function connection(players: Player[] = []): LiveConnection {
     },
     players,
     roster: [],
+    calculation: defaultCalculation(),
+    saveCalculation: vi.fn(async (_value, version) => version + 1),
     savePlayer: vi.fn(),
     nights: [],
     user: null,
