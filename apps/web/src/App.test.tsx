@@ -6,6 +6,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import App from "./App";
@@ -827,4 +828,56 @@ it("explains missing linked periods and players after result readiness", () => {
   render(<App connection={c} />);
   expect(screen.getByText(/This player is not available/)).toBeTruthy();
   expect(new URLSearchParams(location.search).has("player")).toBe(false);
+});
+
+it("exposes published attendance for zero-time players outside ranked rows and only in the season view", () => {
+  const c = connection();
+  c.officer = false;
+  c.hasResults = true;
+  const absent = {
+    id: "absent",
+    name: "Absent",
+    played: 0,
+    bench: 0,
+    preBench: 0,
+    postBench: 0,
+    overridden: false,
+    nights: 0,
+    attendance: {
+      played: 0,
+      bench: 0,
+      possible: 120,
+      rate: 0,
+      weeks: [{ week: "2026-10-13", status: "O" }],
+    },
+  };
+  c.saved.results.players = [
+    absent,
+    { ...absent, id: "legacy", name: "Legacy", attendance: undefined },
+  ];
+  c.saved.results.nights = [
+    {
+      night: "2026-10-15",
+      duration: 120,
+      timing: { start: "", breakStart: "", breakEnd: "", end: "", notes: "" },
+      reports: 1,
+      players: [],
+    },
+  ];
+  render(<App connection={c} />);
+  const additional = screen.getByRole("region", {
+    name: "Additional attendance",
+  });
+  expect(within(additional).getByText("Attendance for Absent")).toBeTruthy();
+  expect(within(additional).getByText("0%", { exact: true })).toBeTruthy();
+  expect(within(additional).queryByText("Attendance for Legacy")).toBeNull();
+  expect(
+    screen.queryByRole("button", { name: "Details for Absent" }),
+  ).toBeNull();
+  fireEvent.change(screen.getByRole("combobox", { name: "Result period" }), {
+    target: { value: "2026-10-15" },
+  });
+  expect(
+    screen.queryByRole("region", { name: "Additional attendance" }),
+  ).toBeNull();
 });
