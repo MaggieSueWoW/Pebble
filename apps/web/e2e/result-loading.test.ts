@@ -13,7 +13,7 @@ import {
   writeBatch,
 } from "firebase/firestore";
 import { readFileSync } from "node:fs";
-import { officer } from "./officer";
+import { officer, signIn } from "./officer";
 const season = "seasons/test-reports",
   report = "AAAAAAAAAAAAAAAA";
 const captured = { [`reports/${report}`]: 1, "players/player-a": 1 };
@@ -637,4 +637,78 @@ test("keeps the default night during a held save and preserves its acknowledged 
     ]);
     expect(overrides.docs[0].data().notes).toBe("Saved for the original night");
   });
+});
+
+test("explains non-officer access through grant, revocation and keyboard sign-out", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const uid = await signIn(page);
+  const access = page.getByRole("region", {
+    name: "Officer access not enabled",
+  });
+  await expect(access).toContainText("You can still read completed results");
+  await expect(access).toContainText(
+    "Editing inputs and running Pebble require an enabled officer account",
+  );
+  await expect(
+    page.getByText("Baseline Player", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("navigation").getByRole("button", { name: /^Reports/ }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Run Pebble", exact: true }),
+  ).toHaveCount(0);
+  await expect(access.locator("code")).toHaveText(uid);
+  const details = access.getByText("Account details", { exact: true });
+  await details.focus();
+  await page.keyboard.press("Enter");
+  await expect(access.locator("code")).toBeHidden();
+  await page.keyboard.press("Enter");
+  await expect(access.locator("code")).toBeVisible();
+  await admin(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), `officers/${uid}`), { enabled: true });
+  });
+  await expect(access).toHaveCount(0);
+  await page
+    .getByRole("navigation")
+    .getByRole("button", { name: /^Reports/ })
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "Add a report" }),
+  ).toBeVisible();
+  await page
+    .getByRole("textbox", { name: "Warcraft Logs reports" })
+    .fill("Unsaved private draft");
+  await admin(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), `officers/${uid}`), { enabled: false });
+  });
+  await expect(access).toBeVisible();
+  await expect(access.locator("code")).toBeHidden();
+  await expect(
+    page.getByRole("textbox", { name: "Warcraft Logs reports" }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole("navigation").getByRole("button", { name: /^Overrides/ }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByText("Baseline Player", { exact: true }),
+  ).toBeVisible();
+  await page
+    .getByRole("button", { name: "Sign out to switch accounts" })
+    .focus();
+  await page.keyboard.press("Enter");
+  await expect(access).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Officer sign-in" }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("Baseline Player", { exact: true }),
+  ).toBeVisible();
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth,
+    ),
+  ).toBe(true);
 });
