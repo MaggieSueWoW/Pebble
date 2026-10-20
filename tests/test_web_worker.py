@@ -794,3 +794,83 @@ def test_attendance_payload_is_preflighted_before_publication(config, emulator):
     assert not season.collection("results").document(run.id).get().exists
     assert pointer.get().to_dict()["latestRunId"] == "previous-attendance"
     assert old_player.get().to_dict()["attendance"]["possible"] == 10
+
+
+@pytest.mark.parametrize("scenario", ["zero", "membership", "ties", "no_mythic"])
+def test_public_season_ranking_matches_established_materialization(
+    config, wcl, monkeypatch, scenario
+):
+    """Use recorded ranking eligibility, totals, ordering and undefined ratios."""
+    from copy import deepcopy
+
+    from pebble.wcl_client import WCLClient
+
+    raw = snapshot()
+    raw["availabilityOverrides"] = {}
+    raw["players"] = {
+        "alpha": meta(name="Alpha", className="Mage", active=True),
+        "beta": meta(name="Beta", className="Priest", active=True),
+    }
+    if scenario == "membership":
+        raw["players"]["alpha"]["leaveDate"] = "2026-10-14"
+        raw["players"].update(
+            former=meta(name="Former", className="Mage", leaveDate="2026-10-14"),
+            future=meta(name="Future", className="Mage", joinDate="2026-10-16"),
+            inactive=meta(name="Inactive", className="Mage", active=False),
+        )
+    if scenario == "ties":
+        raw["players"].update(
+            zulu=meta(name="Zulu", className="Mage"),
+            lower=meta(name="apple", className="Mage"),
+        )
+    original_fetch = WCLClient.fetch_report_bundle
+
+    def fetch(client, code):
+        bundle = deepcopy(original_fetch(client, code))
+        bundle["masterData"]["actors"][0]["name"] = "Alpha"
+        if scenario == "no_mythic":
+            for fight in bundle["fights"]:
+                fight["difficulty"] = 4
+        return bundle
+
+    monkeypatch.setattr(WCLClient, "fetch_report_bundle", fetch)
+    db = mongomock.MongoClient().ranking_parity
+    output = calculate_snapshot(config, db, raw)
+    published = {p["name"]: p for p in output["players"]}
+    expected = list(db.bench_rankings.find({}, {"_id": 0}).sort("rank", 1))
+    actual = sorted(
+        (p for p in output["players"] if p["ranking"] is not None),
+        key=lambda p: p["ranking"]["rank"],
+    )
+    assert [p["name"] for p in actual] == [r["main"] for r in expected]
+    for player, recorded in zip(actual, expected):
+        assert player["ranking"] == {
+            "rank": recorded["rank"],
+            "played": recorded["played_min"],
+            "bench": recorded["bench_min"],
+            "ratio": recorded["bench_to_played_ratio"],
+        }
+        assert player["played"] == recorded["played_min"]
+        assert player["bench"] == recorded["bench_min"]
+    assert all("ranking" not in p for n in output["nights"] for p in n["players"])
+    if scenario != "no_mythic":
+        assert published["Beta"]["ranking"]["ratio"] is None
+        assert published["Beta"]["ranking"]["played"] == 0
+    if scenario == "membership":
+        assert published["Alpha"]["ranking"] is None
+        assert published["Alpha"]["played"] > 0
+        assert published["Former"]["ranking"] is None
+        assert "Inactive" not in published
+        # Future join can share an observed game week; ranking and attendance
+        # intentionally have different established membership boundaries.
+        assert published["Future"]["ranking"] is not None
+        assert "attendance" not in published["Future"]
+        assert any(
+            p["name"] == "Former" for n in output["nights"] for p in n["players"]
+        )
+    if scenario == "ties":
+        tied = [p["name"] for p in actual if p["ranking"]["bench"] == 0]
+        assert tied.index("Zulu") < tied.index("apple")
+        assert [p["ranking"]["rank"] for p in actual] == list(range(1, len(actual) + 1))
+    if scenario == "no_mythic":
+        assert all(p["ranking"] is None for p in output["players"])

@@ -1,6 +1,7 @@
 import { AvailabilityExplanation } from "./AvailabilityExplanation";
 import { useId } from "react";
 import { AttendanceDetails } from "./AttendanceDetails";
+import { rankingRatioLabel } from "./resultRanking";
 import { ArrowRight, ChevronDown, ChevronRight, Settings2 } from "lucide-react";
 import {
   minutes,
@@ -17,6 +18,8 @@ export function ResultRow({
   onExpand,
   onEdit,
   showAttendance = false,
+  rank,
+  benchRatio,
 }: {
   player: Player;
   row: PlayerResult | WeeklyPlayerResult;
@@ -25,13 +28,17 @@ export function ResultRow({
   onExpand: () => void;
   onEdit?: () => void;
   showAttendance?: boolean;
+  rank?: number;
+  benchRatio?: number | null;
 }) {
   const total = row.played + row.bench;
   const detailId = useId();
   return (
     <>
       <tr>
-        <td className="muted rank">{String(index + 1).padStart(2, "0")}</td>
+        <td className="muted rank">
+          {String(rank ?? index + 1).padStart(2, "0")}
+        </td>
         <td>
           <button
             className="result-name"
@@ -127,6 +134,12 @@ export function ResultRow({
               <AttendanceDetails
                 attendance={"attendance" in row ? row.attendance : undefined}
               />
+            )}
+            {benchRatio !== undefined && (
+              <span>
+                Bench:played ratio{" "}
+                <strong>{rankingRatioLabel(benchRatio)}</strong>
+              </span>
             )}
             {onEdit && (
               <button className="text-button" onClick={onEdit}>

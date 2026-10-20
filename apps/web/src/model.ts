@@ -61,6 +61,13 @@ export type PlayerResult = {
   /** Captured nightly calculation provenance; omitted on aggregates/older results. */
   availability?: RecordedAvailability;
   attendance?: AttendanceProjection;
+  /** Season-only established ranking; null means explicitly excluded. */
+  ranking?: {
+    rank: number;
+    played: number;
+    bench: number;
+    ratio: number | null;
+  } | null;
   name?: string;
   className?: string;
   role?: string;
