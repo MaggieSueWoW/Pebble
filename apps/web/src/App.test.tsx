@@ -60,8 +60,8 @@ function connection(players: Player[] = []): LiveConnection {
     retryResults: vi.fn(),
     saveInputs: vi.fn().mockResolvedValue({}),
     requestRun: vi.fn(),
-    signIn: vi.fn(),
-    signOut: vi.fn(),
+    signIn: vi.fn().mockResolvedValue(undefined),
+    signOut: vi.fn().mockResolvedValue(undefined),
   };
 }
 const notes = () =>
@@ -362,8 +362,68 @@ it("offers wrong-account switching and handles sign-out failure without losing t
       screen.getByText(/Couldn’t complete the account action/),
     ).toBeTruthy(),
   );
-  expect(screen.getByText(/Firebase UID:/).textContent).toContain(
+  expect(screen.getByText(/Account ID:/).textContent).toContain(
     "example-member",
   );
   expect(screen.queryByText(/PRIVATE sign-out/)).toBeNull();
+});
+it("keeps public sign-in and explains non-officer access with collapsed account details", async () => {
+  const c = connection();
+  c.officer = false;
+  c.hasResults = true;
+  const { rerender } = render(<App connection={c} />);
+  expect(
+    screen.queryByRole("region", { name: "Officer access not enabled" }),
+  ).toBeNull();
+  await act(async () =>
+    fireEvent.click(screen.getByRole("button", { name: "Officer sign-in" })),
+  );
+  expect(c.signIn).toHaveBeenCalledTimes(1);
+  c.user = {
+    uid: "example-account",
+    displayName: "Example Reader",
+  } as NonNullable<LiveConnection["user"]>;
+  rerender(<App connection={{ ...c }} />);
+  const region = screen.getByRole("region", {
+    name: "Officer access not enabled",
+  });
+  expect(region.textContent).toContain("You can still read completed results");
+  const details = region.querySelector("details")!;
+  expect(details.open).toBe(false);
+  fireEvent.click(screen.getByText("Account details", { exact: true }));
+  expect(details.open).toBe(true);
+  expect(details.querySelector("code")?.textContent).toBe("example-account");
+  expect(screen.queryByRole("button", { name: /^Reports/ })).toBeNull();
+  expect(screen.queryByRole("button", { name: "Overrides" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "Run Pebble" })).toBeNull();
+  await act(async () =>
+    fireEvent.click(
+      screen.getByRole("button", { name: "Sign out to switch accounts" }),
+    ),
+  );
+  expect(c.signOut).toHaveBeenCalledTimes(1);
+  expect(c.saveInputs).not.toHaveBeenCalled();
+  rerender(<App connection={{ ...c, officer: true }} />);
+  expect(
+    screen.queryByRole("region", { name: "Officer access not enabled" }),
+  ).toBeNull();
+  expect(screen.getByRole("button", { name: /^Reports/ })).toBeTruthy();
+});
+
+it("announces an account-switch failure without attempting another sign-in", async () => {
+  const c = connection();
+  c.officer = false;
+  c.hasResults = true;
+  c.user = { uid: "example-account" } as NonNullable<LiveConnection["user"]>;
+  c.signOut = vi.fn().mockRejectedValue(new Error("Sign-out unavailable"));
+  render(<App connection={c} />);
+  await act(async () =>
+    fireEvent.click(
+      screen.getByRole("button", { name: "Sign out to switch accounts" }),
+    ),
+  );
+  expect(screen.getByRole("alert").textContent).toContain(
+    "Couldn’t complete the account action",
+  );
+  expect(c.signIn).not.toHaveBeenCalled();
 });

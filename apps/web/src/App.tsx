@@ -595,9 +595,18 @@ export default function App({ connection }: { connection?: LiveConnection }) {
     <button
       className="button primary"
       disabled={authPending}
-      onClick={() => connection && void accountAction(connection.signIn)}
+      onClick={() => {
+        const action = connection?.user
+          ? connection.signOut
+          : connection?.signIn;
+        if (action) void accountAction(action);
+      }}
     >
-      {authPending ? "Signing in…" : "Officer sign-in"}
+      {authPending
+        ? "Please wait…"
+        : connection?.user
+          ? "Sign out to switch accounts"
+          : "Officer sign-in"}
     </button>
   );
   const visibleResultNight = results.nights.some((n) => n.night === resultNight)
@@ -836,10 +845,28 @@ export default function App({ connection }: { connection?: LiveConnection }) {
           {connection?.user &&
             !connection.officer &&
             !connection.accessError && (
-              <Notice>
-                This account does not have officer access. Firebase UID:{" "}
-                {connection.user.uid}
-              </Notice>
+              <section
+                className="notice"
+                aria-labelledby="officer-access-title"
+              >
+                <Info size={16} aria-hidden="true" />
+                <div>
+                  <h2 id="officer-access-title">Officer access not enabled</h2>
+                  <p>
+                    This account does not have officer access. You can still
+                    read completed results. Editing inputs and running Pebble
+                    require an enabled officer account. Switch Google account or
+                    sign out to use another account.
+                  </p>
+                  <details>
+                    <summary>Account details</summary>
+                    <p>
+                      Account ID: <code>{connection.user.uid}</code>
+                    </p>
+                    <p>Use this ID when enabling officer access.</p>
+                  </details>
+                </div>
+              </section>
             )}
           {connection?.resultsError && (
             <Notice tone="amber">
