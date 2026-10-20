@@ -1,4 +1,4 @@
-export type Page = "reports" | "overrides" | "results";
+export type Page = "reports" | "overrides" | "results" | "roster";
 export type Mode =
   "automatic" | "available" | "unavailable" | "partial" | "unavailableFor";
 export type Availability = { mode: Mode; minutes?: number };

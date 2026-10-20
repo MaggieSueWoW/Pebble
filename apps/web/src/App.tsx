@@ -56,6 +56,8 @@ import { useAvailabilityEditor } from "./useAvailabilityEditor";
 import { TimingEditor } from "./TimingEditor";
 import { OverrideTabs } from "./OverrideTabs";
 import { useTimingEditor } from "./useTimingEditor";
+import { RosterPanel } from "./RosterPanel";
+import { useRosterEditor } from "./useRosterEditor";
 import { blankTiming } from "./timing";
 
 const STORAGE = "pebble-prototype-v1";
@@ -375,7 +377,19 @@ export default function App({ connection }: { connection?: LiveConnection }) {
     Boolean(connection?.busy),
     !connection,
   );
+  const rosterEditor = useRosterEditor(
+    connection?.roster ?? [],
+    async (id, value, expected) => {
+      if (!connection)
+        throw new Error("Roster editing requires an officer connection.");
+      return connection.savePlayer(id, value, expected);
+    },
+    Boolean(connection?.busy),
+    Boolean(connection?.officer),
+  );
   const unsaved =
+    rosterEditor.dirty ||
+    rosterEditor.saving ||
     reportEditor.dirty ||
     reportEditor.saving ||
     availabilityEditor.dirty ||
@@ -524,9 +538,11 @@ export default function App({ connection }: { connection?: LiveConnection }) {
     reportEditor.reset();
     availabilityEditor.cancel();
     timingEditor.cancel();
+    rosterEditor.cancel();
   }
   function guard(action: () => void) {
     if (
+      rosterEditor.saving ||
       reportEditor.saving ||
       availabilityEditor.saving ||
       timingEditor.saving
@@ -689,6 +705,9 @@ export default function App({ connection }: { connection?: LiveConnection }) {
               { id: "reports", name: "Reports", icon: FileText },
               { id: "overrides", name: "Overrides", icon: SlidersHorizontal },
               { id: "results", name: "Results", icon: BarChart3 },
+              ...(connection?.officer
+                ? [{ id: "roster" as const, name: "Roster", icon: Users }]
+                : []),
             ] as const
           )
             .filter((item) => canManage || item.id === "results")
@@ -823,7 +842,9 @@ export default function App({ connection }: { connection?: LiveConnection }) {
                 ? "Reports"
                 : page === "overrides"
                   ? "Overrides"
-                  : "Results"}
+                  : page === "roster"
+                    ? "Roster"
+                    : "Results"}
             </strong>
           </div>
           <div className="topbar-right">
@@ -913,14 +934,18 @@ export default function App({ connection }: { connection?: LiveConnection }) {
                   ? "Raid reports"
                   : page === "overrides"
                     ? "Fine-tune the night"
-                    : "Everyone’s time counts."}
+                    : page === "roster"
+                      ? "Your raid roster"
+                      : "Everyone’s time counts."}
               </h1>
               <p>
                 {page === "reports"
                   ? "Bring the logs. Pebble handles the numbers."
                   : page === "overrides"
                     ? "A few adjustments, then back to the raid."
-                    : "Played time, bench time, and the story behind the numbers."}
+                    : page === "roster"
+                      ? "Keep membership current, then recompute when ready."
+                      : "Played time, bench time, and the story behind the numbers."}
               </p>
             </div>
             {page === "results" ? (
@@ -1090,6 +1115,17 @@ export default function App({ connection }: { connection?: LiveConnection }) {
                 demo={!connection}
               />
             </>
+          )}
+          {page === "roster" && connection?.officer && (
+            <RosterPanel
+              roster={connection.roster}
+              editor={rosterEditor}
+              select={(id) => {
+                if (id !== rosterEditor.id)
+                  guard(() => rosterEditor.select(id));
+              }}
+              add={() => guard(rosterEditor.add)}
+            />
           )}
           {page === "overrides" && (
             <>

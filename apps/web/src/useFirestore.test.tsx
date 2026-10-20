@@ -1500,3 +1500,49 @@ it("recovers from Auth observer failure and ignores callbacks from its retired s
   expect(result.current.connection.officer).toBe(true);
   expect(result.current.connection.accessError).toBe("");
 });
+
+it("saves only one roster document with its expected version and rejects stale or revoked writes", async () => {
+  const { result } = renderHook(useFirestore);
+  login();
+  grant();
+  loadPrivate();
+  const value = {
+    name: "Example",
+    className: "Druid",
+    role: "Healer",
+    active: false,
+    joinDate: "2026-10-01",
+    leaveDate: "",
+    notes: "Keep private",
+  };
+  const set = vi.fn();
+  mock.transaction.mockImplementation(async (_db, callback) =>
+    callback({
+      get: async (ref: { path: string }) => ({ ...snap({ version: 3 }), ref }),
+      set,
+    }),
+  );
+  await act(async () =>
+    expect(await result.current.connection.savePlayer("stable", value, 3)).toBe(
+      4,
+    ),
+  );
+  expect(set).toHaveBeenCalledTimes(1);
+  expect(set.mock.calls[0][0].path).toBe("seasons/test/players/stable");
+  expect(set.mock.calls[0][1]).toMatchObject({
+    ...value,
+    version: 4,
+    updatedBy: "officer",
+  });
+  set.mockClear();
+  await act(async () => {
+    await expect(
+      result.current.connection.savePlayer("stable", value, 2),
+    ).rejects.toThrow("Another officer");
+  });
+  expect(set).not.toHaveBeenCalled();
+  revoke();
+  await expect(
+    result.current.connection.savePlayer("stable", value, 3),
+  ).rejects.toThrow("Officer access changed");
+});

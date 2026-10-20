@@ -23,10 +23,18 @@ import {
 } from "./model";
 import { usePublicResults } from "./usePublicResults";
 
+import { validatePlayer, type RosterEntry, type RosterValue } from "./roster";
+
 export type Versions = Record<string, number>;
 export type LiveConnection = {
   saved: Saved;
   players: Player[];
+  roster: RosterEntry[];
+  savePlayer: (
+    id: string,
+    value: RosterValue,
+    expected: number,
+  ) => Promise<number>;
   nights: string[];
   user: User | null;
   officer: boolean;
@@ -524,6 +532,19 @@ export function useFirestore(): {
     pre: 0,
     post: 0,
   }));
+  const rosterEntries: RosterEntry[] = Object.entries(documents.players ?? {})
+    .map(([id, d]) => ({
+      id,
+      name: d.name,
+      className: d.className ?? "Unknown",
+      role: d.role ?? "Unknown",
+      active: d.active ?? true,
+      joinDate: d.joinDate ?? "",
+      leaveDate: d.leaveDate ?? "",
+      notes: d.notes ?? "",
+      version: d.version ?? 0,
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name));
   const publicPlayers = results.players as (Results["players"][number] &
     Player)[];
   const allPlayers = officer
@@ -616,6 +637,40 @@ export function useFirestore(): {
     },
     [documents, versions, user, assertAccess, accessSession, fail],
   );
+  async function savePlayer(id: string, value: RosterValue, expected: number) {
+    assertAccess();
+    if (!/^[A-Za-z0-9_-]{1,100}$/.test(id))
+      throw new Error("Invalid player ID.");
+    const invalid = validatePlayer(value, rosterEntries, id);
+    if (invalid) throw new Error(invalid);
+    setBusy(true);
+    setError("");
+    try {
+      return await runTransaction(db!, async (transaction) => {
+        assertAccess();
+        const ref = doc(db!, "seasons", seasonId, "players", id);
+        const snapshot = await transaction.get(ref);
+        assertAccess();
+        const actual = snapshot.data()?.version ?? 0;
+        if (actual !== expected)
+          throw new Error(
+            "Another officer changed this player. Cancel your edits to reload, then try again.",
+          );
+        transaction.set(ref, {
+          ...value,
+          version: actual + 1,
+          updatedBy: user!.uid,
+          updatedAt: serverTimestamp(),
+        });
+        return actual + 1;
+      });
+    } catch (e) {
+      if (accessSession === session.current) fail(e as Error);
+      throw e;
+    } finally {
+      if (accessSession === session.current) setBusy(false);
+    }
+  }
   async function requestRun() {
     assertAccess();
     const prior = submission.current;
@@ -716,6 +771,8 @@ export function useFirestore(): {
     connection: {
       saved,
       players: allPlayers,
+      roster: rosterEntries,
+      savePlayer,
       nights: results.nights.map((n) => n.night),
       user,
       officer,
