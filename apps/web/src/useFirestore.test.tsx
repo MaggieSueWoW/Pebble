@@ -213,6 +213,53 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
+it("maps recorded report check timestamps and follows the newest available summary", () => {
+  const { result } = renderHook(useFirestore);
+  login();
+  grant();
+  send(
+    "seasons/test/reports",
+    {},
+    { AAAAAAAAAAAAAAAA: { enabled: true, version: 1 } },
+  );
+  expect(result.current.connection.saved.inputs.reports[0].checkedAt).toBe("");
+  const summary = (checkedAt: string) => ({
+    title: "Example raid",
+    night: "2026-10-15",
+    checkedAt: stamp(checkedAt),
+  });
+  send(
+    "seasons/test/runs",
+    {},
+    {
+      newer: {
+        reportSummaries: { AAAAAAAAAAAAAAAA: summary("2026-10-17T02:05:00Z") },
+      },
+      older: {
+        reportSummaries: { AAAAAAAAAAAAAAAA: summary("2026-10-16T02:05:00Z") },
+      },
+    },
+  );
+  expect(result.current.connection.saved.inputs.reports[0]).toMatchObject({
+    fetched: true,
+    title: "Example raid",
+    checkedAt: "2026-10-17T02:05:00.000Z",
+  });
+  send(
+    "seasons/test/runs",
+    {},
+    {
+      legacy: {
+        reportSummaries: {
+          AAAAAAAAAAAAAAAA: { title: "Example raid", night: "2026-10-15" },
+        },
+      },
+    },
+  );
+  expect(result.current.connection.saved.inputs.reports[0].checkedAt).toBe("");
+  expect(mock.transaction).not.toHaveBeenCalled();
+});
+
 describe("officer access lifecycle", () => {
   it("keeps an empty officer roster separate from historical public result players", async () => {
     mock.getDocs.mockImplementation(async (ref: { path: string }) =>

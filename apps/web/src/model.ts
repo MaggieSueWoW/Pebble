@@ -20,6 +20,7 @@ export type Report = {
   night: string;
   title: string;
   fetched: boolean;
+  checkedAt?: string;
   notes?: string;
 };
 export type Inputs = {

@@ -65,6 +65,10 @@ project. Failure traces stay in ignored `test-results/`.
 Coverage includes report validation/deduplication, add/re-enable, selection
 save/cancel, delayed and denied saves, concurrent version conflicts, draft
 navigation protection, keyboard dialog focus and narrow-screen overflow.
+Report details coverage checks empty lists, blank-title fallbacks, recorded Pacific
+check times, missing timestamps and metadata updates during selection drafts.
+Its metadata scenario seeds one completed history fixture and asserts no extra
+run records; it does not queue a request or contact Warcraft Logs.
 Availability coverage adds
 mode/minute validation, save/cancel/reset, delayed/denied saves, version conflicts,
 newer edits during saves, and player/night/tab/page navigation. Each availability
