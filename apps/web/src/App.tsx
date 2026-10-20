@@ -739,7 +739,8 @@ export default function App({ connection }: { connection?: LiveConnection }) {
       navigation.navigate({ period: "season", player: null }, true);
     } else if (
       expandedPlayer &&
-      !resultRows.some((row) => row.id === expandedPlayer)
+      !resultRows.some((row) => row.id === expandedPlayer) &&
+      !additionalAttendance.some((row) => row.id === expandedPlayer)
     ) {
       setResultLinkNotice({
         text: "This player is not available for this result period. Showing all players.",
@@ -1613,8 +1614,17 @@ export default function App({ connection }: { connection?: LiveConnection }) {
                     bench ranking.
                   </p>
                   {additionalAttendance.map((row) => (
-                    <details key={row.id}>
-                      <summary>Attendance for {row.name ?? row.id}</summary>
+                    <details key={row.id} open={expandedPlayer === row.id}>
+                      <summary
+                        onClick={(event) => {
+                          event.preventDefault();
+                          setExpandedPlayer(
+                            expandedPlayer === row.id ? null : row.id,
+                          );
+                        }}
+                      >
+                        Attendance for {row.name ?? row.id}
+                      </summary>
                       <AttendanceDetails attendance={row.attendance} />
                     </details>
                   ))}

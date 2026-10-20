@@ -831,6 +831,7 @@ it("explains missing linked periods and players after result readiness", () => {
 });
 
 it("exposes published attendance for zero-time players outside ranked rows and only in the season view", () => {
+  history.replaceState(null, "", "/?view=results&period=season&player=absent");
   const c = connection();
   c.officer = false;
   c.hasResults = true;
@@ -868,7 +869,10 @@ it("exposes published attendance for zero-time players outside ranked rows and o
   const additional = screen.getByRole("region", {
     name: "Additional attendance",
   });
-  expect(within(additional).getByText("Attendance for Absent")).toBeTruthy();
+  const disclosure = within(additional).getByText("Attendance for Absent");
+  expect(disclosure.closest("details")?.open).toBe(true);
+  expect(new URLSearchParams(location.search).get("player")).toBe("absent");
+  expect(screen.queryByText(/This player is not available/)).toBeNull();
   expect(within(additional).getByText("0%", { exact: true })).toBeTruthy();
   expect(within(additional).queryByText("Attendance for Legacy")).toBeNull();
   expect(

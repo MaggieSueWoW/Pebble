@@ -230,6 +230,14 @@ test("makes fully absent published attendance reachable outside the fairness ran
   await expect(details.getByText("0%", { exact: true })).toBeVisible();
   await expect(details.getByText("160 min", { exact: true })).toBeVisible();
   await expect(details.getByLabel("out", { exact: true })).toHaveText("O");
+  await expect(page).toHaveURL(/player=absent/);
+  await page.reload();
+  await expect(details.getByText("0%", { exact: true })).toBeVisible();
+  await expect(page.getByText(/This player is not available/)).toHaveCount(0);
+  await additional.getByText("Attendance for Absent", { exact: true }).focus();
+  await page.keyboard.press("Enter");
+  await expect(page).not.toHaveURL(/player=absent/);
+  await expect(details).not.toBeVisible();
   await page
     .getByLabel("Result period", { exact: true })
     .selectOption("2026-10-15");
