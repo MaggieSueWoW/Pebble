@@ -71,31 +71,38 @@ Google sign-in acceptance. Do not assume a configured Google provider proves
 consent works at a new host. Live default Firebase domains may already be authorized;
 custom domains must be checked too. Check any API-key HTTP-referrer restrictions.
 
-Record the previous live release and preserve it in a rollback channel before
-replacing an existing release (substitute the explicit site/project identifiers
-from the private config):
+Record the previous live Hosting version ID, source commit and public config before
+replacing an existing release. Confirm that the previous version is retained under
+the site's Hosting version-retention policy; keep a private copy of each checked
+artifact and config as an additional recovery option. Then release and verify:
 
 ```sh
-firebase hosting:clone SITE_ID:live SITE_ID:rollback-PREVIOUS_REV --project PROJECT_ID
 node scripts/web-release.mjs deploy/private/web-release.json deploy
 node scripts/check-web-host.mjs https://HOSTED_ORIGIN EXPECTED_FULL_COMMIT
 ```
 
 The preview/deploy commands first verify the site belongs to the explicit project.
-The deploy command stages only the verified static files and a Hosting-only config,
+The deploy command stages only verified static files and a Hosting-only config,
 passes an explicit project and site, and invokes `firebase deploy --only hosting`.
 It does not deploy Firestore rules/indexes or change Auth domains. Before the first
 release there is no prior version to restore; record that condition rather than
-inventing a rollback target. For later releases, verify rollback-channel contents
-and retention before relying on them. Roll back the frontend with:
+inventing a rollback target. For later releases, restore a retained version to the
+**existing live channel** (version-source syntax verified with CLI 15.22.4):
 
 ```sh
-firebase hosting:clone SITE_ID:rollback-PREVIOUS_REV SITE_ID:live --project PROJECT_ID
+firebase hosting:clone SITE_ID@PREVIOUS_VERSION_ID SITE_ID:live --project PROJECT_ID
 node scripts/check-web-host.mjs https://HOSTED_ORIGIN PREVIOUS_FULL_COMMIT
 ```
 
+Do not create a backup preview channel through `hosting:clone` as part of this
+procedure: the CLI automatically adds newly created channel domains to Auth.
+Restoring a version to the existing live channel avoids that side effect. If the
+old Hosting version was deleted, rebuild the previous committed source using its
+recorded public config, check the resulting artifact and redeploy it through the
+same explicit release command. Keep that source/config available before publishing.
+
 Firebase's [channel/release documentation](https://firebase.google.com/docs/hosting/manage-hosting-resources)
-explains that cloning a channel within the same site preserves its version. The
+explains how channels, releases and retained versions relate. The
 [Hosting configuration](https://firebase.google.com/docs/hosting/full-config) and
 [cache documentation](https://firebase.google.com/docs/hosting/manage-cache) describe
 SPA rewrites and headers. Retain the private config and release record alongside
@@ -120,7 +127,7 @@ roll back data schemas, rules, indexes, officer membership or a worker. Do not r
 ## Hosted acceptance and closure evidence
 
 Record the Hosting version/channel, source commit, environment, authorized hostname,
-prior rollback target and HTTP/cache check results privately. Issue summaries must
+prior version/rollback target and HTTP/cache check results privately. Issue summaries must
 omit private identifiers. `check-web-host.mjs` only makes HTTP GET requests; it does
 not sign in, edit inputs or submit a worker request.
 

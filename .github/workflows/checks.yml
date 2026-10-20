@@ -3,22 +3,26 @@ on:
   pull_request:
   push:
     branches: [codex/pebble-web-app]
+concurrency:
+  group: checks-${{ github.ref }}
+  cancel-in-progress: true
 permissions:
   contents: read
 jobs:
   python-and-rules:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: "24"
           cache: npm
           cache-dependency-path: firebase/package-lock.json
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: "21"
@@ -29,14 +33,15 @@ jobs:
       - run: firebase emulators:exec --only firestore --project demo-pebble --config firebase.json "npm --prefix firebase test && python -m pytest -q"
   web:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: "24"
           cache: npm
           cache-dependency-path: apps/web/package-lock.json
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: "21"
@@ -59,7 +64,7 @@ jobs:
         run: firebase emulators:exec --only hosting --project demo-pebble-hosting --config firebase.json "node scripts/check-web-host.mjs http://127.0.0.1:5080 $(git rev-parse HEAD)"
       - run: cd apps/web && npx playwright install --with-deps chrome
       - run: npm --prefix apps/web run test:browser
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: failure()
         with:
           name: browser-failure-traces
