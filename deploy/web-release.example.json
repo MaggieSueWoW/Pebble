@@ -1,0 +1,10 @@
+{
+  "environment": "live",
+  "projectId": "YOUR_FIREBASE_PROJECT_ID",
+  "siteId": "YOUR_HOSTING_SITE_ID",
+  "apiKey": "YOUR_FIREBASE_WEB_API_KEY",
+  "authDomain": "YOUR_PROJECT.firebaseapp.com",
+  "appId": "YOUR_FIREBASE_WEB_APP_ID",
+  "seasonId": "midnight-s2",
+  "seasonLabel": "Midnight S2"
+}

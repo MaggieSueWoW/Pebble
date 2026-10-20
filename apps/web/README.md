@@ -29,6 +29,9 @@ Switch Google account opens the account chooser. Login failures show recovery
 instructions; failed access verification returns to public results with a retry
 action instead of leaving the page connecting indefinitely.
 
+See [Hosting and release](../../docs/web-hosting.md) for environment separation,
+explicit release/rollback commands, cache checks and hosted acceptance.
+
 See [Firebase and worker setup](../../docs/firestore-setup.md) for backend setup,
 credentials, officer onboarding/revocation, emulator checks, and changing projects.
 
