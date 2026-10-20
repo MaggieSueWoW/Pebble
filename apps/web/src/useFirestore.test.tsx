@@ -1106,6 +1106,78 @@ describe("public result loading", () => {
     expect(result.current.connection.saved.results.warnings).toEqual([]);
   });
 
+  it("waits for weekly reads and retains all prior results after a weekly failure", async () => {
+    const { result } = renderHook(useFirestore);
+    mock.getDocs.mockImplementation((ref: { path: string }) =>
+      Promise.resolve(
+        ref.path.endsWith("/weeks")
+          ? snap(
+              {},
+              {
+                "2026-10-06": {
+                  players: [
+                    {
+                      main: "Previous Player",
+                      played_min: 60,
+                      bench_min: 10,
+                      bench_pre_min: 10,
+                      bench_post_min: 0,
+                    },
+                  ],
+                },
+              },
+            )
+          : snap(),
+      ),
+    );
+    await publicResults();
+    const weeks = deferred<Snapshot>();
+    mock.getDocs.mockImplementation((ref: { path: string }) =>
+      ref.path.endsWith("/weeks") ? weeks.promise : Promise.resolve(snap()),
+    );
+    send("publicSeasons/test", { latestRunId: "new" });
+    await act(async () => {});
+    expect(result.current.connection.saved.results.signature).toBe("ready");
+    expect(result.current.connection.resultsPending).toBe(true);
+    await act(async () => weeks.reject(new Error("Weekly read failed")));
+    expect(result.current.connection.saved.results.signature).toBe("ready");
+    expect(result.current.connection.resultsError).toMatch(/Couldn’t load/);
+    expect(
+      result.current.connection.saved.results.weeks?.[0].players[0].name,
+    ).toBe("Previous Player");
+    mock.getDocs.mockImplementation((ref: { path: string }) =>
+      Promise.resolve(
+        ref.path.endsWith("/weeks")
+          ? snap(
+              {},
+              {
+                "2026-10-13": {
+                  players: [
+                    {
+                      main: "Weekly Player",
+                      played_min: 123,
+                      bench_min: 47,
+                      bench_pre_min: 20,
+                      bench_post_min: 27,
+                    },
+                  ],
+                },
+              },
+            )
+          : snap(),
+      ),
+    );
+    act(() => result.current.connection.retryResults());
+    await act(async () =>
+      latest("publicSeasons/test").next(snap({ latestRunId: "new" })),
+    );
+    expect(result.current.connection.saved.results.signature).toBe("new");
+    expect(
+      result.current.connection.saved.results.weeks?.[0].players[0],
+    ).toMatchObject({ name: "Weekly Player", played: 123, bench: 47 });
+    expect(result.current.connection.resultsError).toBe("");
+  });
+
   it("waits for every child collection before replacing the displayed set", async () => {
     const { result } = renderHook(useFirestore);
     await publicResults();
@@ -1343,6 +1415,7 @@ describe("public result loading", () => {
     let currentNight = "2026-10-14";
     let currentName = "Baseline Player";
     mock.getDocs.mockImplementation(async (ref: { path: string }) => {
+      if (ref.path.endsWith("/weeks")) return snap();
       const row = {
         id: "p1",
         name: currentName,

@@ -172,3 +172,23 @@ to the demo emulator, with its original rules restored afterward.
 
 These automated checks verify DOM/accessibility semantics, browser focus and
 keyboard behavior. Actual screen-reader listening remains part of final acceptance.
+
+
+Weekly result periods load the worker's existing `weeks` collection in the same
+completed-run read as players and nights. All views stay on the previous complete
+publication until every collection succeeds; weekly read failure uses the existing
+result retry. The selector lists recorded Tuesday game-week IDs, with minutes and
+pre/post bench totals copied from the published projection. No weekly calculations,
+input writes or new worker output are introduced.
+
+Weekly rows retain recorded zero-time and historical players. Names come from the
+weekly output; class/color metadata is used only when the same completed run has
+a matching player name. Missing metadata stays unspecified. Weekly output does not
+record per-night adjustment explanations, so aggregates omit inferred/adjusted
+availability labels and the per-night Edit availability action. Played share remains
+a time split, not attendance; zero time is labelled No recorded time.
+
+Weekly acceptance covers stored totals, historical/zero rows, safe metadata mapping,
+weekly read failure/retry, officer/public access, keyboard details, narrow layout
+and atomic publication replacement. Attendance, possible time, weekly P/B/O, richer
+nightly explanations/diagnostics and shareable routes remain tracked in #11.
