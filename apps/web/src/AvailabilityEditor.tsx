@@ -1,5 +1,10 @@
 import { Check, CircleAlert, Info, RotateCcw } from "lucide-react";
-import type { Player, Availability, Mode } from "./model";
+import {
+  playerDetails,
+  type Player,
+  type Availability,
+  type Mode,
+} from "./model";
 import type { AvailabilityEditorState } from "./useAvailabilityEditor";
 function AvailabilityField({
   label,
@@ -84,7 +89,25 @@ export function AvailabilityEditor({
     return (
       <section className="card adjustment-card empty-state">
         <h2>Select a player</h2>
-        <p>Choose a current roster member to edit availability.</p>
+        {editor.dirty || editor.saving ? (
+          <>
+            <p role="status">
+              This player is no longer in the roster. Your edits are retained.
+              {editor.saving
+                ? " Wait for the save to finish."
+                : " Cancel them or choose another player to continue."}
+            </p>
+            <button
+              className="button secondary"
+              disabled={editor.saving}
+              onClick={editor.cancel}
+            >
+              Cancel edits
+            </button>
+          </>
+        ) : (
+          <p>Choose a current roster member to edit availability.</p>
+        )}
       </section>
     );
   const p = player;
@@ -123,9 +146,7 @@ export function AvailabilityEditor({
         </span>
         <div>
           <h2 style={{ color: p.color }}>{p.name}</h2>
-          <p>
-            {p.className} · {p.role}
-          </p>
+          {playerDetails(p) && <p>{playerDetails(p)}</p>}
         </div>
         {editDirty && <span className="badge amber">Unsaved</span>}
       </div>

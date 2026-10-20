@@ -410,6 +410,7 @@ export function useFirestore(): {
           night: summaries[code]?.night || "",
           title: summaries[code]?.title || "",
           fetched: Boolean(summaries[code]),
+          checkedAt: time(summaries[code]?.checkedAt),
         }))
         .sort(
           (a, b) =>
@@ -447,7 +448,7 @@ export function useFirestore(): {
   }));
   const publicPlayers = results.players as (Results["players"][number] &
     Player)[];
-  const allPlayers = roster.length
+  const allPlayers = officer
     ? roster.map((p) => ({
         ...p,
         color: publicPlayers.find((r) => r.id === p.id)?.color ?? p.color,

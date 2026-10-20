@@ -20,6 +20,7 @@ export type Report = {
   night: string;
   title: string;
   fetched: boolean;
+  checkedAt?: string;
   notes?: string;
 };
 export type Inputs = {
@@ -36,6 +37,17 @@ export type Player = {
   pre: number;
   post: number;
 };
+/** Display only known roster metadata, without empty separators. */
+export function playerDetails(player: {
+  className?: string;
+  role?: string;
+}): string {
+  return [player.className, player.role]
+    .map((value) => value?.trim() ?? "")
+    .filter((value) => value && value.toLowerCase() !== "unknown")
+    .join(" · ");
+}
+
 export type PlayerResult = {
   name?: string;
   className?: string;

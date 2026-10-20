@@ -157,8 +157,20 @@ export function ReportsPanel({
               </tr>
             </thead>
             <tbody>
+              {!reports.length && (
+                <tr>
+                  <td colSpan={4} className="empty-state">
+                    No reports yet. Paste a Warcraft Logs link or report code in
+                    Add a report above.
+                  </td>
+                </tr>
+              )}
               {reports.map((r) => {
                 const enabled = includeEdits[r.code] ?? r.enabled;
+                const checkedAt =
+                  r.checkedAt && Number.isFinite(Date.parse(r.checkedAt))
+                    ? r.checkedAt
+                    : "";
                 return (
                   <tr key={r.code} className={enabled ? "" : "excluded-row"}>
                     <td>
@@ -174,13 +186,33 @@ export function ReportsPanel({
                             target="_blank"
                             rel="noreferrer"
                           >
-                            {r.fetched ? r.title : r.code}
+                            {r.fetched && r.title.trim() ? r.title : r.code}
                             <ExternalLink size={12} />
                           </a>
                           <span className="report-code">
                             {r.fetched
                               ? r.code
                               : "Metadata appears after the next run"}
+                          </span>
+                          <span className="cell-subtitle">
+                            {checkedAt ? (
+                              <>
+                                Last checked{" "}
+                                <time dateTime={checkedAt}>
+                                  {new Intl.DateTimeFormat("en-US", {
+                                    year: "numeric",
+                                    month: "short",
+                                    day: "numeric",
+                                    hour: "numeric",
+                                    minute: "2-digit",
+                                    timeZone: "America/Los_Angeles",
+                                    timeZoneName: "short",
+                                  }).format(new Date(checkedAt))}
+                                </time>
+                              </>
+                            ) : (
+                              "Last checked unavailable"
+                            )}
                           </span>
                         </div>
                       </div>
@@ -259,7 +291,7 @@ export function ReportsPanel({
         )}
         <div className="table-footnote">
           <Info size={14} /> Excluded reports stay here. They won’t contribute
-          to the next run.
+          to the next run. Report details update when Pebble runs.
         </div>
       </section>
     </>
