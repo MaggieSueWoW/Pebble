@@ -1051,6 +1051,13 @@ test("officer-access retry recovers heading focus after a denied membership list
     "utf8",
   );
   await resultsPage(page);
+  await page
+    .getByRole("combobox", { name: "Result period" })
+    .selectOption(nights.baseline);
+  await page
+    .getByRole("button", { name: "Details for Baseline Player" })
+    .click();
+  const selectedURL = page.url();
   const uid = await adminUid();
   const denied = original.replace(
     "allow get: if request.auth != null && uid == request.auth.uid;",
@@ -1076,8 +1083,20 @@ test("officer-access retry recovers heading focus after a denied membership list
     await page.keyboard.press("Enter");
     await expect(page.getByRole("heading", { level: 1 })).toBeFocused();
     await expect(
-      page.getByRole("heading", { name: "Add a report" }),
+      page.getByRole("button", { name: "Manage reports" }),
     ).toBeVisible();
+    await expect(
+      page.getByRole("navigation").getByRole("button", { name: /^Reports/ }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("combobox", { name: "Result period" }),
+    ).toHaveValue(nights.baseline);
+    await expect(
+      page.getByRole("region", {
+        name: "Availability breakdown for Baseline Player",
+      }),
+    ).toBeVisible();
+    expect(page.url()).toBe(selectedURL);
     await expect(
       page.getByRole("button", { name: "Retry officer access" }),
     ).toHaveCount(0);
