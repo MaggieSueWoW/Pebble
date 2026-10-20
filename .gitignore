@@ -309,3 +309,6 @@ deploy/private/
 # Browser acceptance artifacts
 apps/web/test-results/
 apps/web/playwright-report/
+
+# Protected logical Firestore recovery files
+.pebble-backups/

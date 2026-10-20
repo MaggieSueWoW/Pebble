@@ -42,8 +42,8 @@ base. Never clear databases or flush Redis during deployment.
 Mongo is a rebuildable materialization, Redis a disposable WCL cache; Firestore
 holds authoritative web inputs, run history and published results. Existing host
 Mongo storage and Redis persistence are reused unchanged. Maintain host backups,
-verify Firestore backup/export policy separately, and keep protected recovery
-copies of private configuration and credentials. Containers are not backups.
+verify Firestore recovery using [the recovery runbook](web-recovery.md), and keep
+protected recovery copies of private configuration and credentials. Containers are not backups.
 
 ## Build, check, handoff and update
 

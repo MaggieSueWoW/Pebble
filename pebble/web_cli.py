@@ -122,3 +122,60 @@ def import_inputs(config, filename):
     finally:
         client.close()
     click.echo("Imported missing input documents. Run Pebble to compute results.")
+
+
+@web.command("backup-firestore")
+@click.option("--config", default="config-web.yaml", show_default=True)
+@click.option("--file", "filename", required=True, type=click.Path(dir_okay=False))
+def backup_firestore(config, filename):
+    """Read an idle season into a new protected backup; never replace a file."""
+    from .web_backup import RecoveryError
+    from .web_backup import backup_firestore as backup
+
+    client = None
+    try:
+        settings, client = resources(config)
+        count = backup(client, settings.firestore.season_id, filename)
+    except RecoveryError as exc:
+        raise click.ClickException(str(exc)) from None
+    except Exception as exc:  # noqa: BLE001 - redact provider/configuration secrets.
+        raise click.ClickException(
+            f"Firestore backup failed ({type(exc).__name__}). Check configuration, source access and the protected output directory."
+        ) from None
+    finally:
+        if client is not None:
+            client.close()
+    click.echo(f"Backed up {count} Firestore documents to a protected local file.")
+
+
+@web.command("restore-firestore")
+@click.option("--config", required=True, type=click.Path(exists=True, dir_okay=False))
+@click.option(
+    "--file", "filename", required=True, type=click.Path(exists=True, dir_okay=False)
+)
+@click.option(
+    "--target-project",
+    required=True,
+    help="Exact empty destination project ID; must match target config.",
+)
+def restore_firestore(config, filename, target_project):
+    """Restore and verify in an empty different project using create-only writes."""
+    from .web_backup import RecoveryError
+    from .web_backup import restore_firestore as restore
+
+    client = None
+    try:
+        _, client = resources(config)
+        count = restore(client, filename, target_project)
+    except RecoveryError as exc:
+        raise click.ClickException(str(exc)) from None
+    except Exception as exc:  # noqa: BLE001 - redact provider/configuration secrets.
+        raise click.ClickException(
+            f"Firestore restore failed ({type(exc).__name__}). Inspect the destination; retry only in a fresh empty target."
+        ) from None
+    finally:
+        if client is not None:
+            client.close()
+    click.echo(
+        f"Restored and verified {count} Firestore documents in the empty target."
+    )
