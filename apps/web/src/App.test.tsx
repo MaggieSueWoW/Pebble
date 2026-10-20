@@ -144,10 +144,7 @@ it("retains a removed player's draft until return or explicit cancellation", () 
     screen.getByText(/This player is no longer in the roster/),
   ).toBeTruthy();
   expect(screen.queryByRole("button", { name: "Save adjustment" })).toBeNull();
-  expect(
-    (screen.getByRole("button", { name: "Run Pebble" }) as HTMLButtonElement)
-      .disabled,
-  ).toBe(true);
+  expect(screen.queryByRole("button", { name: "Run Pebble" })).toBeNull();
   rerender(<App connection={c} />);
   expect(notes().value).toBe("Retained draft");
   rerender(<App connection={{ ...c, players: [beta] }} />);
@@ -355,7 +352,7 @@ it.each([
     ).toBe(false);
   },
 );
-it("offers wrong-account switching and handles sign-out failure without losing the current session", async () => {
+it("handles sign-out failure without losing the current session", async () => {
   const c = connection();
   c.officer = false;
   c.user = {
@@ -364,10 +361,7 @@ it("offers wrong-account switching and handles sign-out failure without losing t
   } as NonNullable<LiveConnection["user"]>;
   c.signOut = vi.fn().mockRejectedValue(new Error("PRIVATE sign-out payload"));
   render(<App connection={c} />);
-  fireEvent.click(
-    screen.getByRole("button", { name: "Switch Google account" }),
-  );
-  await waitFor(() => expect(c.signIn).toHaveBeenCalledOnce());
+  expect(screen.queryByRole("button", { name: "Officer sign-in" })).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: "Sign out" }));
   await waitFor(() =>
     expect(
@@ -447,9 +441,7 @@ it.each([true, false])(
     expect(screen.getByText(/No completed results yet/).textContent).toContain(
       officer ? "Add or include reports" : "after an officer runs Pebble",
     );
-    expect(
-      Boolean(screen.queryByRole("button", { name: "Manage reports" })),
-    ).toBe(officer);
+    expect(screen.queryByRole("button", { name: "Manage reports" })).toBeNull();
     expect(
       screen.queryByRole("heading", { name: "No player time for this period" }),
     ).toBeNull();
@@ -479,12 +471,16 @@ it.each([true, false])(
     expect(
       screen.getByText(
         officer
-          ? "Use Manage reports to review the included logs."
+          ? "Use Reports in the sidebar to review the included logs."
           : "No player time was recorded for this period in the completed results.",
       ),
     ).toBeTruthy();
     if (officer) {
-      fireEvent.click(screen.getByRole("button", { name: "Manage reports" }));
+      fireEvent.click(
+        within(screen.getByRole("navigation")).getByRole("button", {
+          name: /^Reports/,
+        }),
+      );
       expect(
         screen.getByRole("heading", { name: "Add a report" }),
       ).toBeTruthy();
@@ -610,7 +606,9 @@ it("links both result disclosure controls to stable hidden detail content", () =
   const detail = screen.getByRole("button", {
     name: "Details for Example Alpha",
   });
-  const name = screen.getByRole("button", { name: /Example Alpha.*Mage/ });
+  const name = screen.getByRole("button", {
+    name: "Example Alpha",
+  });
   const id = detail.getAttribute("aria-controls")!;
   expect(name.getAttribute("aria-controls")).toBe(id);
   expect(document.getElementById(id)?.closest("tr")?.hidden).toBe(true);
@@ -703,51 +701,24 @@ it("connects report/availability validation and names the discard dialog", () =>
   ).toBe("alert");
 });
 
-it("shows stored weekly rows, keeps zero time and omits per-night availability actions", () => {
+it("offers season and night results and falls back from a removed weekly link", () => {
+  history.replaceState(null, "", "/?view=results&period=week:2026-10-13");
   const c = connection([alpha]);
   c.hasResults = true;
-  c.saved.results.weeks = [
-    {
-      week: "2026-10-13",
-      players: [
-        {
-          id: alpha.id,
-          name: alpha.name,
-          played: 123,
-          bench: 47,
-          preBench: 20,
-          postBench: 27,
-        },
-        {
-          id: "historical",
-          name: "Historical Player",
-          played: 0,
-          bench: 0,
-          preBench: 0,
-          postBench: 0,
-        },
-      ],
-    },
-  ];
-  const { rerender } = render(<App connection={c} />);
-  fireEvent.click(screen.getByRole("button", { name: /^Results/ }));
-  const period = screen.getByRole("combobox", { name: "Result period" });
-  fireEvent.change(period, { target: { value: "week:2026-10-13" } });
-  expect(screen.getByText("2h 03m")).toBeTruthy();
-  expect(screen.getByText("0h 47m")).toBeTruthy();
-  expect(screen.getByText("Historical Player")).toBeTruthy();
-  expect(screen.getByText("No recorded time")).toBeTruthy();
-  fireEvent.click(
-    screen.getByRole("button", { name: `Details for ${alpha.name}` }),
-  );
-  expect(screen.getByText("20 min")).toBeTruthy();
+  c.saved.results.weeks = [{ week: "2026-10-13", players: [] }];
+  render(<App connection={c} />);
+  const period = screen.getByRole("combobox", {
+    name: "Result period",
+  }) as HTMLSelectElement;
+  expect([...period.options].map((option) => option.value)).toEqual(["season"]);
+  expect(period.value).toBe("season");
+  expect(location.search).toContain("period=season");
+  expect(screen.getByText(/This result period is not available/)).toBeTruthy();
+  expect(screen.queryByRole("button", { name: "Run Pebble" })).toBeNull();
   expect(
-    screen.queryByRole("button", { name: "Edit availability" }),
-  ).toBeNull();
-  expect(screen.queryByText("Automatically inferred")).toBeNull();
-  c.saved.results = { ...c.saved.results, weeks: [] };
-  rerender(<App connection={{ ...c }} />);
-  expect((period as HTMLSelectElement).value).toBe("season");
+    screen.getByRole("status", { name: "Run status" }).querySelector("time")
+      ?.dateTime,
+  ).toBe(c.saved.results.completedAt);
 });
 
 it("retains a linked result selection through pending reads and failures until matching results arrive", () => {

@@ -212,7 +212,7 @@ test("validates modes/minutes and saves, cancels, and resets only the selected o
   ).toHaveValue("automatic");
   await expect(
     page.getByRole("button", { name: "Run Pebble", exact: true }),
-  ).toBeDisabled();
+  ).toHaveCount(0);
   await admin(async (ctx) => {
     expect((await getDoc(doc(ctx.firestore(), path))).data()?.version).toBe(2);
   });
@@ -276,7 +276,7 @@ test("preserves newer field edits through a held save and guards navigation and 
   await expect(page.getByRole("dialog")).not.toBeVisible();
   await expect(
     page.getByRole("button", { name: "Run Pebble", exact: true }),
-  ).toBeDisabled();
+  ).toHaveCount(0);
   release();
   await expect(status(page)).toContainText("Availability saved");
   await expect(notes(page)).toHaveValue("Newer notes");
@@ -513,7 +513,7 @@ test("preserves a removed player's draft and recovers after cancel without writi
   await expect(saveButton(page)).toHaveCount(0);
   await expect(
     page.getByRole("button", { name: "Run Pebble", exact: true }),
-  ).toBeDisabled();
+  ).toHaveCount(0);
   await admin(async (ctx) => {
     await setDoc(doc(ctx.firestore(), `${season}/players/player-a`), {
       name: "Example Alpha",

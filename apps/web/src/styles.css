@@ -1312,14 +1312,32 @@ tbody tr:last-child td {
   border-top: 1px solid #2e3746;
   padding-top: 20px;
 }
-.results-card .table-heading select {
+.results-card {
+  margin-top: 20px;
+}
+.results-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px 18px;
+  padding: 20px 23px;
+}
+.result-night-count,
+.result-updated {
+  color: #a2acba;
+  font-size: 11px;
+}
+.results-toolbar .text-button {
+  margin-left: auto;
+}
+.results-toolbar select {
   font-size: 11px;
   min-width: 170px;
 }
 .results-card table {
   min-width: 670px;
 }
-.results-card th:nth-child(4) > svg {
+.results-card th:nth-child(3) > svg {
   vertical-align: middle;
   margin-left: 4px;
 }
@@ -1343,10 +1361,27 @@ tbody tr:last-child td {
   font-weight: 550;
   font-size: 11px;
 }
-.class-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 2px;
+.results-card tbody > tr:not(.result-detail) > td {
+  padding-top: 1px;
+  padding-bottom: 1px;
+}
+.results-card .result-name {
+  min-height: 20px;
+}
+.results-card td > .icon-button {
+  display: flex;
+  width: 24px;
+  height: 20px;
+  padding: 0;
+}
+.result-breakdown {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.result-breakdown > .small {
+  font-size: 9px;
+  white-space: nowrap;
 }
 .time-bar {
   display: flex;
@@ -1354,7 +1389,8 @@ tbody tr:last-child td {
   height: 5px;
   background: #5d557c;
   border-radius: 3px;
-  margin-bottom: 7px;
+  margin-bottom: 0;
+  flex-shrink: 0;
   overflow: hidden;
 }
 .time-bar > span {
@@ -1362,9 +1398,6 @@ tbody tr:last-child td {
   background: #b6d591;
   flex-shrink: 0;
   border-right: 2px solid var(--card);
-}
-.results-card td > .small {
-  font-size: 9px;
 }
 .results-card .rank {
   font-family: ui-monospace, monospace;
@@ -1721,6 +1754,17 @@ tbody tr:last-child td {
   }
 }
 @media (max-width: 650px) {
+  .results-card .result-name {
+    min-height: 24px;
+  }
+  .results-card td > .icon-button {
+    height: 24px;
+  }
+  .results-card tbody > tr:not(.result-detail) > td {
+    padding-top: 5px;
+    padding-bottom: 5px;
+  }
+
   .sidebar {
     position: static;
     width: 100%;
@@ -2076,12 +2120,7 @@ tbody tr:last-child td {
   .timing-card .text-button {
     font-size: 10px;
   }
-  .results-card .table-heading {
-    align-items: flex-start;
-    flex-direction: column;
-    gap: 12px;
-  }
-  .results-card .table-heading select {
+  .results-toolbar select {
     width: 100%;
   }
   .result-detail td > div {

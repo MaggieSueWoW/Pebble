@@ -109,7 +109,7 @@ test("adds a Unicode main, edits and archives the same ID, preserves notes and f
   await page.getByLabel("Private roster notes").fill("Private note");
   await expect(
     page.getByRole("button", { name: "Run Pebble", exact: true }),
-  ).toBeDisabled();
+  ).toHaveCount(0);
   await save(page).click();
   await expect(
     page.getByRole("status", { name: "Roster changes" }),

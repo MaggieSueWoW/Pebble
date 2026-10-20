@@ -243,9 +243,9 @@ test("retains the complete view during held reads and swaps rows, totals and nig
     page.getByRole("combobox", { name: "Result period" }).locator("option"),
   ).toHaveText(["Season to date", "Thursday, October 15"]);
   await expect(
-    page.getByText("2 included reports", { exact: true }),
+    page.getByText("1 raid night this season", { exact: true }),
   ).toBeVisible();
-  await expect(status(page)).toContainText("Results updated");
+  await expect(status(page)).toContainText("Updated");
 });
 test("public read denial preserves prior results and keyboard retry recovers on a narrow screen", async ({
   page,
@@ -330,7 +330,7 @@ test("a superseded delayed fetch never replaces the latest published view", asyn
   await publish("latest");
   held.release();
   await expect(page.getByText("Latest Player", { exact: true })).toBeVisible();
-  await expect(status(page)).toContainText("Results updated");
+  await expect(status(page)).toContainText("Updated");
   await expect(
     page.getByRole("combobox", { name: "Result period" }).locator("option"),
   ).toHaveText(["Season to date", "Friday, October 16"]);
@@ -389,6 +389,13 @@ test("an edit saved during computation still needs another run after completion 
     page.getByText("Completed Player", { exact: true }),
   ).toBeVisible();
   await expect(status(page)).toContainText("Changes ready for the next run");
+  await expect(
+    page.getByRole("button", { name: "Run Pebble", exact: true }),
+  ).toHaveCount(0);
+  await page
+    .getByRole("navigation")
+    .getByRole("button", { name: /^Reports/ })
+    .click();
   await expect(
     page.getByRole("button", { name: "Run Pebble", exact: true }),
   ).toBeEnabled();
@@ -697,9 +704,7 @@ test("explains non-officer access through grant, revocation and keyboard sign-ou
   await expect(
     page.getByText("Baseline Player", { exact: true }),
   ).toBeVisible();
-  await page
-    .getByRole("button", { name: "Sign out to switch accounts" })
-    .focus();
+  await page.getByRole("button", { name: "Sign out", exact: true }).focus();
   await page.keyboard.press("Enter");
   await expect(access).toHaveCount(0);
   await expect(
@@ -794,7 +799,7 @@ test("officer empty periods and recent history keep progress visible and link to
     page.getByRole("heading", { name: "No player time for this period" }),
   ).toBeVisible();
   await expect(
-    page.getByText(/Use Manage reports to review the included logs/),
+    page.getByText(/Use Reports in the sidebar to review the included logs/),
   ).toBeVisible();
   await expect(page.getByRole("button", { name: "Run queued" })).toBeDisabled();
   const history = page.getByText("Run history", { exact: true });
@@ -811,7 +816,10 @@ test("officer empty periods and recent history keep progress visible and link to
   await page
     .getByRole("combobox", { name: "Result period" })
     .selectOption(nights.latest);
-  await page.getByRole("button", { name: "Manage reports" }).focus();
+  await page
+    .getByRole("navigation")
+    .getByRole("button", { name: /^Reports/ })
+    .focus();
   await page.keyboard.press("Enter");
   await expect(
     page.getByRole("heading", { name: "Add a report" }),
@@ -1084,7 +1092,7 @@ test("officer-access retry recovers heading focus after a denied membership list
     await expect(page.getByRole("heading", { level: 1 })).toBeFocused();
     await expect(
       page.getByRole("button", { name: "Manage reports" }),
-    ).toBeVisible();
+    ).toHaveCount(0);
     await expect(
       page.getByRole("navigation").getByRole("button", { name: /^Reports/ }),
     ).toBeVisible();
@@ -1124,79 +1132,43 @@ async function setDemoRules(rules: string) {
 }
 
 for (const signedIn of [false, true]) {
-  test(`stored weekly totals remain atomic and readable for ${signedIn ? "officers" : "public readers"}`, async ({
+  test(`only season and night periods are selectable for ${signedIn ? "officers" : "public readers"}`, async ({
     page,
   }) => {
-    const seedWeek = (run: string, week: string, name: string, played = 123) =>
-      admin(async (ctx) => {
-        await setDoc(
-          doc(ctx.firestore(), `${season}/results/${run}/weeks/${week}`),
-          {
-            players: [
-              {
-                game_week: week,
-                main: name,
-                played_min: played,
-                bench_min: 47,
-                bench_pre_min: 20,
-                bench_post_min: 27,
-              },
-              {
-                game_week: week,
-                main: "Historical Player",
-                played_min: 0,
-                bench_min: 0,
-                bench_pre_min: 0,
-                bench_post_min: 0,
-              },
-            ],
-          },
-        );
-      });
-    await seedWeek("baseline", "2026-10-13", "Baseline Player");
+    await admin(async (ctx) => {
+      await setDoc(
+        doc(ctx.firestore(), `${season}/results/baseline/weeks/2026-10-13`),
+        { players: [] },
+      );
+    });
     await page.setViewportSize({ width: 390, height: 844 });
     await resultsPage(page, signedIn);
     const period = page.getByRole("combobox", { name: "Result period" });
-    await period.selectOption("week:2026-10-13");
-    await expect(page.getByText("2h 03m", { exact: true })).toBeVisible();
-    await expect(page.getByText("0h 47m", { exact: true })).toBeVisible();
+    await expect(period.locator("option")).toHaveText([
+      "Season to date",
+      "Wednesday, October 14",
+    ]);
+    await period.selectOption(nights.baseline);
     await expect(
-      page.getByText("Historical Player", { exact: true }),
+      page.getByText("Baseline Player", { exact: true }),
     ).toBeVisible();
-    await expect(
-      page.getByText("No recorded time", { exact: true }),
-    ).toBeVisible();
-    const details = page.getByRole("button", {
-      name: "Details for Baseline Player",
-    });
-    await details.focus();
-    await page.keyboard.press("Enter");
-    const breakdown = page.getByRole("region", {
-      name: "Availability breakdown for Baseline Player",
-    });
-    await expect(breakdown).toContainText("20 min");
-    await expect(breakdown).toContainText("27 min");
-    await expect(
-      breakdown.getByRole("button", { name: "Edit availability" }),
-    ).toHaveCount(0);
-    await expect(breakdown).not.toContainText("Automatically inferred");
-    const held = await holdReads(page, "weekly-new");
-    await seedResult("weekly-new", "Latest Player", nights.latest);
-    await seedWeek("weekly-new", "2026-10-20", "Latest Player", 231);
-    await publish("weekly-new");
+    const held = await holdReads(page, "night-new");
+    await seedResult("night-new", "Latest Player", nights.latest);
+    await publish("night-new");
     await expect.poll(() => held.hits).toBeGreaterThan(0);
-    await expect(period).toHaveValue("week:2026-10-13");
-    await expect(page.getByText("2h 03m", { exact: true })).toBeVisible();
+    await expect(period).toHaveValue(nights.baseline);
     await expect(status(page)).toContainText("Loading latest results");
     held.release();
     await expect(period).toHaveValue("season");
     await expect(
       page.getByText("Latest Player", { exact: true }),
     ).toBeVisible();
-    await period.selectOption("week:2026-10-20");
-    await expect(page.getByText("3h 51m", { exact: true })).toBeVisible();
+    await expect(period.locator("option")).toHaveText([
+      "Season to date",
+      "Friday, October 16",
+    ]);
     await expect(
-      page.getByRole("option", { name: /Week of Tuesday, October 13/ }),
+      page.getByRole("button", { name: "Run Pebble", exact: true }),
     ).toHaveCount(0);
     expect(
       await page.evaluate(
@@ -1322,19 +1294,17 @@ test("public result links survive delayed reads, refresh, copy and back/forward"
   );
   expect([...copied.searchParams.keys()]).toEqual(["view", "period", "player"]);
   expect(copied.searchParams.get("player")).toBe("player-a");
-  await period.selectOption("week:2026-10-13");
+  await period.selectOption(nights.baseline);
   await page
     .getByRole("button", { name: "Details for Baseline Player" })
     .click();
-  expect(new URL(page.url()).searchParams.get("period")).toBe(
-    "week:2026-10-13",
-  );
+  expect(new URL(page.url()).searchParams.get("period")).toBe(nights.baseline);
   await page.reload();
-  await expect(period).toHaveValue("week:2026-10-13");
+  await expect(period).toHaveValue(nights.baseline);
   await expect(breakdown).toBeVisible();
   await period.selectOption("season");
   await page.evaluate(() => history.back());
-  await expect(period).toHaveValue("week:2026-10-13");
+  await expect(period).toHaveValue(nights.baseline);
   await expect(breakdown).toBeVisible();
   await page.evaluate(() => history.forward());
   await expect(period).toHaveValue("season");
@@ -1503,16 +1473,6 @@ test("recorded season rankings preserve eligibility, zero rows, tie order and un
   ).toContainText("Bench:played ratio 0.20");
   const period = page.getByRole("combobox", { name: "Result period" });
   await period.selectOption(nights.baseline);
-  await expect(page.locator(".result-name strong")).toHaveText([
-    "Baseline Player",
-  ]);
-  await page
-    .getByRole("button", { name: "Details for Baseline Player" })
-    .click();
-  await expect(
-    page.getByText("Bench:played ratio", { exact: false }),
-  ).toHaveCount(0);
-  await period.selectOption("week:2026-10-13");
   await expect(page.locator(".result-name strong")).toHaveText([
     "Baseline Player",
   ]);

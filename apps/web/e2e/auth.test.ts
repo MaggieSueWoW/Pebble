@@ -121,7 +121,7 @@ test("cancelled Google popup returns to public view with retry", async ({
   await expect(page.getByRole("button", { name: /^Reports/ })).toHaveCount(0);
 });
 
-test("account switching preserves the officer on cancel and removes drafts for a non-officer", async ({
+test("sign-out protects officer drafts and allows signing in with another account", async ({
   page,
 }) => {
   const uid = await signIn(page);
@@ -133,24 +133,22 @@ test("account switching preserves the officer on cancel and removes drafts for a
     .getByRole("button", { name: /^Reports/ })
     .click();
   const draft = page.getByRole("textbox", { name: "Warcraft Logs reports" });
-  const switchAccount = page.getByRole("button", {
-    name: "Switch Google account",
-  });
-  const cancelledPopup = page.waitForEvent("popup");
-  await switchAccount.click();
-  const cancelled = await cancelledPopup;
-  await cancelled.waitForLoadState("load");
-  await cancelled.close();
-  await expect(page.getByRole("alert")).toContainText("sign-in was cancelled", {
-    timeout: 15000,
-  });
-  await expect(draft).toBeVisible();
-  await expect(switchAccount).toBeEnabled();
+  const signOut = page.getByRole("button", { name: "Sign out", exact: true });
   await draft.fill("AAAAAAAAAAAAAAAA");
-  await switchAccount.click();
+  await signOut.click();
   await expect(page.getByRole("dialog")).toBeVisible();
-  const nextPopup = page.waitForEvent("popup");
+  await page.getByRole("button", { name: "Keep editing" }).click();
+  await expect(draft).toHaveValue("AAAAAAAAAAAAAAAA");
+  await signOut.click();
   await page.getByRole("button", { name: "Discard edits" }).click();
+  const signInButton = page.getByRole("button", {
+    name: "Officer sign-in",
+    exact: true,
+  });
+  await expect(signInButton).toBeVisible();
+  await expect(draft).toHaveCount(0);
+  const nextPopup = page.waitForEvent("popup");
+  await signInButton.click();
   const popup = await nextPopup;
   await popup.waitForLoadState("load");
   await popup.getByRole("button", { name: "Add new account" }).click();

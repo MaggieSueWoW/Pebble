@@ -105,7 +105,7 @@ test("creates normalized mappings, rejects duplicate identity and allows a disti
   await page.getByLabel("Mapped main", { exact: true }).selectOption("main");
   await expect(
     page.getByRole("button", { name: "Run Pebble", exact: true }),
-  ).toBeDisabled();
+  ).toHaveCount(0);
   await save(page).click();
   await expect(
     page.getByRole("status", { name: "Character mapping changes" }),

@@ -23,9 +23,9 @@ Never place a service account or WCL secret in a `VITE_` variable.
 Open http://127.0.0.1:5173. Google sign-in requires this host in Firebase Auth's
 authorized domains. Officers can save inputs and queue runs. Everyone can read
 the last complete result set without login. Signed-in accounts without officer
-access see a read-only explanation and a Sign out to switch accounts action.
+access see a read-only explanation and a Sign out action.
 Account details keeps the setup ID available without showing it in the main message.
-Switch Google account opens the account chooser. Login failures show recovery
+Sign out, then use Officer sign-in to choose another Google account. Login failures show recovery
 instructions; failed access verification returns to public results with a retry
 action instead of leaving the page connecting indefinitely.
 
@@ -138,7 +138,7 @@ or input changes; all sign-in helpers use the visible account-details disclosure
 
 Empty-results coverage distinguishes no completed result set from a completed
 period with no player time. Public guidance stays read-only; officers can use
-Manage reports to review inputs without a write or run request. Empty recent
+Reports in the sidebar to review inputs without a write or run request. Empty recent
 history has an explicit message while queued progress and previous results remain
 available. Loading and result errors retain their separate states.
 
@@ -168,35 +168,21 @@ to the demo emulator, with its original rules restored afterward.
 These automated checks verify DOM/accessibility semantics, browser focus and
 keyboard behavior. Actual screen-reader listening remains part of final acceptance.
 
-Weekly result periods load the worker's existing `weeks` collection in the same
-completed-run read as players and nights. All views stay on the previous complete
-publication until every collection succeeds; weekly read failure uses the existing
-result retry. The selector lists recorded Tuesday game-week IDs, with minutes and
-pre/post bench totals copied from the published projection. No weekly calculations,
-input writes or new worker output are introduced.
-
-Weekly rows retain recorded zero-time and historical players. Names come from the
-weekly output; class/color metadata is used only when the same completed run has
-a matching player name. Missing metadata stays unspecified. Weekly output does not
-record per-night adjustment explanations, so aggregates omit inferred/adjusted
-availability labels and the per-night Edit availability action. Played share remains
-a time split, not attendance; zero time is labelled No recorded time.
-
-Weekly acceptance covers stored totals, historical/zero rows, safe metadata mapping,
-weekly read failure/retry, officer/public access, keyboard details, narrow layout
-and atomic publication replacement. Attendance, possible time, weekly P/B/O, richer
-nightly explanations/diagnostics and shareable routes remain tracked in #11.
+Results offers season totals and individual raid nights. The toolbar shows the
+completion time for the displayed results and the season's raid-night count.
+Loading and retry preserve the previous completed results and their timestamp.
+Run Pebble is available on Reports. Older weekly result links fall back to season
+totals; stored weekly projections remain part of the published data schema.
 
 Season and nightly result details show the worker's recorded pre/post played
 minutes beside the existing pre/post bench minutes. Zero is displayed as zero;
 a missing played half is labelled Not recorded, without splitting or inferring
-from the total. Weekly output has no played-half fields, so weekly details omit
-those labels. The recorded per-row adjustment flag retains its existing general
+from the total. The recorded per-row adjustment flag retains its existing general
 explanation; no per-half availability or private provenance is invented. The
 existing atomic completed-run loader supplies the fields with no extra reads.
 
-Played-breakdown coverage checks recorded values, zero/missing halves, weekly
-omission, public/officer visibility, period changes, keyboard details and narrow
+Played-breakdown coverage checks recorded values, zero/missing halves,
+public/officer visibility, period changes, keyboard details and narrow
 layout. The illustrative sample calculation supplies its own played halves only
 in sample mode. Attendance, possible time, weekly P/B/O, richer availability/source
 explanations, private diagnostics and shareable links remain in #11.

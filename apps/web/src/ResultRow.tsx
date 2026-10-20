@@ -46,31 +46,29 @@ export function ResultRow({
             aria-expanded={expanded}
             aria-controls={detailId}
           >
-            <span className="class-dot" style={{ background: player.color }} />
-            <span>
-              <strong style={{ color: player.color }}>{player.name}</strong>
-              <span className="cell-subtitle">{player.className}</span>
-            </span>
+            <strong style={{ color: player.color }}>{player.name}</strong>
           </button>
         </td>
-        <td className="numeric">{minutes(row.played)}</td>
         <td className="numeric bench-value">{minutes(row.bench)}</td>
+        <td className="numeric">{minutes(row.played)}</td>
         <td>
-          <div
-            className="time-bar"
-            aria-label={`${row.played} minutes played, ${row.bench} minutes benched`}
-          >
-            <span
-              style={{ width: `${total ? (row.played / total) * 100 : 0}%` }}
-            />
-            <i />
+          <div className="result-breakdown">
+            <div
+              className="time-bar"
+              aria-label={`${row.played} minutes played, ${row.bench} minutes benched`}
+            >
+              <span
+                style={{ width: `${total ? (row.played / total) * 100 : 0}%` }}
+              />
+              <i />
+            </div>
+            <span className="small muted">
+              {total
+                ? `${Math.round((row.played / total) * 100)}% played`
+                : "No recorded time"}
+              {"overridden" in row && row.overridden ? " · adjusted" : ""}
+            </span>
           </div>
-          <span className="small muted">
-            {total
-              ? `${Math.round((row.played / total) * 100)}% played`
-              : "No recorded time"}
-            {"overridden" in row && row.overridden ? " · adjusted" : ""}
-          </span>
         </td>
         <td>
           <button

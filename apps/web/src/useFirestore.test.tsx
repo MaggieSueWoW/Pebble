@@ -1540,7 +1540,9 @@ describe("public result loading", () => {
     );
     await publicResults();
     expect(screen.queryByRole("alert")).toBeNull();
-    expect(screen.getByText(/Everyone’s time counts/)).toBeTruthy();
+    expect(
+      screen.getByRole("heading", { name: "Results", level: 1 }),
+    ).toBeTruthy();
   });
 });
 

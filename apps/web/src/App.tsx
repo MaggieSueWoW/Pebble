@@ -37,7 +37,6 @@ import {
   formatDate,
   formatTime,
   freshState,
-  minutes,
   playerDetails,
   nightOptions as sampleNights,
   players as samplePlayers,
@@ -673,28 +672,18 @@ export default function App({ connection }: { connection?: LiveConnection }) {
           : "Run Pebble"}
     </button>
   ) : null;
-  const weeks = results.weeks ?? [];
   const hasResultPeriod = (period: string) =>
-    results.nights.some((n) => n.night === period) ||
-    weeks.some((w) => `week:${w.week}` === period);
+    results.nights.some((n) => n.night === period);
   const visibleResultNight = hasResultPeriod(resultNight)
     ? resultNight
     : "season";
-  const selectedWeek = weeks.find(
-    (w) => `week:${w.week}` === visibleResultNight,
-  );
   const latestNight = results.nights.find((n) => n.night === night);
   const resultRows = orderResultRows(
     visibleResultNight === "season"
       ? results.players
-      : (selectedWeek?.players ??
-          results.nights.find((n) => n.night === visibleResultNight)?.players ??
+      : (results.nights.find((n) => n.night === visibleResultNight)?.players ??
           []),
-    visibleResultNight === "season"
-      ? "season"
-      : selectedWeek
-        ? "week"
-        : "night",
+    visibleResultNight === "season" ? "season" : "night",
     (row) => row.name ?? players.find((p) => p.id === row.id)?.name ?? row.id,
   );
   const additionalAttendance =
@@ -902,19 +891,15 @@ export default function App({ connection }: { connection?: LiveConnection }) {
               </span>
               {connection && (
                 <div className="account-actions">
-                  <button
-                    className="text-button"
-                    disabled={authPending}
-                    onClick={() =>
-                      guard(() => {
-                        void accountAction(connection.signIn);
-                      })
-                    }
-                  >
-                    {connection.user
-                      ? "Switch Google account"
-                      : "Officer sign-in"}
-                  </button>
+                  {!connection.user && (
+                    <button
+                      className="text-button"
+                      disabled={authPending}
+                      onClick={() => void accountAction(connection.signIn)}
+                    >
+                      Officer sign-in
+                    </button>
+                  )}
                   {connection.user && (
                     <button
                       className="text-button"
@@ -961,8 +946,8 @@ export default function App({ connection }: { connection?: LiveConnection }) {
                   <p>
                     This account does not have officer access. You can still
                     read completed results. Editing inputs and running Pebble
-                    require an enabled officer account. Switch Google account or
-                    sign out to use another account.
+                    require an enabled officer account. Sign out and sign back
+                    in to use another account.
                   </p>
                   <details>
                     <summary>Account details</summary>
@@ -998,11 +983,9 @@ export default function App({ connection }: { connection?: LiveConnection }) {
             )}
           <div className="page-heading">
             <div>
-              <div className="eyebrow accent">
-                {page === "results"
-                  ? "THE LATEST PICTURE"
-                  : "A LITTLE LESS RAID ADMIN"}
-              </div>
+              {page !== "results" && (
+                <div className="eyebrow accent">A LITTLE LESS RAID ADMIN</div>
+              )}
               <h1 id="page-title" tabIndex={-1}>
                 {page === "reports"
                   ? "Raid reports"
@@ -1012,30 +995,21 @@ export default function App({ connection }: { connection?: LiveConnection }) {
                       ? "Calculation settings"
                       : page === "roster"
                         ? "Your raid roster"
-                        : "Everyone’s time counts."}
+                        : "Results"}
               </h1>
-              <p>
-                {page === "reports"
-                  ? "Bring the logs. Pebble handles the numbers."
-                  : page === "overrides"
-                    ? "A few adjustments, then back to the raid."
-                    : page === "settings"
-                      ? "Set the calculation parameters, then recompute when ready."
-                      : page === "roster"
-                        ? "Keep membership current, then recompute when ready."
-                        : "Played time, bench time, and the story behind the numbers."}
-              </p>
+              {page !== "results" && (
+                <p>
+                  {page === "reports"
+                    ? "Bring the logs. Pebble handles the numbers."
+                    : page === "overrides"
+                      ? "A few adjustments, then back to the raid."
+                      : page === "settings"
+                        ? "Set the calculation parameters, then recompute when ready."
+                        : "Keep membership current, then recompute when ready."}
+                </p>
+              )}
             </div>
-            {page === "results" ? (
-              canManage && (
-                <button
-                  className="button secondary"
-                  onClick={() => go("reports")}
-                >
-                  <FileText size={16} /> Manage reports
-                </button>
-              )
-            ) : (
+            {page !== "results" && (
               <button
                 className="button secondary"
                 onClick={() => go("results")}
@@ -1044,90 +1018,92 @@ export default function App({ connection }: { connection?: LiveConnection }) {
               </button>
             )}
           </div>
-          <div
-            className={`run-strip ${active || connection?.submitting || waitingForResults ? "is-running" : ""} ${(lastFailed || resultLoadFailed) && !active && !connection?.submitting ? "has-error" : ""}`}
-          >
+          {page !== "results" && (
             <div
-              className={`strip-icon ${active || connection?.submitting || waitingForResults ? "running-icon" : ""}`}
+              className={`run-strip ${active || connection?.submitting || waitingForResults ? "is-running" : ""} ${(lastFailed || resultLoadFailed) && !active && !connection?.submitting ? "has-error" : ""}`}
             >
-              {active ||
-              connection?.submitting ||
-              (waitingForResults && !resultLoadFailed) ? (
-                <LoaderCircle size={19} className="spin" />
-              ) : lastFailed || resultLoadFailed ? (
-                <CircleAlert size={19} />
-              ) : unprocessed ? (
-                <Clock3 size={19} />
-              ) : (
-                <CheckCheck size={19} />
-              )}
-            </div>
-            <div
-              className="strip-copy"
-              role="status"
-              aria-label="Run status"
-              aria-atomic="true"
-            >
-              <strong>
-                {active
-                  ? active.status === "queued" && !online
-                    ? "Queued · waiting for your local bot"
-                    : steps[active.stage] + "…"
-                  : connection?.submitting
-                    ? "Submitting run…"
-                    : connection?.officer && !connection.queueReady
-                      ? connection.queueError
-                        ? "Run queue is unavailable"
-                        : "Checking run queue…"
-                      : connection?.resultsError
-                        ? "Latest results are unavailable"
-                        : connection?.resultsPending
-                          ? "Loading latest results…"
-                          : lastFailed
-                            ? "Last run didn’t finish"
-                            : unsaved
-                              ? "You have unsaved edits"
-                              : unprocessed
-                                ? "Changes ready for the next run"
-                                : connection && !connection.hasResults
-                                  ? "No completed runs yet"
-                                  : connection &&
-                                      history[0]?.status === "succeeded"
-                                    ? "Results updated"
-                                    : "You’re all caught up"}
-              </strong>
-              <span>
-                {active
-                  ? "Your last completed results stay visible while Pebble works."
-                  : connection?.submitting
-                    ? "Waiting for the server to confirm your request."
-                    : connection?.officer && !connection.queueReady
-                      ? "Waiting to check for pending runs. Your previous results stay visible."
-                      : connection?.resultsError || connection?.resultsPending
-                        ? connection.hasResults
-                          ? "Showing the previous completed results until the latest set loads."
-                          : "The latest result set has not loaded yet."
-                        : lastFailed
-                          ? "Previous results are still available. You can run Pebble again."
-                          : unsaved
-                            ? "Save or discard your edits before running Pebble."
-                            : unprocessed
-                              ? "Saved inputs have changed. Run Pebble to update the results."
-                              : connection && !connection.hasResults
-                                ? "Add reports and Run Pebble to create the first result set."
-                                : `Last completed ${formatTime(results.completedAt)} PT · ${formatRunDate(results.completedAt)}`}
-              </span>
-            </div>
-            {connection?.officer && connection.queueError && (
-              <button
-                className="button"
-                onClick={() => retryWithFocus(connection.retryQueue)}
+              <div
+                className={`strip-icon ${active || connection?.submitting || waitingForResults ? "running-icon" : ""}`}
               >
-                Retry run queue
-              </button>
-            )}
-            {runButton}
-          </div>
+                {active ||
+                connection?.submitting ||
+                (waitingForResults && !resultLoadFailed) ? (
+                  <LoaderCircle size={19} className="spin" />
+                ) : lastFailed || resultLoadFailed ? (
+                  <CircleAlert size={19} />
+                ) : unprocessed ? (
+                  <Clock3 size={19} />
+                ) : (
+                  <CheckCheck size={19} />
+                )}
+              </div>
+              <div
+                className="strip-copy"
+                role="status"
+                aria-label="Run status"
+                aria-atomic="true"
+              >
+                <strong>
+                  {active
+                    ? active.status === "queued" && !online
+                      ? "Queued · waiting for your local bot"
+                      : steps[active.stage] + "…"
+                    : connection?.submitting
+                      ? "Submitting run…"
+                      : connection?.officer && !connection.queueReady
+                        ? connection.queueError
+                          ? "Run queue is unavailable"
+                          : "Checking run queue…"
+                        : connection?.resultsError
+                          ? "Latest results are unavailable"
+                          : connection?.resultsPending
+                            ? "Loading latest results…"
+                            : lastFailed
+                              ? "Last run didn’t finish"
+                              : unsaved
+                                ? "You have unsaved edits"
+                                : unprocessed
+                                  ? "Changes ready for the next run"
+                                  : connection && !connection.hasResults
+                                    ? "No completed runs yet"
+                                    : connection &&
+                                        history[0]?.status === "succeeded"
+                                      ? "Results updated"
+                                      : "You’re all caught up"}
+                </strong>
+                <span>
+                  {active
+                    ? "Your last completed results stay visible while Pebble works."
+                    : connection?.submitting
+                      ? "Waiting for the server to confirm your request."
+                      : connection?.officer && !connection.queueReady
+                        ? "Waiting to check for pending runs. Your previous results stay visible."
+                        : connection?.resultsError || connection?.resultsPending
+                          ? connection.hasResults
+                            ? "Showing the previous completed results until the latest set loads."
+                            : "The latest result set has not loaded yet."
+                          : lastFailed
+                            ? "Previous results are still available. You can run Pebble again."
+                            : unsaved
+                              ? "Save or discard your edits before running Pebble."
+                              : unprocessed
+                                ? "Saved inputs have changed. Run Pebble to update the results."
+                                : connection && !connection.hasResults
+                                  ? "Add reports and Run Pebble to create the first result set."
+                                  : `Last completed ${formatTime(results.completedAt)} PT · ${formatRunDate(results.completedAt)}`}
+                </span>
+              </div>
+              {connection?.officer && connection.queueError && (
+                <button
+                  className="button"
+                  onClick={() => retryWithFocus(connection.retryQueue)}
+                >
+                  Retry run queue
+                </button>
+              )}
+              {page === "reports" && runButton}
+            </div>
+          )}
           {storageError && (
             <Notice tone="amber">
               Browser storage is unavailable. The demo works, but changes won’t
@@ -1413,38 +1389,8 @@ export default function App({ connection }: { connection?: LiveConnection }) {
                   </div>
                 </section>
               )}
-              <div className="stats-grid">
-                <Stat
-                  icon={<Clock3 size={20} />}
-                  label="Played together"
-                  value={minutes(
-                    results.players.reduce((s, r) => s + r.played, 0),
-                  )}
-                  detail="Total player time"
-                />
-                <Stat
-                  icon={<Users size={20} />}
-                  label="Bench time"
-                  value={minutes(
-                    results.players.reduce((s, r) => s + r.bench, 0),
-                  )}
-                  detail="Tracked across included raid nights"
-                />
-                <Stat
-                  icon={<Activity size={20} />}
-                  label="Raid nights"
-                  value={results.nights.length}
-                  detail={`${results.reportCount} included reports`}
-                />
-              </div>
               <section className="card results-card">
-                <div className="table-heading">
-                  <div>
-                    <h2>Time on the team</h2>
-                    <p>
-                      Click a player for their pre- and post-break breakdown.
-                    </p>
-                  </div>
+                <div className="results-toolbar">
                   <select
                     aria-label="Result period"
                     value={visibleResultNight}
@@ -1454,52 +1400,64 @@ export default function App({ connection }: { connection?: LiveConnection }) {
                     }}
                   >
                     <option value="season">Season to date</option>
-                    {weeks.map((w) => (
-                      <option value={`week:${w.week}`} key={`week:${w.week}`}>
-                        Week of {formatDate(w.week, true)}
-                      </option>
-                    ))}
                     {results.nights.map((n) => (
                       <option value={n.night} key={n.night}>
                         {formatDate(n.night, true)}
                       </option>
                     ))}
                   </select>
+                  <span className="result-night-count">
+                    {results.nights.length} raid{" "}
+                    {results.nights.length === 1 ? "night" : "nights"} this
+                    season
+                  </span>
+                  <span
+                    className="result-updated"
+                    role="status"
+                    aria-label="Run status"
+                    aria-atomic="true"
+                  >
+                    {connection?.resultsPending
+                      ? "Loading latest results… · "
+                      : connection?.resultsError
+                        ? "Latest results are unavailable · "
+                        : active
+                          ? `${steps[active.stage]}… · `
+                          : unprocessed
+                            ? "Changes ready for the next run · "
+                            : ""}
+                    Updated{" "}
+                    <time dateTime={results.completedAt}>
+                      {formatTime(results.completedAt)} PT ·{" "}
+                      {formatRunDate(results.completedAt)}
+                    </time>
+                  </span>
+                  <button
+                    className="text-button"
+                    onClick={() => void copyResultLink()}
+                    disabled={!resultSelectionReady}
+                  >
+                    <Link2 size={14} /> Copy result link
+                  </button>
                 </div>
-                <button
-                  className="text-button"
-                  onClick={() => void copyResultLink()}
-                  disabled={!resultSelectionReady}
-                >
-                  <Link2 size={14} /> Copy result link
-                </button>
-                {selectedWeek && (
-                  <p className="muted">
-                    Stored weekly totals · game weeks begin Tuesday in Pacific
-                    time.
-                  </p>
+                {canManage && connection && visibleResultNight !== "season" && (
+                  <NightDiagnostics
+                    night={visibleResultNight}
+                    diagnostic={
+                      connection.resultDiagnostics[visibleResultNight]
+                    }
+                  />
                 )}
-                {canManage &&
-                  connection &&
-                  !selectedWeek &&
-                  visibleResultNight !== "season" && (
-                    <NightDiagnostics
-                      night={visibleResultNight}
-                      diagnostic={
-                        connection.resultDiagnostics[visibleResultNight]
-                      }
-                    />
-                  )}
                 <div className="table-scroll">
                   <table>
                     <thead>
                       <tr>
                         <th>#</th>
                         <th>Player</th>
-                        <th>Played</th>
                         <th aria-sort="ascending">
                           Bench <ArrowDown size={12} />
                         </th>
+                        <th>Played</th>
                         <th>Time breakdown</th>
                         <th />
                       </tr>
@@ -1541,7 +1499,7 @@ export default function App({ connection }: { connection?: LiveConnection }) {
                               )
                             }
                             onEdit={
-                              !canManage || selectedWeek
+                              !canManage
                                 ? undefined
                                 : () => {
                                     guard(() => {
@@ -1569,7 +1527,7 @@ export default function App({ connection }: { connection?: LiveConnection }) {
                       <h3>No player time for this period</h3>
                       <p>
                         {canManage
-                          ? "Use Manage reports to review the included logs."
+                          ? "Use Reports in the sidebar to review the included logs."
                           : "No player time was recorded for this period in the completed results."}
                         {results.nights.length > 0 &&
                           " Try another result period."}
@@ -1581,7 +1539,7 @@ export default function App({ connection }: { connection?: LiveConnection }) {
                   <CheckCheck size={14} />{" "}
                   {connection && !connection.hasResults
                     ? "No completed result set loaded."
-                    : `${connection && (connection.resultsPending || connection.resultsError) ? "Previous completed results" : "Latest completed run"} · ${formatTime(results.completedAt)} PT. Results update automatically after a successful run.`}
+                    : "Results update automatically after a successful run."}
                 </div>
               </section>
               {additionalAttendance.length > 0 && (

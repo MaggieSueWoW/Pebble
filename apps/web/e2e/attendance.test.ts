@@ -175,16 +175,7 @@ test("presents published season attendance separately, orders P/B/O weeks and do
     page.getByRole("region", { name: "Availability breakdown for Example" }),
   ).toBeVisible();
   await expect(details).toHaveCount(0);
-  await page
-    .getByLabel("Result period", { exact: true })
-    .selectOption("week:2026-10-13");
-  await page
-    .getByRole("button", { name: "Details for Example", exact: true })
-    .click();
-  await expect(
-    page.getByRole("region", { name: "Availability breakdown for Example" }),
-  ).toBeVisible();
-  await expect(details).toHaveCount(0);
+  await expect(page.getByRole("option", { name: /^Week of/ })).toHaveCount(0);
   await expect(
     page.getByRole("button", { name: "Details for Example", exact: true }),
   ).toBeVisible();

@@ -98,7 +98,7 @@ test("creates default settings with validation, guarded navigation and no recomp
   await page.getByLabel("Minimum break minutes").fill("12");
   await expect(
     page.getByRole("button", { name: "Run Pebble", exact: true }),
-  ).toBeDisabled();
+  ).toHaveCount(0);
   await page
     .getByRole("navigation")
     .getByRole("button", { name: /^Reports/ })
