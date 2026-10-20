@@ -8,11 +8,13 @@ import {
 } from "firebase/firestore";
 import { db, seasonId } from "./firebase";
 import type { Results } from "./model";
+import { readWeekResults } from "./weeklyResults";
 
 const emptyResults = (): Results => ({
   completedAt: "",
   signature: "",
   nights: [],
+  weeks: [],
   players: [],
   reportCount: 0,
   warnings: [],
@@ -51,27 +53,37 @@ export function usePublicResults() {
         }
         try {
           const base = doc(db!, "seasons", seasonId, "results", id);
-          const [root, playerDocs, nightDocs] = await Promise.all([
+          const [root, playerDocs, nightDocs, weekDocs] = await Promise.all([
             getDocFromServer(base),
             getDocsFromServer(collection(base, "players")),
             getDocsFromServer(collection(base, "nights")),
+            getDocsFromServer(collection(base, "weeks")),
           ]);
           if (!current()) return;
           if (!root.exists() || root.data().complete !== true)
             throw new Error("Incomplete result set");
           const completedAt = root.data().completedAt?.toDate().toISOString();
           if (!completedAt) throw new Error("Missing completion time");
+          const players = playerDocs.docs.map((d) =>
+            d.data(),
+          ) as Results["players"];
+          const nights = nightDocs.docs.map((d) =>
+            d.data(),
+          ) as Results["nights"];
           setResults({
             completedAt,
             signature: id,
             reportCount: root.data().reportCount,
             warnings: root.data().warnings ?? [],
-            players: playerDocs.docs.map((d) => d.data()) as Results["players"],
-            nights: nightDocs.docs
-              .map((d) => d.data())
-              .sort((a, b) =>
-                b.night.localeCompare(a.night),
-              ) as Results["nights"],
+            players,
+            nights: nights.sort((a, b) => b.night.localeCompare(a.night)),
+            weeks: readWeekResults(
+              weekDocs.docs.map((d) => ({
+                week: d.id,
+                players: d.data().players,
+              })),
+              [...players, ...nights.flatMap((n) => n.players)],
+            ),
           });
           setReady(true);
           setLoading(false);

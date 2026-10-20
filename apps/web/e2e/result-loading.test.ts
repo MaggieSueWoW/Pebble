@@ -1103,3 +1103,86 @@ async function setDemoRules(rules: string) {
   });
   await temporary.cleanup();
 }
+
+for (const signedIn of [false, true]) {
+  test(`stored weekly totals remain atomic and readable for ${signedIn ? "officers" : "public readers"}`, async ({
+    page,
+  }) => {
+    const seedWeek = (run: string, week: string, name: string, played = 123) =>
+      admin(async (ctx) => {
+        await setDoc(
+          doc(ctx.firestore(), `${season}/results/${run}/weeks/${week}`),
+          {
+            players: [
+              {
+                game_week: week,
+                main: name,
+                played_min: played,
+                bench_min: 47,
+                bench_pre_min: 20,
+                bench_post_min: 27,
+              },
+              {
+                game_week: week,
+                main: "Historical Player",
+                played_min: 0,
+                bench_min: 0,
+                bench_pre_min: 0,
+                bench_post_min: 0,
+              },
+            ],
+          },
+        );
+      });
+    await seedWeek("baseline", "2026-10-13", "Baseline Player");
+    await page.setViewportSize({ width: 390, height: 844 });
+    await resultsPage(page, signedIn);
+    const period = page.getByRole("combobox", { name: "Result period" });
+    await period.selectOption("week:2026-10-13");
+    await expect(page.getByText("2h 03m", { exact: true })).toBeVisible();
+    await expect(page.getByText("0h 47m", { exact: true })).toBeVisible();
+    await expect(
+      page.getByText("Historical Player", { exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByText("No recorded time", { exact: true }),
+    ).toBeVisible();
+    const details = page.getByRole("button", {
+      name: "Details for Baseline Player",
+    });
+    await details.focus();
+    await page.keyboard.press("Enter");
+    const breakdown = page.getByRole("region", {
+      name: "Availability breakdown for Baseline Player",
+    });
+    await expect(breakdown).toContainText("20 min");
+    await expect(breakdown).toContainText("27 min");
+    await expect(
+      breakdown.getByRole("button", { name: "Edit availability" }),
+    ).toHaveCount(0);
+    await expect(breakdown).not.toContainText("Automatically inferred");
+    const held = await holdReads(page, "weekly-new");
+    await seedResult("weekly-new", "Latest Player", nights.latest);
+    await seedWeek("weekly-new", "2026-10-20", "Latest Player", 231);
+    await publish("weekly-new");
+    await expect.poll(() => held.hits).toBeGreaterThan(0);
+    await expect(period).toHaveValue("week:2026-10-13");
+    await expect(page.getByText("2h 03m", { exact: true })).toBeVisible();
+    await expect(status(page)).toContainText("Loading latest results");
+    held.release();
+    await expect(period).toHaveValue("season");
+    await expect(
+      page.getByText("Latest Player", { exact: true }),
+    ).toBeVisible();
+    await period.selectOption("week:2026-10-20");
+    await expect(page.getByText("3h 51m", { exact: true })).toBeVisible();
+    await expect(
+      page.getByRole("option", { name: /Week of Tuesday, October 13/ }),
+    ).toHaveCount(0);
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= window.innerWidth,
+      ),
+    ).toBe(true);
+  });
+}

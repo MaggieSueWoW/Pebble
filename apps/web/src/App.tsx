@@ -47,6 +47,7 @@ import {
   type Inputs,
   type Page,
   type Saved,
+  type WeeklyPlayerResult,
 } from "./model";
 
 import { useReportEditor } from "./useReportEditor";
@@ -636,31 +637,40 @@ export default function App({ connection }: { connection?: LiveConnection }) {
           : "Officer sign-in"}
     </button>
   );
-  const visibleResultNight = results.nights.some((n) => n.night === resultNight)
+  const weeks = results.weeks ?? [];
+  const hasResultPeriod = (period: string) =>
+    results.nights.some((n) => n.night === period) ||
+    weeks.some((w) => `week:${w.week}` === period);
+  const visibleResultNight = hasResultPeriod(resultNight)
     ? resultNight
     : "season";
+  const selectedWeek = weeks.find(
+    (w) => `week:${w.week}` === visibleResultNight,
+  );
   useEffect(() => {
-    if (
-      resultNight !== "season" &&
-      !results.nights.some((n) => n.night === resultNight)
-    ) {
+    if (resultNight !== "season" && !hasResultPeriod(resultNight)) {
       setResultNight("season");
       setExpandedPlayer(null);
     }
-  }, [results.nights, resultNight]);
+  }, [results.nights, results.weeks, resultNight]);
   const latestNight = results.nights.find((n) => n.night === night);
   const resultRows = (
     visibleResultNight === "season"
       ? results.players
-      : (results.nights.find((n) => n.night === visibleResultNight)?.players ??
+      : (selectedWeek?.players ??
+        results.nights.find((n) => n.night === visibleResultNight)?.players ??
         [])
   )
-    .filter((r) => r.played + r.bench > 0)
+    .filter((r) => selectedWeek || r.played + r.bench > 0)
     .sort(
       (a, b) =>
         a.bench - b.bench ||
-        (players.find((p) => p.id === a.id)?.name ?? a.id).localeCompare(
-          players.find((p) => p.id === b.id)?.name ?? b.id,
+        (
+          a.name ??
+          players.find((p) => p.id === a.id)?.name ??
+          a.id
+        ).localeCompare(
+          b.name ?? players.find((p) => p.id === b.id)?.name ?? b.id,
         ),
     );
   const lastFailed = history[0]?.status === "failed";
@@ -1355,6 +1365,11 @@ export default function App({ connection }: { connection?: LiveConnection }) {
                     }}
                   >
                     <option value="season">Season to date</option>
+                    {weeks.map((w) => (
+                      <option value={`week:${w.week}`} key={`week:${w.week}`}>
+                        Week of {formatDate(w.week, true)}
+                      </option>
+                    ))}
                     {results.nights.map((n) => (
                       <option value={n.night} key={n.night}>
                         {formatDate(n.night, true)}
@@ -1362,6 +1377,12 @@ export default function App({ connection }: { connection?: LiveConnection }) {
                     ))}
                   </select>
                 </div>
+                {selectedWeek && (
+                  <p className="muted">
+                    Stored weekly totals · game weeks begin Tuesday in Pacific
+                    time.
+                  </p>
+                )}
                 <div className="table-scroll">
                   <table>
                     <thead>
@@ -1383,7 +1404,7 @@ export default function App({ connection }: { connection?: LiveConnection }) {
                               id: row.id,
                               name: row.name,
                               className: row.className ?? "",
-                              role: row.role ?? "Damage",
+                              role: row.role ?? "",
                               color: row.color ?? "#b9c7d8",
                               pre: 0,
                               post: 0,
@@ -1402,7 +1423,7 @@ export default function App({ connection }: { connection?: LiveConnection }) {
                               )
                             }
                             onEdit={
-                              !canManage
+                              !canManage || selectedWeek
                                 ? undefined
                                 : () => {
                                     guard(() => {
@@ -1547,7 +1568,7 @@ function ResultRow({
   onEdit,
 }: {
   player: (typeof samplePlayers)[number];
-  row: ReturnType<typeof calculate>["players"][number];
+  row: ReturnType<typeof calculate>["players"][number] | WeeklyPlayerResult;
   index: number;
   expanded: boolean;
   onExpand: () => void;
@@ -1586,8 +1607,10 @@ function ResultRow({
             <i />
           </div>
           <span className="small muted">
-            {total ? Math.round((row.played / total) * 100) : 0}% played
-            {row.overridden ? " · adjusted" : ""}
+            {total
+              ? `${Math.round((row.played / total) * 100)}% played`
+              : "No recorded time"}
+            {"overridden" in row && row.overridden ? " · adjusted" : ""}
           </span>
         </td>
         <td>
@@ -1615,14 +1638,16 @@ function ResultRow({
             <span>
               After break bench <strong>{row.postBench} min</strong>
             </span>
-            <span>
-              Availability{" "}
-              <strong>
-                {row.overridden
-                  ? "Officer adjustment applied"
-                  : "Automatically inferred"}
-              </strong>
-            </span>
+            {"overridden" in row && (
+              <span>
+                Availability{" "}
+                <strong>
+                  {row.overridden
+                    ? "Officer adjustment applied"
+                    : "Automatically inferred"}
+                </strong>
+              </span>
+            )}
             {onEdit && (
               <button className="text-button" onClick={onEdit}>
                 <Settings2 size={14} /> Edit availability{" "}

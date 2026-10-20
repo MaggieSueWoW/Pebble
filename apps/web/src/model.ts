@@ -68,7 +68,22 @@ export type NightResult = {
   players: PlayerResult[];
   reports: number;
 };
+/** Weekly minutes are published by the worker, not recomputed in the browser. */
+export type WeeklyPlayerResult = Pick<
+  PlayerResult,
+  | "id"
+  | "name"
+  | "className"
+  | "role"
+  | "color"
+  | "played"
+  | "bench"
+  | "preBench"
+  | "postBench"
+>;
+export type WeekResult = { week: string; players: WeeklyPlayerResult[] };
 export type Results = {
+  weeks?: WeekResult[];
   warnings?: string[];
   completedAt: string;
   signature: string;

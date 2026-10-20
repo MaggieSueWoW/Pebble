@@ -697,3 +697,50 @@ it("connects report/availability validation and names the discard dialog", () =>
     document.getElementById("availability-validation")?.getAttribute("role"),
   ).toBe("alert");
 });
+
+it("shows stored weekly rows, keeps zero time and omits per-night availability actions", () => {
+  const c = connection([alpha]);
+  c.hasResults = true;
+  c.saved.results.weeks = [
+    {
+      week: "2026-10-13",
+      players: [
+        {
+          id: alpha.id,
+          name: alpha.name,
+          played: 123,
+          bench: 47,
+          preBench: 20,
+          postBench: 27,
+        },
+        {
+          id: "historical",
+          name: "Historical Player",
+          played: 0,
+          bench: 0,
+          preBench: 0,
+          postBench: 0,
+        },
+      ],
+    },
+  ];
+  const { rerender } = render(<App connection={c} />);
+  fireEvent.click(screen.getByRole("button", { name: /^Results/ }));
+  const period = screen.getByRole("combobox", { name: "Result period" });
+  fireEvent.change(period, { target: { value: "week:2026-10-13" } });
+  expect(screen.getByText("2h 03m")).toBeTruthy();
+  expect(screen.getByText("0h 47m")).toBeTruthy();
+  expect(screen.getByText("Historical Player")).toBeTruthy();
+  expect(screen.getByText("No recorded time")).toBeTruthy();
+  fireEvent.click(
+    screen.getByRole("button", { name: `Details for ${alpha.name}` }),
+  );
+  expect(screen.getByText("20 min")).toBeTruthy();
+  expect(
+    screen.queryByRole("button", { name: "Edit availability" }),
+  ).toBeNull();
+  expect(screen.queryByText("Automatically inferred")).toBeNull();
+  c.saved.results = { ...c.saved.results, weeks: [] };
+  rerender(<App connection={{ ...c }} />);
+  expect((period as HTMLSelectElement).value).toBe("season");
+});
