@@ -16,7 +16,7 @@ import Root from "./Root";
 type Data = Record<string, unknown>;
 type Snapshot = {
   exists: () => boolean;
-  metadata: { hasPendingWrites: boolean };
+  metadata: { hasPendingWrites: boolean; fromCache?: boolean };
   data: () => Data;
   docs: {
     id: string;
@@ -58,15 +58,20 @@ vi.mock("firebase/firestore", () => ({
   collection: (base: { path?: string }, ...parts: string[]) => ({
     path: [base.path, ...parts].filter(Boolean).join("/"),
   }),
-  query: (ref: unknown) => ref,
+  query: (ref: { path: string }, ...constraints: unknown[]) => ({
+    path: constraints.includes("active-status")
+      ? `${ref.path}/active`
+      : ref.path,
+  }),
+  where: () => "active-status",
   orderBy: vi.fn(),
   limit: vi.fn(),
   serverTimestamp: vi.fn(),
-  onSnapshot: (
-    ref: { path: string },
-    next: Listener["next"],
-    error: Listener["error"],
-  ) => {
+  onSnapshot: (ref: { path: string }, ...args: unknown[]) => {
+    const [next, error] = args.slice(-2) as [
+      Listener["next"],
+      Listener["error"],
+    ];
     const stop = vi.fn();
     mock.listeners.push({ path: ref.path, next, error, stop });
     return stop;
@@ -81,8 +86,12 @@ vi.mock("firebase/firestore", () => ({
 const snap = (data: Data = {}, docs: Record<string, Data> = {}): Snapshot => ({
   exists: () => true,
   data: () => data,
-  metadata: { hasPendingWrites: false },
-  docs: Object.entries(docs).map(([id, d]) => ({ id, data: () => d })),
+  metadata: { hasPendingWrites: false, fromCache: false },
+  docs: Object.entries(docs).map(([id, d]) => ({
+    id,
+    data: () => d,
+    metadata: { hasPendingWrites: false },
+  })),
 });
 const latest = (path: string) => {
   const found = mock.listeners.filter((l) => l.path === path).at(-1);
@@ -95,7 +104,10 @@ const send = (path: string, data: Data = {}, docs: Record<string, Data> = {}) =>
   });
 const login = (uid = "officer") =>
   act(() => mock.auth({ uid, displayName: uid } as User));
-const grant = (uid = "officer") => send(`officers/${uid}`, { enabled: true });
+const grant = (uid = "officer", queueLoaded = true) => {
+  send(`officers/${uid}`, { enabled: true });
+  if (queueLoaded) send("seasons/test/runs/active");
+};
 const revoke = () => send("officers/officer", { enabled: false });
 const inputNames = [
   "reports",
@@ -537,6 +549,133 @@ const stamp = (iso = "2026-10-16T23:00:00Z") => ({
 });
 const completed = (): Snapshot =>
   snap({ complete: true, completedAt: stamp(), reportCount: 2 });
+
+describe("queue recovery", () => {
+  it("waits for the server queue and offers a working retry after listener failure", async () => {
+    render(<Root />);
+    login();
+    grant("officer", false);
+    loadPrivate();
+    await publicResults();
+    const button = () =>
+      screen.getByRole("button", { name: "Run Pebble" }) as HTMLButtonElement;
+    expect(button().disabled).toBe(true);
+    expect(
+      screen.getByRole("status", { name: "Run status" }).textContent,
+    ).toContain("Checking run queue");
+    const cached = snap();
+    cached.metadata.fromCache = true;
+    act(() => latest("seasons/test/runs/active").next(cached));
+    expect(button().disabled).toBe(true);
+    const old = latest("seasons/test/runs/active");
+    act(() => old.error(new Error("Queue unavailable")));
+    expect(button().disabled).toBe(true);
+    expect(
+      screen.getByRole("status", { name: "Run status" }).textContent,
+    ).toContain("Run queue is unavailable");
+    fireEvent.click(screen.getByRole("button", { name: "Retry run queue" }));
+    expect(old.stop).toHaveBeenCalled();
+    act(() => old.next(snap()));
+    expect(button().disabled).toBe(true);
+    send("seasons/test/runs/active");
+    expect(button().disabled).toBe(false);
+    expect(
+      screen.queryByRole("button", { name: "Retry run queue" }),
+    ).toBeNull();
+    expect(mock.transaction).not.toHaveBeenCalled();
+  });
+
+  it("recovers a run outside history, prefers running work, and pins terminal details", async () => {
+    const { result } = renderHook(useFirestore);
+    login();
+    grant();
+    const queued = {
+      status: "queued",
+      requestedAt: stamp("2026-10-15T20:00:00Z"),
+    };
+    const running = {
+      status: "running",
+      stage: "Fetching reports",
+      requestedAt: stamp(),
+    };
+    send("seasons/test/runs", {}, { newer: { status: "failed" } });
+    send("seasons/test/runs/active", {}, { old: queued, running });
+    expect(result.current.connection.active).toMatchObject({
+      id: "running",
+      status: "running",
+      stage: 2,
+    });
+    // Direct tracking stays conservative until both query and document agree.
+    send("seasons/test/runs/active", {}, { old: queued });
+    send("seasons/test/runs/running", {
+      ...running,
+      status: "failed",
+      error: "Finished outside history",
+    });
+    expect(result.current.connection.active?.id).toBe("old");
+    send("seasons/test/runs/active");
+    send("seasons/test/runs/old", {
+      ...queued,
+      status: "failed",
+      error: "Recovered run stopped",
+    });
+    expect(result.current.connection.active).toBeNull();
+    expect(
+      result.current.connection.saved.history.some(
+        (r) => r.message === "Recovered run stopped",
+      ),
+    ).toBe(true);
+    expect(mock.transaction).not.toHaveBeenCalled();
+  });
+
+  it("keeps observed run data when queue confirmation arrives before submission acknowledgement", async () => {
+    const { result } = renderHook(useFirestore);
+    login();
+    grant();
+    const write = deferred<void>();
+    mock.getDoc.mockResolvedValueOnce(missing());
+    mock.setDoc.mockReturnValueOnce(write.promise);
+    let request!: Promise<void>;
+    await act(async () => {
+      request = result.current.connection.requestRun();
+    });
+    const path = mock.getDoc.mock.calls[0][0].path;
+    const id = path.split("/").at(-1)!;
+    send(
+      "seasons/test/runs/active",
+      {},
+      { [id]: { status: "queued", requestedAt: stamp() } },
+    );
+    send(path, { status: "queued", requestedAt: stamp() });
+    await act(async () => {
+      write.resolve();
+      await request;
+    });
+    expect(result.current.connection.submitting).toBe(false);
+    expect(result.current.connection.active?.id).toBe(id);
+    expect(mock.setDoc).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects submission before queue confirmation and ignores queue callbacks after access loss", async () => {
+    const { result } = renderHook(useFirestore);
+    login();
+    grant("officer", false);
+    await expect(result.current.connection.requestRun()).rejects.toThrow(
+      "Wait for the run queue",
+    );
+    const old = latest("seasons/test/runs/active");
+    revoke();
+    act(() => {
+      old.next(snap({}, { hidden: { status: "queued" } }));
+      old.error(new Error("Old queue failure"));
+    });
+    expect(result.current.connection.active).toBeNull();
+    expect(result.current.connection.queueReady).toBe(false);
+    expect(result.current.connection.queueError).toBe("");
+    expect(old.stop).toHaveBeenCalled();
+    expect(mock.transaction).not.toHaveBeenCalled();
+  });
+});
 
 describe("run submission", () => {
   it("disables the actual Run button while submitting and until the run is observed", async () => {

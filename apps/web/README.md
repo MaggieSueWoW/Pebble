@@ -80,9 +80,13 @@ other nights and the empty run queue stay unchanged.
 
 
 Run-submission coverage includes held/repeated clicks, denied writes, a committed
-request whose acknowledgement is replaced with an error, retry without duplicate
+request whose acknowledgement is replaced with an error, recovery without duplicate
 creation, offline heartbeat messaging, progress stages, terminal failure and
-tracking beyond the recent-history limit. Test fixtures advance the emulator queue
+tracking beyond the recent-history limit. Active queued/running requests are read
+separately from recent history, so reloads and other officer sessions still find
+older work. Run stays disabled until the server confirms queue state; a terminated
+queue listener offers Retry run queue. Browser coverage checks queued and running
+reloads, another officer session and terminal details outside recent history. Test fixtures advance the emulator queue
 and heartbeat; they never start or contact a worker. Previous completed results
 and unrelated input versions are checked throughout these cases.
 

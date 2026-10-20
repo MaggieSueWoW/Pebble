@@ -284,7 +284,7 @@ test("retains the request ID after a denied submission and creates one request o
   expect(new Set(calls.creates).size).toBe(1);
   expect(new Set(calls.lookups).size).toBe(1);
 });
-test("recovers an accepted request after a lost acknowledgement and tracks it beyond recent history", async ({
+test("observes an accepted request after a lost acknowledgement without resubmission", async ({
   page,
 }) => {
   await officer(page, env);
@@ -299,7 +299,7 @@ test("recovers an accepted request after a lost acknowledgement and tracks it be
     const response = await route.fetch();
     expect(response.status()).toBe(200);
     // The real emulator committed, but the browser receives an error instead of
-    // acknowledgement. Roll recent history forward before allowing a manual retry.
+    // acknowledgement. Roll recent history forward before delivering the error.
     await setRun(accepted, { fixtureMarker: "accepted before response loss" });
     await histories();
     await route.fulfill({
@@ -319,10 +319,9 @@ test("recovers an accepted request after a lost acknowledgement and tracks it be
   await expect(page.getByRole("alert")).toContainText(
     "Submission acknowledgement unavailable",
   );
-  await expect(runButton(page)).toBeEnabled();
   expect((await requests())[0].id).toBe(accepted);
   await page.unroute(/\/documents:commit(?:\?|$)/);
-  await runButton(page).click();
+  // The independent queue listener discovers the accepted request automatically.
   await expect(page.getByRole("button", { name: "Run queued" })).toBeDisabled();
   expect(new Set(calls.lookups)).toEqual(new Set([accepted]));
   expect(calls.creates).toEqual([accepted]);
@@ -345,4 +344,76 @@ test("recovers an accepted request after a lost acknowledgement and tracks it be
         ?.fixtureMarker,
     ).toBe("accepted before response loss");
   });
+});
+
+test("recovers old queued work after reload and in another officer session", async ({
+  page,
+  browser,
+}) => {
+  expectedRequests = 1;
+  await setRun("recovered", {
+    status: "queued",
+    requestedBy: "another-officer",
+    requestedAt: Timestamp.fromMillis(Date.now() - 1800000),
+  });
+  await histories();
+  await officer(page, env);
+  await expect(page.getByRole("button", { name: "Run queued" })).toBeDisabled();
+  await expect(runStatus(page)).toContainText(
+    "Queued · waiting for your local bot",
+  );
+  await previousResults(page);
+  await page.reload();
+  await expect(page.getByRole("button", { name: "Run queued" })).toBeDisabled();
+  await previousResults(page);
+
+  const context = await browser.newContext({
+    viewport: { width: 390, height: 844 },
+  });
+  const other = await context.newPage();
+  try {
+    await officer(other, env);
+    await expect(
+      other.getByRole("button", { name: "Run queued" }),
+    ).toBeDisabled();
+    await previousResults(other);
+    for (const stage of ["Fetching reports", "Calculating results"]) {
+      await setRun("recovered", { status: "running", stage });
+      for (const view of [page, other]) {
+        await expect(runStatus(view)).toContainText(`${stage}…`);
+        await expect(
+          view.getByRole("button", { name: "Running Pebble" }),
+        ).toBeDisabled();
+        await expect(
+          view.getByText("Example Player", { exact: true }),
+        ).toBeVisible();
+      }
+    }
+    await page.reload();
+    await expect(runStatus(page)).toContainText("Calculating results…");
+    await previousResults(page);
+    await setRun("recovered", {
+      status: "failed",
+      completedAt: Timestamp.now(),
+      error: "Recovered request finished",
+    });
+    for (const view of [page, other]) {
+      await expect(runButton(view)).toBeEnabled();
+      await expect(
+        view.getByText("Example Player", { exact: true }),
+      ).toBeVisible();
+      await view.getByText("Run history", { exact: true }).click();
+      await expect(
+        view.getByText("Recovered request finished", { exact: true }),
+      ).toBeVisible();
+    }
+    expect(
+      await other.evaluate(
+        () => document.documentElement.scrollWidth <= window.innerWidth,
+      ),
+    ).toBe(true);
+    expect((await requests()).map((r) => r.id)).toEqual(["recovered"]);
+  } finally {
+    await context.close();
+  }
 });
