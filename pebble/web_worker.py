@@ -7,32 +7,87 @@ import hashlib
 import json
 import logging
 import os
+import signal
 import tempfile
 import threading
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 
 import yaml
 from dotenv import load_dotenv
-from google.api_core.exceptions import GoogleAPICallError
+from google.api_core import exceptions as api_errors
+from google.api_core.retry import Retry
 from google.auth.credentials import AnonymousCredentials
 from google.cloud import firestore
 from google.cloud.firestore_v1.base_query import FieldFilter
+from pymongo.errors import ConnectionFailure, ExecutionTimeout
+from redis.exceptions import AuthenticationError, AuthorizationError
+from redis.exceptions import ConnectionError as RedisConnectionError
+from redis.exceptions import TimeoutError as RedisTimeoutError
 
 from .ingest import WOW_CLASS_COLORS, persist_report_fights
 from .mongo_client import ensure_indexes
 from .pipeline import compute_results
 from .utils.time import ms_to_pt_iso, night_id_from_ms
-from .wcl_client import WCLClient
+from .wcl_client import WCLClient, _is_retryable
 from .web_models import (
-    CalculationInput,
     INPUT_MODELS,
+    CalculationInput,
     WorkerConfig,
     validate_snapshot,
     wall_ms,
 )
 
 log = logging.getLogger(__name__)
+RPC_OPTIONS = {"timeout": 10, "retry": Retry(initial=0.2, maximum=1, timeout=10)}
+
+
+class InputError(ValueError):
+    """An actionable message authored by the worker, without raw service data."""
+
+
+class RunDeadlineExceeded(BaseException):
+    """Interrupt even dependency retry wrappers when a run exceeds its budget."""
+
+
+def retryable(exc: BaseException) -> bool:
+    """Classify service outages without logging their potentially private text."""
+    if isinstance(exc, (AuthenticationError, AuthorizationError)):
+        return False
+    return isinstance(
+        exc,
+        (
+            api_errors.ServiceUnavailable,
+            api_errors.DeadlineExceeded,
+            api_errors.Aborted,
+            api_errors.InternalServerError,
+            api_errors.TooManyRequests,
+            api_errors.RetryError,
+            ConnectionFailure,
+            ExecutionTimeout,
+            RedisConnectionError,
+            RedisTimeoutError,
+        ),
+    ) or _is_retryable(exc)
+
+
+@contextmanager
+def run_deadline(seconds: int):
+    """Bound main-thread processing; SIGTERM still drains within this budget."""
+
+    def expired(*_):
+        raise RunDeadlineExceeded()
+
+    previous = signal.signal(signal.SIGALRM, expired)
+    signal.setitimer(signal.ITIMER_REAL, seconds)
+    try:
+        yield
+    finally:
+        signal.setitimer(signal.ITIMER_REAL, 0)
+        signal.signal(signal.SIGALRM, previous)
+
+
 WORKING_COLLECTIONS = (
     "reports",
     "actors",
@@ -89,35 +144,39 @@ def capture_inputs(client, season_id: str) -> tuple[dict, dict]:
         result, versions = {}, {}
         for name in (*INPUT_MODELS, "settings"):
             result[name] = {}
-            for document in season.collection(name).get(transaction=transaction):
+            for document in season.collection(name).get(
+                transaction=transaction, **RPC_OPTIONS
+            ):
                 value = document.to_dict()
                 result[name][document.id] = value
                 versions[f"{name}/{document.id}"] = value.get("version")
         return result, versions
 
-    return read(client.transaction(read_only=True))
+    return read(client.transaction(read_only=True, max_attempts=3))
 
 
 def calculate_snapshot(
     config: WorkerConfig, db, raw: dict, stage=lambda _: None
 ) -> dict:
     """Rebuild local materializations and return a public-safe result projection."""
-    inputs = validate_snapshot(raw)
-    settings = raw.get("settings", {}).get("calculation")
-    config = config.model_copy(
-        update={
-            "time": (
-                CalculationInput.model_validate(settings).time_config()
-                if settings
-                else config.time
-            )
-        }
-    )
+    try:
+        inputs = validate_snapshot(raw)
+        calculation = raw.get("settings", {}).get("calculation")
+        time_config = (
+            CalculationInput.model_validate(calculation).time_config()
+            if calculation
+            else config.time
+        )
+    except ValueError:
+        raise InputError(
+            "Invalid inputs. Check roster, reports, availability and calculation settings."
+        ) from None
+    config = config.model_copy(update={"time": time_config})
     if config.time.tz != "America/Los_Angeles":
-        raise ValueError("The existing calculation engine requires America/Los_Angeles")
+        raise InputError("The existing calculation engine requires America/Los_Angeles")
     enabled = [code for code, report in inputs["reports"].items() if report.enabled]
     if enabled and not inputs["players"]:
-        raise ValueError("Add the team roster before processing reports")
+        raise InputError("Add the team roster before processing reports")
     # This database is dedicated to web runs; never clear the existing Sheets DB.
     for collection in WORKING_COLLECTIONS:
         db[collection].delete_many({})
@@ -152,39 +211,48 @@ def calculate_snapshot(
         cache_prefix=config.redis.key_prefix,
     )
     summaries = {}
-    for code in enabled:
-        try:
-            bundle = wcl.fetch_report_bundle(code)
-            start, end = int(bundle["startTime"]), int(bundle["endTime"])
-            if start <= 0 or end < start:
-                raise ValueError("Invalid report timestamps")
-        except Exception as exc:
-            raise ValueError(
-                f"Could not fetch report {code}. Check its code and WCL accessibility, then run again."
-            ) from exc
-        night = night_id_from_ms(start)
-        doc = {
-            "code": code,
-            "title": bundle.get("title", ""),
-            "start_ms": start,
-            "end_ms": end,
-            "night_id": night,
-        }
-        timing = inputs["nightOverrides"].get(night)
-        for field, attribute in (
-            ("break_override_start_ms", "breakStart"),
-            ("break_override_end_ms", "breakEnd"),
-            ("mythic_override_start_ms", "start"),
-            ("mythic_override_end_ms", "end"),
-        ):
-            doc[field] = wall_ms(getattr(timing, attribute)) if timing else None
-        db.reports.insert_one(doc)
-        persist_report_fights(db, code, bundle, start, night)
-        summaries[code] = {
-            "title": doc["title"],
-            "night": night,
-            "checkedAt": datetime.now(timezone.utc),
-        }
+    try:
+        for code in enabled:
+            try:
+                bundle = wcl.fetch_report_bundle(code)
+                start, end = int(bundle["startTime"]), int(bundle["endTime"])
+                if start <= 0 or end < start:
+                    raise ValueError("Invalid report timestamps")
+            except Exception as exc:
+                if retryable(exc):
+                    raise
+                if isinstance(exc, (AuthenticationError, AuthorizationError)):
+                    raise InputError(
+                        "Redis access denied. Check worker cache credentials, then run again."
+                    ) from None
+                raise InputError(
+                    f"Could not fetch report {code}. Check its code and WCL accessibility, then run again."
+                ) from exc
+            night = night_id_from_ms(start)
+            doc = {
+                "code": code,
+                "title": bundle.get("title", ""),
+                "start_ms": start,
+                "end_ms": end,
+                "night_id": night,
+            }
+            timing = inputs["nightOverrides"].get(night)
+            for field, attribute in (
+                ("break_override_start_ms", "breakStart"),
+                ("break_override_end_ms", "breakEnd"),
+                ("mythic_override_start_ms", "start"),
+                ("mythic_override_end_ms", "end"),
+            ):
+                doc[field] = wall_ms(getattr(timing, attribute)) if timing else None
+            db.reports.insert_one(doc)
+            persist_report_fights(db, code, bundle, start, night)
+            summaries[code] = {
+                "title": doc["title"],
+                "night": night,
+                "checkedAt": datetime.now(timezone.utc),
+            }
+    finally:
+        wcl.close()
     stage("Calculating results")
     overrides = {}
     for a in inputs["availabilityOverrides"].values():
@@ -203,7 +271,7 @@ def calculate_snapshot(
                     value.mode == "partial"
                     and value.minutes > qa[a.nightId][f"mythic_{half}_min"]
                 ):
-                    raise ValueError(
+                    raise InputError(
                         f"Partial availability exceeds {half}-break duration on {a.nightId}"
                     )
 
@@ -258,7 +326,7 @@ def calculate_snapshot(
     warnings = []
     for night, q in sorted(qa.items(), reverse=True):
         if q["mythic_end_ms"] <= q["mythic_start_ms"]:
-            raise ValueError(f"Mythic end must follow start on {night}")
+            raise InputError(f"Mythic end must follow start on {night}")
 
         def wall(ms):
             return ms_to_pt_iso(ms)[:16] if ms is not None else ""
@@ -314,7 +382,8 @@ class Worker:
     def __init__(self, config, client, mongo):
         self.config, self.client = config, client
         self.season = client.collection("seasons").document(config.firestore.season_id)
-        suffix = hashlib.sha256(config.firestore.season_id.encode()).hexdigest()[:12]
+        identity = f"{config.firestore.project_id}/{config.firestore.season_id}"
+        suffix = hashlib.sha256(identity.encode()).hexdigest()[:12]
         self.db = mongo[f"{config.mongo.db}_web_{suffix}"]
         self.current_run = None
 
@@ -323,21 +392,37 @@ class Worker:
             {
                 "lastHeartbeatAt": firestore.SERVER_TIMESTAMP,
                 "currentRunId": self.current_run,
-            }
+            },
+            **RPC_OPTIONS,
         )
+
+    def fail_run(self, ref, message):
+        """Settle pending/active work; never downgrade a committed success."""
+
+        @firestore.transactional
+        def fail(tx):
+            value = ref.get(transaction=tx, **RPC_OPTIONS).to_dict() or {}
+            if value.get("status") in {"queued", "running"}:
+                tx.update(
+                    ref,
+                    {
+                        "status": "failed",
+                        "completedAt": firestore.SERVER_TIMESTAMP,
+                        "error": message,
+                    },
+                )
+
+        fail(self.client.transaction(max_attempts=3))
 
     def recover(self):
         for run in (
             self.season.collection("runs")
             .where(filter=FieldFilter("status", "==", "running"))
-            .stream()
+            .stream(**RPC_OPTIONS)
         ):
-            run.reference.update(
-                {
-                    "status": "failed",
-                    "completedAt": firestore.SERVER_TIMESTAMP,
-                    "error": "Worker stopped during this run. Run Pebble again.",
-                }
+            self.fail_run(
+                run.reference,
+                "Worker interrupted by shutdown or a service outage. Run Pebble again.",
             )
 
     def queued_runs(self):
@@ -349,20 +434,21 @@ class Worker:
             .limit(1)
         )
 
-    def process_next(self) -> bool:
-        queued = list(self.queued_runs().stream())
-        if not queued:
-            return False
-        ref = queued[0].reference
+    def claim(self, ref, stop: threading.Event | None = None):
+        """Transactionally claim a queued request after checking officer access."""
 
         @firestore.transactional
         def claim(tx):
-            run = ref.get(transaction=tx).to_dict()
-            if run.get("status") != "queued":
+            run = ref.get(transaction=tx, **RPC_OPTIONS).to_dict()
+            if run.get("status") != "queued" or (stop is not None and stop.is_set()):
                 return False
             officer = self.client.document(
                 f"officers/{run.get('requestedBy', '')}"
-            ).get(transaction=tx)
+            ).get(transaction=tx, **RPC_OPTIONS)
+            # A stop may arrive while either transaction read is in flight.
+            # Leave the request queued instead of accepting new work to drain.
+            if stop is not None and stop.is_set():
+                return False
             if not officer.exists or not officer.to_dict().get("enabled"):
                 tx.update(
                     ref,
@@ -383,59 +469,84 @@ class Worker:
             )
             return True
 
-        if not claim(self.client.transaction()):
-            return True
-        self.current_run = ref.id
+        return claim(self.client.transaction(max_attempts=3))
+
+    def process_next(self, stop: threading.Event | None = None) -> bool:
+        if threading.current_thread() is not threading.main_thread():
+            raise RuntimeError(
+                "Worker processing requires the main thread for deadlines"
+            )
+        if stop is not None and stop.is_set():
+            return False
+        queued = list(self.queued_runs().stream(**RPC_OPTIONS))
+        if not queued or (stop is not None and stop.is_set()):
+            return False
+        ref = queued[0].reference
+
         try:
-            raw, versions = capture_inputs(self.client, self.config.firestore.season_id)
-            self.db.input_snapshots.replace_one(
-                {"run_id": ref.id}, {"run_id": ref.id, "inputs": raw}, upsert=True
+            with run_deadline(self.config.run_timeout_seconds):
+                if not self.claim(ref, stop=stop):
+                    return True
+                self.current_run = ref.id
+                self.compute(ref)
+        except (Exception, RunDeadlineExceeded) as exc:
+            if retryable(exc):
+                # Resolve an ambiguous claim/publication on reconnect before
+                # accepting another request. Never recompute a completed run.
+                raise
+            log.warning(
+                "Web run failed (%s)", type(exc).__name__, extra={"run_id": ref.id}
             )
-            digest = hashlib.sha256(
-                json.dumps(raw, default=str, sort_keys=True).encode()
-            ).hexdigest()
-            ref.update(
-                {
-                    "inputVersions": versions,
-                    "inputSnapshotHash": digest,
-                    "engineVersion": "0.1.2",
-                }
-            )
-            output = calculate_snapshot(
-                self.config,
-                self.db,
-                raw,
-                stage=lambda stage: ref.update({"stage": stage}),
-            )
-            ref.update(
-                {
-                    "stage": "Updating results",
-                    "reportSummaries": output["reportSummaries"],
-                    "warnings": output["warnings"],
-                }
-            )
-            self.publish(ref, output)
-        except Exception as exc:
-            log.exception("Web run failed", extra={"run_id": ref.id})
             message = (
-                str(exc)
-                if isinstance(exc, ValueError)
-                else "Processing failed. Check the local bot log and Run Pebble again."
+                "Run exceeded its time limit. Reduce the report set and Run Pebble again."
+                if isinstance(exc, RunDeadlineExceeded)
+                else (
+                    str(exc)
+                    if isinstance(exc, InputError)
+                    else "Processing failed. Check worker access and inputs, then Run Pebble again."
+                )
             )
-            ref.update(
-                {
-                    "status": "failed",
-                    "completedAt": firestore.SERVER_TIMESTAMP,
-                    "error": message[:2000],
-                }
-            )
+            self.fail_run(ref, message)
         finally:
             self.current_run = None
         return True
 
+    def compute(self, ref):
+        """Capture, compute and publish one already-claimed request."""
+        raw, versions = capture_inputs(self.client, self.config.firestore.season_id)
+        self.db.input_snapshots.replace_one(
+            {"run_id": ref.id}, {"run_id": ref.id, "inputs": raw}, upsert=True
+        )
+        digest = hashlib.sha256(
+            json.dumps(raw, default=str, sort_keys=True).encode()
+        ).hexdigest()
+        ref.update(
+            {
+                "inputVersions": versions,
+                "inputSnapshotHash": digest,
+                "engineVersion": "0.1.2",
+            },
+            **RPC_OPTIONS,
+        )
+        output = calculate_snapshot(
+            self.config,
+            self.db,
+            raw,
+            stage=lambda stage: ref.update({"stage": stage}, **RPC_OPTIONS),
+        )
+        ref.update(
+            {
+                "stage": "Updating results",
+                "reportSummaries": output["reportSummaries"],
+                "warnings": output["warnings"],
+            },
+            **RPC_OPTIONS,
+        )
+        self.publish(ref, output)
+
     def publish(self, run_ref, output):
         root = self.season.collection("results").document(run_ref.id)
-        root.set({"complete": False})
+        root.set({"complete": False}, **RPC_OPTIONS)
         writes = [
             (root.collection("players").document(p["id"]), p) for p in output["players"]
         ]
@@ -456,14 +567,16 @@ class Worker:
             batch = self.client.batch()
             for ref, value in writes[offset : offset + 400]:
                 batch.set(ref, value)
-            batch.commit()
+            batch.commit(**RPC_OPTIONS)
 
         @firestore.transactional
         def finish(tx):
-            run = run_ref.get(transaction=tx).to_dict()
+            run = run_ref.get(transaction=tx, **RPC_OPTIONS).to_dict()
+            if run["status"] == "succeeded":
+                return
             if run["status"] != "running":
                 raise ValueError("Run was interrupted before results were committed")
-            season_data = self.season.get(transaction=tx).to_dict() or {}
+            season_data = self.season.get(transaction=tx, **RPC_OPTIONS).to_dict() or {}
             tx.set(
                 root,
                 {
@@ -490,7 +603,7 @@ class Worker:
                 {"status": "succeeded", "completedAt": firestore.SERVER_TIMESTAMP},
             )
 
-        finish(self.client.transaction())
+        finish(self.client.transaction(max_attempts=3))
 
     def listen(self, stop: threading.Event):
         """Wake on queue changes; let the SDK resume transient stream failures."""
@@ -520,15 +633,20 @@ class Worker:
                     else:
                         # This timeout only checks local listener health; it
                         # makes no Firestore query when there is no notification.
-                        if not wake.wait(10):
+                        if not wake.wait(1):
                             continue
                         wake.clear()
-                        while not stop.is_set() and self.process_next():
+                        while not stop.is_set() and self.process_next(stop=stop):
                             pass
                         retry_delay = 1
                         continue
-                except GoogleAPICallError as exc:
-                    log.warning("Firestore unavailable; reconnecting: %s", exc.message)
+                except Exception as exc:
+                    if not retryable(exc):
+                        raise
+                    log.warning(
+                        "Worker dependency unavailable; reconnecting (%s)",
+                        type(exc).__name__,
+                    )
                     if watch is not None:
                         watch.unsubscribe()
                         watch = None
@@ -554,28 +672,33 @@ class Worker:
             try:
                 fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
             except BlockingIOError as exc:
-                raise ValueError(
+                raise InputError(
                     "A local worker is already running for this project and season"
                 ) from exc
             if once:
                 self.recover()
                 self.heartbeat()
-                self.process_next()
+                self.process_next(stop=stop)
                 return
             stop = stop if stop is not None else threading.Event()
 
+            heartbeat_stop = threading.Event()
+
             def beat():
-                while not stop.is_set():
+                while not heartbeat_stop.is_set():
                     try:
                         self.heartbeat()
                     except Exception:
                         log.warning("Could not update worker heartbeat")
-                    stop.wait(60)
+                    heartbeat_stop.wait(60)
 
-            thread = threading.Thread(target=beat, daemon=True)
+            thread = threading.Thread(target=beat, name="pebble-heartbeat", daemon=True)
             thread.start()
             try:
                 self.listen(stop)
             finally:
                 stop.set()
-                thread.join(timeout=2)
+                heartbeat_stop.set()
+                thread.join(timeout=21)
+                if thread.is_alive():
+                    raise RuntimeError("Heartbeat failed to stop within the RPC budget")

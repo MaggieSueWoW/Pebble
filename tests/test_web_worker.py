@@ -310,7 +310,7 @@ def test_listener_drains_requests_on_main_thread_and_unsubscribes(config, monkey
     monkeypatch.setattr(worker, "recover", Mock())
     calls = []
 
-    def process():
+    def process(stop=None):
         calls.append(threading.get_ident())
         if len(calls) == 3:
             stop.set()
@@ -381,7 +381,7 @@ def test_listener_retries_startup_and_stopped_watch_with_backoff(config, monkeyp
         worker, "recover", Mock(side_effect=[ServiceUnavailable("offline"), None, None])
     )
 
-    def process():
+    def process(stop=None):
         stop.is_set.return_value = True
         return False
 
@@ -431,9 +431,9 @@ def test_listener_receives_real_firestore_requests_and_restarts(
     queued_runs = worker.queued_runs
     calls = []
 
-    def process():
+    def process(stop=None):
         calls.append(threading.get_ident())
-        worked = process_next()
+        worked = process_next(stop=stop)
         first = season.collection("runs").document("listener-first").get().to_dict()
         if first and first["status"] == "succeeded":
             first_finished.set()
@@ -473,20 +473,30 @@ def test_listener_receives_real_firestore_requests_and_restarts(
         )
 
     queue("listener-first")
-    thread = threading.Thread(target=listen, daemon=True)
+    # SDK notifications run in the background; calculations run on the main
+    # thread so the POSIX run deadline can interrupt blocked dependencies.
+    main_id = threading.get_ident()
+
+    def producer():
+        try:
+            assert attached.wait(10)
+            assert first_finished.wait(10)
+            attached.clear()
+            watches[0].unsubscribe()
+            assert attached.wait(15), "stopped listener was not recreated"
+            queue("listener-second")
+            assert finished.wait(10), "listener did not pick up work after restarting"
+        except BaseException as exc:
+            failures.append(exc)
+            stop.set()
+
+    thread = threading.Thread(target=producer, daemon=True)
     thread.start()
     try:
-        assert attached.wait(10)
-        assert first_finished.wait(10)
-        # Force a fully stopped listener, beyond SDK transient reconnection.
-        attached.clear()
-        watches[0].unsubscribe()
-        assert attached.wait(15), "stopped listener was not recreated"
-        queue("listener-second")
-        assert finished.wait(10), "listener did not pick up work after restarting"
+        listen()
         assert not failures
         assert len(watches) >= 2
-        assert set(calls) == {thread.ident}, "all processing must remain serial"
+        assert set(calls) == {main_id}, "all processing must remain serial"
         for name in ("listener-first", "listener-second"):
             assert (
                 season.collection("runs").document(name).get().to_dict()["status"]
@@ -504,13 +514,18 @@ def test_worker_heartbeat_runs_at_most_once_per_minute(config, monkeypatch):
     waited = threading.Event()
     intervals = []
 
-    def wait(interval):
-        intervals.append(interval)
-        stop.set()
-        waited.set()
-        return True
+    original_wait = threading.Event.wait
 
-    monkeypatch.setattr(stop, "wait", wait)
+    def wait(event, interval=None):
+        if interval == 60:
+            intervals.append(interval)
+            stop.set()
+            event.set()
+            waited.set()
+            return True
+        return original_wait(event, interval)
+
+    monkeypatch.setattr(threading.Event, "wait", wait)
     monkeypatch.setattr(worker, "heartbeat", Mock())
     monkeypatch.setattr(worker, "listen", lambda _: waited.wait(1))
     worker.run(stop=stop)

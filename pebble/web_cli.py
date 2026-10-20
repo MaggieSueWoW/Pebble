@@ -12,8 +12,8 @@ import click
 from google.cloud import firestore
 from pymongo import MongoClient
 
-from .web_models import CalculationInput, INPUT_MODELS
-from .web_worker import Worker, firestore_client, load_worker_config
+from .web_models import INPUT_MODELS, CalculationInput
+from .web_worker import InputError, Worker, firestore_client, load_worker_config
 
 
 @click.group()
@@ -34,18 +34,36 @@ def resources(config):
 @click.option("--once", is_flag=True, help="Process at most one queued run and exit.")
 def worker(config, once):
     """Read queued runs, compute locally, and update complete public results."""
-    settings, client = resources(config)
     logging.basicConfig(level=logging.INFO)
-    stop = threading.Event()
-    previous = signal.signal(signal.SIGTERM, lambda *_: stop.set())
     try:
-        with MongoClient(settings.mongo.uri) as mongo:
-            try:
-                Worker(settings, client, mongo).run(once=once, stop=stop)
-            except ValueError as exc:
-                raise click.ClickException(str(exc)) from exc
+        settings, client = resources(config)
+    except Exception as exc:
+        raise click.ClickException(
+            f"Worker configuration unavailable ({type(exc).__name__}). Check config and credentials."
+        ) from None
+    stop = threading.Event()
+    previous = {
+        sig: signal.signal(sig, lambda *_: stop.set())
+        for sig in (signal.SIGTERM, signal.SIGINT)
+    }
+    try:
+        with MongoClient(
+            settings.mongo.uri,
+            timeoutMS=10000,
+            serverSelectionTimeoutMS=5000,
+            connectTimeoutMS=5000,
+            socketTimeoutMS=10000,
+        ) as mongo:
+            Worker(settings, client, mongo).run(once=once, stop=stop)
+    except Exception as exc:
+        raise click.ClickException(
+            str(exc)
+            if isinstance(exc, InputError)
+            else f"Worker stopped ({type(exc).__name__}). Check worker configuration, service access and logs."
+        ) from None
     finally:
-        signal.signal(signal.SIGTERM, previous)
+        for sig, handler in previous.items():
+            signal.signal(sig, handler)
         client.close()
 
 

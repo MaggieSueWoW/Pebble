@@ -1,9 +1,34 @@
-import requests
 import time
+
+import pytest
+import requests
 from tenacity import nap
 
 from pebble import wcl_client
 from pebble.wcl_client import WCLClient
+
+
+@pytest.mark.parametrize("operation", ["token", "graphql"])
+def test_service_response_bodies_are_not_exposed_in_errors_or_logs(
+    monkeypatch, caplog, operation
+):
+    client = WCLClient("fake", "fake")
+
+    class Response:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {"errors": ["PRIVATE SERVICE RESPONSE"]}
+
+    monkeypatch.setattr(client._session, "post", lambda *_, **__: Response())
+    if operation == "graphql":
+        monkeypatch.setattr(client, "_ensure_token", lambda: None)
+    with pytest.raises(RuntimeError) as exc:
+        client._ensure_token() if operation == "token" else client._post("query")
+    assert "PRIVATE" not in str(exc.value)
+    assert "PRIVATE" not in caplog.text
+    client.close()
 
 
 def test_post_retries(monkeypatch):
@@ -54,7 +79,11 @@ def test_fetch_report_bundle_caches(monkeypatch):
 
     def fake_post(query, variables=None):
         calls["n"] += 1
-        return {"data": {"reportData": {"report": {"code": variables["code"], "startTime": 0}}}}
+        return {
+            "data": {
+                "reportData": {"report": {"code": variables["code"], "startTime": 0}}
+            }
+        }
 
     client._post = fake_post
     client.fetch_report_bundle("ABC")
@@ -70,7 +99,13 @@ def test_fetch_report_bundle_ttl(monkeypatch):
     client._ensure_token = lambda: None
 
     def fake_post(query, variables=None):
-        return {"data": {"reportData": {"report": {"code": variables["code"], "startTime": recent_start}}}}
+        return {
+            "data": {
+                "reportData": {
+                    "report": {"code": variables["code"], "startTime": recent_start}
+                }
+            }
+        }
 
     client._post = fake_post
     client.fetch_report_bundle("NEW")
@@ -82,7 +117,13 @@ def test_fetch_report_bundle_ttl(monkeypatch):
     client2._ensure_token = lambda: None
 
     def fake_post2(query, variables=None):
-        return {"data": {"reportData": {"report": {"code": variables["code"], "startTime": old_start}}}}
+        return {
+            "data": {
+                "reportData": {
+                    "report": {"code": variables["code"], "startTime": old_start}
+                }
+            }
+        }
 
     client2._post = fake_post2
     client2.fetch_report_bundle("OLD")

@@ -211,6 +211,7 @@ class WorkerConfig(BaseModel):
     wcl: WCLConfig
     redis: RedisConfig = Field(default_factory=RedisConfig)
     time: TimeConfig = Field(default_factory=TimeConfig)
+    run_timeout_seconds: Annotated[int, Field(strict=True, ge=1, le=1200)] = 1200
 
 
 class CalculationInput(InputDocument):
