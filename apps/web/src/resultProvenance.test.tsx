@@ -17,7 +17,7 @@ it("explains partial half flags and whole-row source without inventing full-half
   expect(
     screen.getByRole("region", { name: "Recorded availability explanation" })
       .textContent,
-  ).toContain("Available flag · Input: Partial availability");
+  ).toContain("Recorded available · Input: Partial availability");
   expect(screen.getByText("Officer adjustment")).toBeTruthy();
   expect(screen.getByText(/overall source describes the row/)).toBeTruthy();
 });

@@ -38,8 +38,8 @@ export function AvailabilityExplanation({
             <dt>{label}</dt>
             <dd>
               {availability[half].available
-                ? "Available flag"
-                : "Unavailable flag"}{" "}
+                ? "Recorded available"
+                : "Recorded unavailable"}{" "}
               · Input: {modes[availability[half].mode]}
             </dd>
           </div>
@@ -50,7 +50,7 @@ export function AvailabilityExplanation({
         </div>
       </dl>
       <p>
-        An available flag can represent partial availability. Played and bench
+        Recorded availability can cover part of the half. Played and bench
         minutes show the recorded totals. The overall source describes the row,
         not each half.
       </p>

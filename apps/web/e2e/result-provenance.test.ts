@@ -111,7 +111,7 @@ test("public recorded explanations and officer-only diagnostics survive selectio
     name: "Recorded availability explanation",
   });
   await expect(explanation).toContainText("Partial availability");
-  await expect(explanation).toContainText("Unavailable flag");
+  await expect(explanation).toContainText("Recorded unavailable");
   await expect(
     page.getByLabel("Officer night diagnostics", { exact: true }),
   ).toHaveCount(0);
@@ -132,6 +132,12 @@ test("public recorded explanations and officer-only diagnostics survive selectio
   await expect(diagnostics).toContainText("Configured default");
   await expect(diagnostics).toContainText("Officer timing override");
   await expect(diagnostics.locator("dd").nth(2)).toHaveText("2");
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth,
+    ),
+  ).toBe(true);
   await page
     .getByRole("combobox", { name: "Result period" })
     .selectOption("season");
