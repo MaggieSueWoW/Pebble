@@ -17,6 +17,7 @@ import {
   FlaskConical,
   Info,
   LoaderCircle,
+  Link2,
   Play,
   RotateCcw,
   Search,
@@ -47,6 +48,7 @@ import {
   type Saved,
 } from "./model";
 
+import { resultLink, useResultNavigation } from "./useResultNavigation";
 import { ResultRow } from "./ResultRow";
 import { useReportEditor } from "./useReportEditor";
 import { ReportsPanel } from "./ReportsPanel";
@@ -234,7 +236,13 @@ export default function App({ connection }: { connection?: LiveConnection }) {
     : sampleNights;
   const defaultNight = nightOptions[0] ?? today;
   const firstPlayer = players[0]?.id ?? "";
-  const [page, setPage] = useState<Page>(canManage ? "reports" : "results");
+  const navigation = useResultNavigation(
+    canManage ? "reports" : "results",
+    () => unsaved,
+    (action) => guard(action),
+  );
+  const page = navigation.page;
+  const setPage = (page: Page) => navigation.navigate({ page });
   const [night, setNight] = useState(defaultNight);
   const nightChosen = useRef(false);
   const [overrideTab, setOverrideTab] = useState<"availability" | "timing">(
@@ -242,8 +250,17 @@ export default function App({ connection }: { connection?: LiveConnection }) {
   );
   const [selected, setSelected] = useState(firstPlayer);
   const [search, setSearch] = useState("");
-  const [resultNight, setResultNight] = useState("season");
-  const [expandedPlayer, setExpandedPlayer] = useState<string | null>(null);
+  const resultNight = navigation.period;
+  const expandedPlayer = navigation.player;
+  const setResultNight = (period: string) =>
+    navigation.navigate({ period, player: null });
+  const setExpandedPlayer = (player: string | null) =>
+    navigation.navigate({ player });
+  const [resultLinkNotice, setResultLinkNotice] = useState<{
+    text: string;
+    period: string;
+    player: string | null;
+  } | null>(null);
   const [demoOnline, setOnline] = useState(true);
   const online = connection?.online ?? demoOnline;
   const [failNext, setFailNext] = useState(false);
@@ -680,12 +697,6 @@ export default function App({ connection }: { connection?: LiveConnection }) {
   const selectedWeek = weeks.find(
     (w) => `week:${w.week}` === visibleResultNight,
   );
-  useEffect(() => {
-    if (resultNight !== "season" && !hasResultPeriod(resultNight)) {
-      setResultNight("season");
-      setExpandedPlayer(null);
-    }
-  }, [results.nights, results.weeks, resultNight]);
   const latestNight = results.nights.find((n) => n.night === night);
   const resultRows = (
     visibleResultNight === "season"
@@ -706,6 +717,45 @@ export default function App({ connection }: { connection?: LiveConnection }) {
           b.name ?? players.find((p) => p.id === b.id)?.name ?? b.id,
         ),
     );
+  const resultSelectionReady =
+    !connection?.resultsPending && !connection?.resultsError;
+  useEffect(() => {
+    if (page !== "results" || !resultSelectionReady) return;
+    if (resultNight !== "season" && !hasResultPeriod(resultNight)) {
+      setResultLinkNotice({
+        text: "This result period is not available in the latest completed results. Showing season totals.",
+        period: "season",
+        player: null,
+      });
+      navigation.navigate({ period: "season", player: null }, true);
+    } else if (
+      expandedPlayer &&
+      !resultRows.some((row) => row.id === expandedPlayer)
+    ) {
+      setResultLinkNotice({
+        text: "This player is not available for this result period. Showing all players.",
+        period: resultNight,
+        player: null,
+      });
+      navigation.navigate({ player: null }, true);
+    }
+  }, [page, results, resultNight, expandedPlayer, resultSelectionReady]);
+  async function copyResultLink() {
+    try {
+      await navigator.clipboard.writeText(
+        resultLink(
+          { period: visibleResultNight, player: expandedPlayer },
+          !connection,
+        ),
+      );
+      notify("Result link copied.");
+    } catch {
+      notify(
+        "Couldn’t copy the link. Copy the address from your browser.",
+        true,
+      );
+    }
+  }
   const lastFailed = history[0]?.status === "failed";
   const waitingForResults = Boolean(
     connection?.submitting || connection?.resultsPending,
@@ -1344,6 +1394,12 @@ export default function App({ connection }: { connection?: LiveConnection }) {
               )}
             </>
           )}
+          {page === "results" &&
+            resultLinkNotice &&
+            resultLinkNotice.period === resultNight &&
+            resultLinkNotice.player === expandedPlayer && (
+              <p role="status">{resultLinkNotice.text}</p>
+            )}
           {page === "results" && (!connection || connection.hasResults) && (
             <>
               {Boolean(results.warnings?.length) && (
@@ -1421,8 +1477,8 @@ export default function App({ connection }: { connection?: LiveConnection }) {
                     aria-label="Result period"
                     value={visibleResultNight}
                     onChange={(e) => {
+                      setResultLinkNotice(null);
                       setResultNight(e.target.value);
-                      setExpandedPlayer(null);
                     }}
                   >
                     <option value="season">Season to date</option>
@@ -1438,6 +1494,13 @@ export default function App({ connection }: { connection?: LiveConnection }) {
                     ))}
                   </select>
                 </div>
+                <button
+                  className="text-button"
+                  onClick={() => void copyResultLink()}
+                  disabled={!resultSelectionReady}
+                >
+                  <Link2 size={14} /> Copy result link
+                </button>
                 {selectedWeek && (
                   <p className="muted">
                     Stored weekly totals · game weeks begin Tuesday in Pacific

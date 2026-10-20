@@ -1051,6 +1051,13 @@ test("officer-access retry recovers heading focus after a denied membership list
     "utf8",
   );
   await resultsPage(page);
+  await page
+    .getByRole("combobox", { name: "Result period" })
+    .selectOption(nights.baseline);
+  await page
+    .getByRole("button", { name: "Details for Baseline Player" })
+    .click();
+  const selectedURL = page.url();
   const uid = await adminUid();
   const denied = original.replace(
     "allow get: if request.auth != null && uid == request.auth.uid;",
@@ -1076,8 +1083,20 @@ test("officer-access retry recovers heading focus after a denied membership list
     await page.keyboard.press("Enter");
     await expect(page.getByRole("heading", { level: 1 })).toBeFocused();
     await expect(
-      page.getByRole("heading", { name: "Add a report" }),
+      page.getByRole("button", { name: "Manage reports" }),
     ).toBeVisible();
+    await expect(
+      page.getByRole("navigation").getByRole("button", { name: /^Reports/ }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("combobox", { name: "Result period" }),
+    ).toHaveValue(nights.baseline);
+    await expect(
+      page.getByRole("region", {
+        name: "Availability breakdown for Baseline Player",
+      }),
+    ).toBeVisible();
+    expect(page.url()).toBe(selectedURL);
     await expect(
       page.getByRole("button", { name: "Retry officer access" }),
     ).toHaveCount(0);
@@ -1253,3 +1272,152 @@ for (const signedIn of [false, true]) {
     ).toBe(true);
   });
 }
+
+test("public result links survive delayed reads, refresh, copy and back/forward", async ({
+  page,
+  context,
+}) => {
+  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+  await admin(async (ctx) => {
+    await setDoc(
+      doc(ctx.firestore(), `${season}/results/baseline/weeks/2026-10-13`),
+      {
+        players: [
+          {
+            game_week: "2026-10-13",
+            main: "Baseline Player",
+            played_min: 123,
+            bench_min: 47,
+            bench_pre_min: 20,
+            bench_post_min: 27,
+          },
+        ],
+      },
+    );
+  });
+  const held = await holdReads(page, "baseline");
+  const linked = `/?view=results&period=${nights.baseline}&player=player-a`;
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(linked, { waitUntil: "domcontentloaded" });
+  await expect.poll(() => held.hits).toBeGreaterThan(0);
+  expect(new URL(page.url()).searchParams.get("period")).toBe(nights.baseline);
+  expect(new URL(page.url()).searchParams.get("player")).toBe("player-a");
+  held.release();
+  const period = page.getByRole("combobox", { name: "Result period" });
+  const breakdown = page.getByRole("region", {
+    name: "Availability breakdown for Baseline Player",
+  });
+  await expect(period).toHaveValue(nights.baseline);
+  await expect(breakdown).toBeVisible();
+  await page.reload();
+  await expect(period).toHaveValue(nights.baseline);
+  await expect(breakdown).toBeVisible();
+  await page.getByRole("button", { name: "Copy result link" }).focus();
+  await page.keyboard.press("Enter");
+  await expect(
+    page.getByText("Result link copied.", { exact: true }),
+  ).toBeVisible();
+  const copied = new URL(
+    await page.evaluate(() => navigator.clipboard.readText()),
+  );
+  expect([...copied.searchParams.keys()]).toEqual(["view", "period", "player"]);
+  expect(copied.searchParams.get("player")).toBe("player-a");
+  await period.selectOption("week:2026-10-13");
+  await page
+    .getByRole("button", { name: "Details for Baseline Player" })
+    .click();
+  expect(new URL(page.url()).searchParams.get("period")).toBe(
+    "week:2026-10-13",
+  );
+  await page.reload();
+  await expect(period).toHaveValue("week:2026-10-13");
+  await expect(breakdown).toBeVisible();
+  await period.selectOption("season");
+  await page.evaluate(() => history.back());
+  await expect(period).toHaveValue("week:2026-10-13");
+  await expect(breakdown).toBeVisible();
+  await page.evaluate(() => history.forward());
+  await expect(period).toHaveValue("season");
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth,
+    ),
+  ).toBe(true);
+});
+
+test("missing public result targets explain safe fallbacks", async ({
+  page,
+}) => {
+  await page.goto("/?view=results&period=2020-01-01&player=missing");
+  await expect(
+    page.getByText(/This result period is not available/),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("combobox", { name: "Result period" }),
+  ).toHaveValue("season");
+  expect(new URL(page.url()).searchParams.has("player")).toBe(false);
+  await page.goto(`/?view=results&period=${nights.baseline}&player=missing`);
+  await expect(page.getByText(/This player is not available/)).toBeVisible();
+  await expect(
+    page.getByRole("combobox", { name: "Result period" }),
+  ).toHaveValue(nights.baseline);
+  expect(new URL(page.url()).searchParams.has("player")).toBe(false);
+});
+
+test("browser Back preserves officer drafts until discard and blocks pending saves", async ({
+  page,
+}) => {
+  await resultsPage(page);
+  await page
+    .getByRole("combobox", { name: "Result period" })
+    .selectOption(nights.baseline);
+  const reportsNav = () =>
+    page.getByRole("navigation").getByRole("button", { name: /^Reports/ });
+  await reportsNav().click();
+  const input = page.getByRole("textbox", { name: "Warcraft Logs reports" });
+  await input.fill("Unsaved draft");
+  const before = page.url();
+  await page.evaluate(() => history.back());
+  const dialog = page.getByRole("dialog", { name: "Keep your changes?" });
+  await expect(dialog).toBeVisible();
+  expect(page.url()).toBe(before);
+  await dialog.getByRole("button", { name: "Keep editing" }).click();
+  await expect(input).toHaveValue("Unsaved draft");
+  await page.evaluate(() => history.back());
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole("button", { name: "Discard edits" }).click();
+  await expect(
+    page.getByRole("combobox", { name: "Result period" }),
+  ).toHaveValue(nights.baseline);
+  await reportsNav().click();
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  releases.push(release);
+  await page.route(/\/documents:commit(?:\?|$)/, async (route) => {
+    await gate;
+    await route.continue();
+  });
+  await input.fill("BBBBBBBBBBBBBBBB");
+  await page.getByRole("button", { name: "Add report", exact: true }).click();
+  await expect(
+    page.getByRole("status", { name: "Report changes" }),
+  ).toContainText("Saving");
+  await page.evaluate(() => history.back());
+  await expect(
+    page.getByText("Wait for the save to finish.", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Add a report" }),
+  ).toBeVisible();
+  expect(new URL(page.url()).searchParams.has("view")).toBe(false);
+  release();
+  await expect(
+    page.getByRole("status", { name: "Report changes" }),
+  ).toContainText("Reports added");
+  await page.evaluate(() => history.back());
+  await expect(
+    page.getByRole("combobox", { name: "Result period" }),
+  ).toHaveValue(nights.baseline);
+});
