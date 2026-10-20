@@ -832,7 +832,10 @@ export default function App({ connection }: { connection?: LiveConnection }) {
             !connection.resultsPending &&
             !connection.resultsError && (
               <Notice>
-                No results yet. An officer can add reports and Run Pebble.
+                No completed results yet.{" "}
+                {canManage
+                  ? "Add or include reports, then run Pebble to create the first result set."
+                  : "Completed results will appear here after an officer runs Pebble."}
               </Notice>
             )}
           <div className="page-heading">
@@ -858,13 +861,14 @@ export default function App({ connection }: { connection?: LiveConnection }) {
               </p>
             </div>
             {page === "results" ? (
-              <button
-                className="button secondary"
-                disabled={!canManage}
-                onClick={() => go("reports")}
-              >
-                <FileText size={16} /> Manage reports
-              </button>
+              canManage && (
+                <button
+                  className="button secondary"
+                  onClick={() => go("reports")}
+                >
+                  <FileText size={16} /> Manage reports
+                </button>
+              )
             ) : (
               <button
                 className="button secondary"
@@ -1299,9 +1303,13 @@ export default function App({ connection }: { connection?: LiveConnection }) {
                   {!resultRows.length && (
                     <div className="empty-state">
                       <FileText size={28} />
-                      <h3>No included raid data</h3>
+                      <h3>No player time for this period</h3>
                       <p>
-                        Include a report and Run Pebble to see results here.
+                        {canManage
+                          ? "Use Manage reports to review the included logs."
+                          : "No player time was recorded for this period in the completed results."}
+                        {results.nights.length > 0 &&
+                          " Try another result period."}
                       </p>
                     </div>
                   )}
@@ -1336,6 +1344,11 @@ export default function App({ connection }: { connection?: LiveConnection }) {
                 <ChevronDown size={16} />
               </summary>
               <div>
+                {!history.length && (
+                  <p className="empty-state">
+                    No completed runs in recent history.
+                  </p>
+                )}
                 {history.map((h) => (
                   <div className="history-row" key={h.id}>
                     {h.status === "succeeded" ? (

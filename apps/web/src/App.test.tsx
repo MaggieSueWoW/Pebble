@@ -372,3 +372,100 @@ it("announces an account-switch failure without attempting another sign-in", asy
   );
   expect(c.signIn).not.toHaveBeenCalled();
 });
+
+it.each([true, false])(
+  "explains missing completed results for officer=%s and suppresses it during loading/errors",
+  (officer) => {
+    const c = connection();
+    c.officer = officer;
+    const { rerender } = render(<App connection={c} />);
+    if (officer)
+      fireEvent.click(screen.getByRole("button", { name: /^Results/ }));
+    expect(screen.getByText(/No completed results yet/).textContent).toContain(
+      officer ? "Add or include reports" : "after an officer runs Pebble",
+    );
+    expect(
+      Boolean(screen.queryByRole("button", { name: "Manage reports" })),
+    ).toBe(officer);
+    expect(
+      screen.queryByRole("heading", { name: "No player time for this period" }),
+    ).toBeNull();
+    rerender(<App connection={{ ...c, resultsPending: true }} />);
+    expect(screen.queryByText(/No completed results yet/)).toBeNull();
+    rerender(
+      <App connection={{ ...c, resultsError: "Result reads unavailable" }} />,
+    );
+    expect(screen.queryByText(/No completed results yet/)).toBeNull();
+    expect(screen.getByText("Result reads unavailable")).toBeTruthy();
+  },
+);
+
+it.each([true, false])(
+  "explains empty completed periods for officer=%s without claiming no result exists",
+  (officer) => {
+    const c = connection();
+    c.officer = officer;
+    c.hasResults = true;
+    render(<App connection={c} />);
+    if (officer)
+      fireEvent.click(screen.getByRole("button", { name: /^Results/ }));
+    expect(
+      screen.getByRole("heading", { name: "No player time for this period" }),
+    ).toBeTruthy();
+    expect(screen.queryByText(/No completed results yet/)).toBeNull();
+    expect(
+      screen.getByText(
+        officer
+          ? "Use Manage reports to review the included logs."
+          : "No player time was recorded for this period in the completed results.",
+      ),
+    ).toBeTruthy();
+    if (officer) {
+      fireEvent.click(screen.getByRole("button", { name: "Manage reports" }));
+      expect(
+        screen.getByRole("heading", { name: "Add a report" }),
+      ).toBeTruthy();
+    } else
+      expect(
+        screen.queryByRole("button", { name: "Manage reports" }),
+      ).toBeNull();
+    expect(c.saveInputs).not.toHaveBeenCalled();
+    expect(c.requestRun).not.toHaveBeenCalled();
+  },
+);
+
+it("explains empty recent history without hiding active progress or previous results", () => {
+  const c = connection();
+  c.hasResults = true;
+  c.saved.history = [];
+  c.active = { id: "queued", status: "queued", stage: 0 };
+  const { rerender } = render(<App connection={c} />);
+  expect(screen.getByText("No completed runs in recent history.")).toBeTruthy();
+  expect(
+    (screen.getByRole("button", { name: "Run queued" }) as HTMLButtonElement)
+      .disabled,
+  ).toBe(true);
+  expect(
+    screen.getByRole("status", { name: "Run status" }).textContent,
+  ).toContain("Your last completed results stay visible");
+  rerender(
+    <App
+      connection={{
+        ...c,
+        saved: {
+          ...c.saved,
+          history: [
+            {
+              id: "done",
+              status: "succeeded",
+              at: "2026-10-19T02:00:00Z",
+              message: "Completed fixture",
+            },
+          ],
+        },
+      }}
+    />,
+  );
+  expect(screen.queryByText("No completed runs in recent history.")).toBeNull();
+  expect(screen.getByText("Completed fixture")).toBeTruthy();
+});
