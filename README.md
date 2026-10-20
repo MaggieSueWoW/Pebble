@@ -35,14 +35,20 @@ The loop continues until interrupted. Use `--max-errors 0` to keep it running re
 ## Docker
 
 For the isolated Firestore worker, use the [deployment runbook](docs/web-worker-deployment.md)
-and `docker-compose.web.yaml`. It builds from the feature branch and mounts private
+and `docker-compose.web.yaml`. Its helper explicitly builds `Dockerfile.web`, whose
+`Dockerfile.web.dockerignore` includes only Python package inputs. It mounts private
 configuration and Firestore credentials at runtime. The legacy `docker-compose.yaml`
 is deliberately unchanged; do not use it to deploy the web worker.
 
 The [worker reliability guide](docs/worker-reliability.md) describes shutdown,
 recovery, processing deadlines and the disposable lifecycle/fault-test harness.
 
-A Docker image is provided for running the loop in a container. Build and run it with:
+The root `Dockerfile` and `docker-compose.yaml` retain the legacy Sheets build.
+That image includes `config-*.yaml` and `service-account.json`, as required by the
+existing Compose command; `.env` remains supplied at runtime. The default build
+context allowlist excludes unrelated private deployment files.
+
+For a separately authorized legacy build, the existing commands remain:
 
 ```bash
 docker build -t pebble-loop .
@@ -53,6 +59,7 @@ docker run --rm \
 ```
 
 Mount any required credentials (e.g., Google service account JSON) and override the command arguments as needed.
-The image runs as UID/GID 10001 by default; grant that identity read access to
-mounted files or select a matching non-root UID/GID. Newly built images contain
-no configs or credentials. Existing running images are unaffected.
+The web image runs as UID/GID 10001 by default and contains no runtime configs or
+credentials. The legacy image preserves its existing execution identity and file
+layout. Neither build replaces a running container; keep production image tags and
+services unchanged until a separate deployment is authorized.

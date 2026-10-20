@@ -31,6 +31,14 @@ def deployment(tmp_path):
         "    sys.exit(1)\n"
     )
     docker.chmod(0o755)
+    git = tmp_path / "git"
+    git.write_text(
+        "#!/usr/bin/env python3\n"
+        "import os, sys\n"
+        "if sys.argv[1] == 'status': print(os.environ.get('GIT_STATUS', ''))\n"
+        f"elif sys.argv[1] == 'rev-parse': print('{REVISION}')\n"
+    )
+    git.chmod(0o755)
     log = tmp_path / "calls.jsonl"
     env = {
         **os.environ,
@@ -41,12 +49,13 @@ def deployment(tmp_path):
         "PEBBLE_WEB_SINGLETON_CONFIRMED": "yes",
     }
 
-    def run(**changes):
+    def run(action="update", **changes):
         result = subprocess.run(
-            ["bash", str(SCRIPT), "unused.env", "update"],
+            ["bash", str(SCRIPT), "unused.env", action],
             env={**env, **changes},
             capture_output=True,
             text=True,
+            check=False,
         )
         calls = (
             [json.loads(line) for line in log.read_text().splitlines()]
@@ -97,5 +106,23 @@ def test_update_checks_replacement_before_stop_and_start(deployment):
 
 def test_update_requires_singleton_acknowledgement(deployment):
     result, calls = deployment(PEBBLE_WEB_SINGLETON_CONFIRMED="")
+    assert result.returncode != 0
+    assert calls == []
+
+
+def test_build_selects_web_dockerfile_and_immutable_tag(deployment):
+    result, calls = deployment(action="build")
+    assert result.returncode == 0, result.stderr
+    assert len(calls) == 1
+    build = calls[0]
+    assert build[0] == "build"
+    assert build[build.index("-f") + 1] == "Dockerfile.web"
+    assert build[build.index("--platform") + 1] == "linux/amd64"
+    assert build[build.index("-t") + 1] == f"pebble-web:{REVISION}"
+    assert build[-1] == "."
+
+
+def test_build_refuses_uncommitted_source(deployment):
+    result, calls = deployment(action="build", GIT_STATUS=" M Dockerfile.web")
     assert result.returncode != 0
     assert calls == []

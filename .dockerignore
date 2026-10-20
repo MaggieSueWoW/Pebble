@@ -1,4 +1,4 @@
-# Only package inputs enter the build context, including remote builds.
+# Legacy Sheets build inputs only. Web builds use Dockerfile.web.dockerignore.
 **
 !Dockerfile
 !pyproject.toml
@@ -6,3 +6,5 @@
 !pebble/
 !pebble/**/
 !pebble/**/*.py
+!config-*.yaml
+!service-account.json

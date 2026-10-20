@@ -57,7 +57,7 @@ case "$action" in
       exit 1
     fi
     revision=$(git rev-parse HEAD)
-    docker build --platform linux/amd64 --label "org.opencontainers.image.revision=$revision" \
+    docker build -f Dockerfile.web --platform linux/amd64 --label "org.opencontainers.image.revision=$revision" \
       -t "pebble-web:$revision" .
     ;;
   check) check_runtime ;;
