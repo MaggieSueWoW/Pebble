@@ -247,6 +247,17 @@ def build_attendance_projection(db) -> dict[str, dict]:
     Minute values use the same normalization as the Sheets presentation. Rates
     retain the existing numeric ratio, or None when there is no possible time.
     Only aggregate values and ordered weekly status letters are exposed.
+
+    Parameters
+    ----------
+    db
+        Mongo database containing the current roster, night QA and bench totals.
+
+    Returns
+    -------
+    dict[str, dict]
+        Eligible mains mapped to normalized minute totals, a raw attendance ratio
+        (None without possible time), and ordered Tuesday-week P/B/O statuses.
     """
     week_ids, players = _collect_attendance_stats(db)
     return {
