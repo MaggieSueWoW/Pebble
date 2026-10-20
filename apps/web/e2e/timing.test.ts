@@ -376,3 +376,98 @@ test("keeps timing edits working in standalone sample mode", async ({
     .click();
   await expect(notes(page)).toHaveValue("Sample timing notes");
 });
+
+test("manually activates keyboard-focused tabs and preserves dialog focus and drafts", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await open(page);
+  const timing = page.getByRole("tab", { name: "Raid timing" });
+  const availability = page.getByRole("tab", { name: "Player availability" });
+  const panel = page.getByRole("tabpanel", { name: "Raid timing" });
+  await timing.focus();
+  await page.keyboard.press("ArrowRight");
+  await expect(availability).toBeFocused();
+  await expect(panel).toBeVisible();
+  await expect(availability).toHaveAttribute("aria-selected", "false");
+  await expect(availability).toHaveAttribute("tabindex", "0");
+  await expect(timing).toHaveAttribute("tabindex", "-1");
+  await page.keyboard.press("End");
+  await expect(timing).toBeFocused();
+  await page.keyboard.press("Home");
+  await expect(availability).toBeFocused();
+  await page.keyboard.press("ArrowLeft");
+  await expect(timing).toBeFocused();
+  await notes(page).fill("Retained keyboard draft");
+  await timing.focus();
+  await page.keyboard.press("ArrowLeft");
+  await expect(availability).toBeFocused();
+  await expect(page.getByRole("dialog")).not.toBeVisible();
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("dialog")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(availability).toBeFocused();
+  await expect(panel).toBeVisible();
+  await expect(notes(page)).toHaveValue("Retained keyboard draft");
+  await page.keyboard.press("Space");
+  await page.getByRole("button", { name: "Discard edits" }).click();
+  await expect(availability).toBeFocused();
+  await expect(
+    page.getByRole("tabpanel", { name: "Player availability" }),
+  ).toBeVisible();
+  await expect(availability).toHaveAttribute("aria-selected", "true");
+  await expect(availability).toHaveAttribute("aria-controls", "override-panel");
+  await expect(page.getByRole("tabpanel")).toHaveAttribute(
+    "aria-labelledby",
+    (await availability.getAttribute("id")) as string,
+  );
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth,
+    ),
+  ).toBe(true);
+});
+
+test("keeps the current panel during a save and activates the focused tab after acknowledgement", async ({
+  page,
+}) => {
+  await open(page);
+  await notes(page).fill("Saved before switching tabs");
+  let release!: () => void, intercept!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const requested = new Promise<void>((resolve) => {
+    intercept = resolve;
+  });
+  await page.route(/\/documents:commit(?:\?|$)/, async (route) => {
+    intercept();
+    await gate;
+    await route.continue();
+  });
+  await save(page).click();
+  await requested;
+  try {
+    await page.getByRole("tab", { name: "Raid timing" }).focus();
+    await page.keyboard.press("ArrowLeft");
+    const availability = page.getByRole("tab", { name: "Player availability" });
+    await expect(availability).toBeFocused();
+    await page.keyboard.press("Enter");
+    await expect(
+      page.getByText("Wait for the save to finish.", { exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("tabpanel", { name: "Raid timing" }),
+    ).toBeVisible();
+    await expect(page.getByRole("dialog")).not.toBeVisible();
+    release();
+    await saved(page);
+    await expect(availability).toBeFocused();
+    await page.keyboard.press("Enter");
+    await expect(
+      page.getByRole("tabpanel", { name: "Player availability" }),
+    ).toBeVisible();
+  } finally {
+    release();
+  }
+});

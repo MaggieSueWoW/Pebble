@@ -52,6 +52,7 @@ import { ReportsPanel } from "./ReportsPanel";
 import { AvailabilityEditor } from "./AvailabilityEditor";
 import { useAvailabilityEditor } from "./useAvailabilityEditor";
 import { TimingEditor } from "./TimingEditor";
+import { OverrideTabs } from "./OverrideTabs";
 import { useTimingEditor } from "./useTimingEditor";
 import { blankTiming } from "./timing";
 
@@ -1056,26 +1057,17 @@ export default function App({ connection }: { connection?: LiveConnection }) {
                   />
                 </label>
               </div>
-              <div className="tabs" role="tablist" aria-label="Override type">
-                <button
-                  role="tab"
-                  aria-selected={overrideTab === "availability"}
-                  className={overrideTab === "availability" ? "selected" : ""}
-                  onClick={() => guard(() => setOverrideTab("availability"))}
-                >
-                  <Users size={16} /> Player availability
-                </button>
-                <button
-                  role="tab"
-                  aria-selected={overrideTab === "timing"}
-                  className={overrideTab === "timing" ? "selected" : ""}
-                  onClick={() => guard(() => setOverrideTab("timing"))}
-                >
-                  <Clock3 size={16} /> Raid timing
-                </button>
-              </div>
+              <OverrideTabs
+                value={overrideTab}
+                onChange={(next) => guard(() => setOverrideTab(next))}
+              />
               {overrideTab === "availability" ? (
-                <div className="override-grid">
+                <div
+                  className="override-grid"
+                  id="override-panel"
+                  role="tabpanel"
+                  aria-labelledby="override-tab-availability"
+                >
                   <section className="card player-card">
                     <div className="table-heading">
                       <div>
@@ -1163,11 +1155,17 @@ export default function App({ connection }: { connection?: LiveConnection }) {
                   />
                 </div>
               ) : (
-                <TimingEditor
-                  night={night}
-                  detected={detectedTiming}
-                  editor={timingEditor}
-                />
+                <div
+                  id="override-panel"
+                  role="tabpanel"
+                  aria-labelledby="override-tab-timing"
+                >
+                  <TimingEditor
+                    night={night}
+                    detected={detectedTiming}
+                    editor={timingEditor}
+                  />
+                </div>
               )}
             </>
           )}
