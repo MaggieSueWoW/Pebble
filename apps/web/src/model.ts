@@ -50,9 +50,17 @@ export function playerDetails(player: {
     .join(" · ");
 }
 
+export type AttendanceProjection = {
+  played: number;
+  bench: number;
+  possible: number;
+  rate: number | null;
+  weeks: { week: string; status: string }[];
+};
 export type PlayerResult = {
   /** Captured nightly calculation provenance; omitted on aggregates/older results. */
   availability?: RecordedAvailability;
+  attendance?: AttendanceProjection;
   name?: string;
   className?: string;
   role?: string;
@@ -427,9 +435,34 @@ export function calculate(
 }
 export function freshState(): Saved {
   const inputs = structuredClone(initialInputs);
+  const results = calculate(inputs, "2026-10-16T05:18:00.000Z");
+  // Sample-only illustration. Connected results use the worker's publication;
+  // missing attendance in connected mode is never replaced with these values.
+  const sampleAttendance: AttendanceProjection = {
+    played: 411,
+    bench: 99,
+    possible: 510,
+    rate: 1,
+    weeks: [
+      { week: "2026-10-06", status: "PB" },
+      { week: "2026-10-13", status: "PB" },
+    ],
+  };
+  results.players.find((player) => player.id === "Example")!.attendance =
+    sampleAttendance;
+  results.players.find((player) => player.id === "solace")!.attendance = {
+    played: 0,
+    bench: 0,
+    possible: 510,
+    rate: 0,
+    weeks: [
+      { week: "2026-10-06", status: "O" },
+      { week: "2026-10-13", status: "O" },
+    ],
+  };
   return {
     inputs,
-    results: calculate(inputs, "2026-10-16T05:18:00.000Z"),
+    results,
     history: [
       {
         id: "sample-run",

@@ -85,3 +85,41 @@ it("omits unavailable weekly played halves and adjustment provenance", () => {
   expect(breakdown.textContent).not.toContain("Officer adjustment applied");
   expect(breakdown.textContent).toContain("Before break bench 20 min");
 });
+
+it("shows attendance only when requested for a season row, preserving nightly and weekly scope", () => {
+  const row = {
+    ...base,
+    attendance: { played: 60, bench: 30, possible: 120, rate: 0.75, weeks: [] },
+  };
+  const { rerender } = render(
+    <table>
+      <tbody>
+        <ResultRow
+          player={player}
+          row={row}
+          index={0}
+          expanded
+          onExpand={vi.fn()}
+          showAttendance
+        />
+      </tbody>
+    </table>,
+  );
+  expect(screen.getByRole("region", { name: "Attendance" })).toBeTruthy();
+  expect(screen.getByText("75%", { exact: true })).toBeTruthy();
+  rerender(
+    <table>
+      <tbody>
+        <ResultRow
+          player={player}
+          row={row}
+          index={0}
+          expanded
+          onExpand={vi.fn()}
+        />
+      </tbody>
+    </table>,
+  );
+  expect(screen.queryByRole("region", { name: "Attendance" })).toBeNull();
+  expect(screen.getByText(/Before break bench/)).toBeTruthy();
+});

@@ -51,6 +51,7 @@ import {
 import { resultLink, useResultNavigation } from "./useResultNavigation";
 import { NightDiagnostics } from "./NightDiagnostics";
 import { ResultRow } from "./ResultRow";
+import { AttendanceDetails } from "./AttendanceDetails";
 import { useReportEditor } from "./useReportEditor";
 import { ReportsPanel } from "./ReportsPanel";
 import { AvailabilityEditor } from "./AvailabilityEditor";
@@ -718,6 +719,14 @@ export default function App({ connection }: { connection?: LiveConnection }) {
           b.name ?? players.find((p) => p.id === b.id)?.name ?? b.id,
         ),
     );
+  const additionalAttendance =
+    visibleResultNight === "season"
+      ? results.players.filter(
+          (row) =>
+            row.attendance &&
+            !resultRows.some((ranked) => ranked.id === row.id),
+        )
+      : [];
   const resultSelectionReady =
     !connection?.resultsPending && !connection?.resultsError;
   useEffect(() => {
@@ -731,7 +740,8 @@ export default function App({ connection }: { connection?: LiveConnection }) {
       navigation.navigate({ period: "season", player: null }, true);
     } else if (
       expandedPlayer &&
-      !resultRows.some((row) => row.id === expandedPlayer)
+      !resultRows.some((row) => row.id === expandedPlayer) &&
+      !additionalAttendance.some((row) => row.id === expandedPlayer)
     ) {
       setResultLinkNotice({
         text: "This player is not available for this result period. Showing all players.",
@@ -1551,6 +1561,7 @@ export default function App({ connection }: { connection?: LiveConnection }) {
                             key={row.id}
                             player={player}
                             row={row}
+                            showAttendance={visibleResultNight === "season"}
                             index={i}
                             expanded={expandedPlayer === row.id}
                             onExpand={() =>
@@ -1602,6 +1613,35 @@ export default function App({ connection }: { connection?: LiveConnection }) {
                     : `${connection && (connection.resultsPending || connection.resultsError) ? "Previous completed results" : "Latest completed run"} · ${formatTime(results.completedAt)} PT. Results update automatically after a successful run.`}
                 </div>
               </section>
+              {additionalAttendance.length > 0 && (
+                <section
+                  className="card additional-attendance"
+                  aria-labelledby="additional-attendance-title"
+                >
+                  <h2 id="additional-attendance-title">
+                    Additional attendance
+                  </h2>
+                  <p>
+                    These published attendance records are separate from the
+                    bench ranking.
+                  </p>
+                  {additionalAttendance.map((row) => (
+                    <details key={row.id} open={expandedPlayer === row.id}>
+                      <summary
+                        onClick={(event) => {
+                          event.preventDefault();
+                          setExpandedPlayer(
+                            expandedPlayer === row.id ? null : row.id,
+                          );
+                        }}
+                      >
+                        Attendance for {row.name ?? row.id}
+                      </summary>
+                      <AttendanceDetails attendance={row.attendance} />
+                    </details>
+                  ))}
+                </section>
+              )}
               {!connection && (
                 <Notice>
                   These are illustrative sample calculations, not Pebble’s

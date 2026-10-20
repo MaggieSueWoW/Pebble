@@ -1,5 +1,6 @@
 import { AvailabilityExplanation } from "./AvailabilityExplanation";
 import { useId } from "react";
+import { AttendanceDetails } from "./AttendanceDetails";
 import { ArrowRight, ChevronDown, ChevronRight, Settings2 } from "lucide-react";
 import {
   minutes,
@@ -15,6 +16,7 @@ export function ResultRow({
   expanded,
   onExpand,
   onEdit,
+  showAttendance = false,
 }: {
   player: Player;
   row: PlayerResult | WeeklyPlayerResult;
@@ -22,6 +24,7 @@ export function ResultRow({
   expanded: boolean;
   onExpand: () => void;
   onEdit?: () => void;
+  showAttendance?: boolean;
 }) {
   const total = row.played + row.bench;
   const detailId = useId();
@@ -119,6 +122,11 @@ export function ResultRow({
             )}
             {"availability" in row && row.availability && (
               <AvailabilityExplanation availability={row.availability} />
+            )}
+            {showAttendance && (
+              <AttendanceDetails
+                attendance={"attendance" in row ? row.attendance : undefined}
+              />
             )}
             {onEdit && (
               <button className="text-button" onClick={onEdit}>
