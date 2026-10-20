@@ -832,3 +832,130 @@ test("officer empty periods and recent history keep progress visible and link to
     ).toEqual(["active-fixture"]);
   });
 });
+
+async function sourceMetadata(
+  id: string,
+  summaries: Record<string, { title: string }>,
+) {
+  await admin(async (ctx) => {
+    await setDoc(
+      doc(ctx.firestore(), `${season}/runs/${id}`),
+      {
+        reportSummaries: Object.fromEntries(
+          Object.entries(summaries).map(([code, summary]) => [
+            code,
+            { ...summary, night: nights.baseline, checkedAt: Timestamp.now() },
+          ]),
+        ),
+        requestedBy: "fixture",
+      },
+      { merge: true },
+    );
+  });
+}
+
+test("officer warning sources stay with displayed results instead of newer history and replace together", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await sourceMetadata("baseline", {
+    [report]: { title: "Original source report" },
+  });
+  await admin(async (ctx) => {
+    await setDoc(
+      doc(ctx.firestore(), `${season}/results/baseline`),
+      { warnings: ["Baseline warning"] },
+      { merge: true },
+    );
+  });
+  await resultsPage(page);
+  const sources = page.getByRole("region", {
+    name: "Source reports for this run",
+  });
+  const original = sources.getByRole("link", {
+    name: "Original source report",
+  });
+  await expect(original).toHaveAttribute(
+    "href",
+    `https://www.warcraftlogs.com/reports/${report}`,
+  );
+  await original.focus();
+  await expect(original).toBeFocused();
+  await admin(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), `${season}/runs/other-metadata`), {
+      status: "failed",
+      requestedBy: "fixture",
+      requestedAt: Timestamp.now(),
+      reportSummaries: {
+        [report]: {
+          title: "Unpublished report title",
+          night: nights.baseline,
+          checkedAt: Timestamp.now(),
+        },
+      },
+    });
+  });
+  await expect(original).toBeVisible();
+  const held = await holdReads(page, "delayed");
+  await seedResult("delayed", "Delayed Player", nights.delayed, true, 2, [
+    "New warning",
+  ]);
+  await sourceMetadata("delayed", { BBBBBBBBBBBBBBBB: { title: "  " } });
+  await publish("delayed");
+  await expect.poll(() => held.hits).toBeGreaterThan(0);
+  await expect(original).toBeVisible();
+  await expect(
+    sources.getByRole("link", { name: "BBBBBBBBBBBBBBBB" }),
+  ).toHaveCount(0);
+  held.release();
+  await expect(page.getByText("Delayed Player", { exact: true })).toBeVisible();
+  await expect(
+    sources.getByRole("link", { name: "BBBBBBBBBBBBBBBB" }),
+  ).toHaveAttribute(
+    "href",
+    "https://www.warcraftlogs.com/reports/BBBBBBBBBBBBBBBB",
+  );
+  await expect(original).toHaveCount(0);
+  await expect(
+    page.getByText("Unpublished report title", { exact: true }),
+  ).toHaveCount(0);
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth,
+    ),
+  ).toBe(true);
+  await seedResult("latest", "Latest Player", nights.latest, true, 2, [
+    "Missing source metadata warning",
+  ]);
+  await publish("latest");
+  await expect(page.getByText("Latest Player", { exact: true })).toBeVisible();
+  await expect(
+    page.getByText("Missing source metadata warning", { exact: true }),
+  ).toBeVisible();
+  await expect(sources).toHaveCount(0);
+});
+
+test("public warnings do not expose private source metadata", async ({
+  page,
+}) => {
+  await sourceMetadata("baseline", {
+    [report]: { title: "Officer source metadata" },
+  });
+  await admin(async (ctx) => {
+    await setDoc(
+      doc(ctx.firestore(), `${season}/results/baseline`),
+      { warnings: ["Public result warning"] },
+      { merge: true },
+    );
+  });
+  await resultsPage(page, false);
+  await expect(
+    page.getByText("Public result warning", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("region", { name: "Source reports for this run" }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByText("Officer source metadata", { exact: true }),
+  ).toHaveCount(0);
+});

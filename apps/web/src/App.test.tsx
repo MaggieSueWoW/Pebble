@@ -52,6 +52,7 @@ function connection(players: Player[] = []): LiveConnection {
     queueReady: true,
     queueError: "",
     retryQueue: vi.fn(),
+    resultSources: [],
     resultsPending: false,
     resultsError: "",
     retryResults: vi.fn(),
@@ -486,3 +487,42 @@ it("labels the visible override panel from its selected tab and links both contr
     screen.queryByRole("tabpanel", { name: "Player availability" }),
   ).toBeNull();
 });
+
+it.each([true, false])(
+  "shows warning source links only to officers (officer=%s)",
+  (officer) => {
+    const c = connection();
+    c.officer = officer;
+    c.hasResults = true;
+    c.saved.results.warnings = ["Recorded warning"];
+    c.resultSources = [
+      { code: "AAAAAAAAAAAAAAAA", title: "Example source report" },
+    ];
+    const { rerender } = render(<App connection={c} />);
+    if (officer)
+      fireEvent.click(screen.getByRole("button", { name: /^Results/ }));
+    expect(
+      screen.getByRole("region", { name: "Result warnings" }),
+    ).toBeTruthy();
+    if (officer) {
+      const source = screen.getByRole("link", {
+        name: "Example source report",
+      });
+      expect(source.getAttribute("href")).toBe(
+        "https://www.warcraftlogs.com/reports/AAAAAAAAAAAAAAAA",
+      );
+      expect(source.getAttribute("target")).toBe("_blank");
+      expect(
+        screen.getByRole("region", { name: "Source reports for this run" }),
+      ).toBeTruthy();
+    } else
+      expect(
+        screen.queryByRole("link", { name: "Example source report" }),
+      ).toBeNull();
+    rerender(<App connection={{ ...c, resultSources: [] }} />);
+    expect(
+      screen.queryByRole("region", { name: "Source reports for this run" }),
+    ).toBeNull();
+    expect(screen.getByText("Recorded warning")).toBeTruthy();
+  },
+);

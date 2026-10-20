@@ -141,3 +141,12 @@ Enter/Space or a click activates the focused tab through the existing draft/save
 guards. Both tabs link to the visible, labelled tab panel; only one tab is in the
 keyboard tab order. Acceptance checks keyboard focus, Escape/discard restoration,
 pending-save activation, panel relationships and narrow layout.
+
+
+When a completed result has warnings, officers can follow Source reports for this
+run links using that run's recorded titles and report codes. The existing private
+run-metadata listener supplies them; newer input/history metadata cannot relabel
+an older displayed result. Missing titles fall back to codes and missing metadata
+omits the list. Public readers retain warning text without private source links.
+Acceptance checks replacement/loading, stale history, fallback labels, public
+visibility, keyboard link focus and narrow layout without contacting Warcraft Logs.
