@@ -410,6 +410,7 @@ export function useFirestore(): {
           night: summaries[code]?.night || "",
           title: summaries[code]?.title || "",
           fetched: Boolean(summaries[code]),
+          checkedAt: time(summaries[code]?.checkedAt),
         }))
         .sort(
           (a, b) =>

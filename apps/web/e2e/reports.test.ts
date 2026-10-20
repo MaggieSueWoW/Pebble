@@ -5,6 +5,7 @@ import {
 } from "@firebase/rules-unit-testing";
 import {
   collection,
+  deleteDoc,
   doc,
   getDoc,
   getDocs,
@@ -20,6 +21,7 @@ const a = "AAAAAAAAAAAAAAAA",
   c = "CCCCCCCCCCCCCCCC",
   d = "DDDDDDDDDDDDDDDD";
 let env: RulesTestEnvironment;
+let expectedRunIds: string[] = [];
 const admin = (
   fn: Parameters<RulesTestEnvironment["withSecurityRulesDisabled"]>[0],
 ) => env.withSecurityRulesDisabled(fn);
@@ -49,6 +51,7 @@ test.beforeAll(async () => {
   });
 });
 test.beforeEach(async () => {
+  expectedRunIds = [];
   await env.clearFirestore();
   await seedReport(a, true);
   await seedReport(b, false);
@@ -61,8 +64,10 @@ test.beforeEach(async () => {
 test.afterEach(async () => {
   await admin(async (ctx) => {
     expect(
-      (await getDocs(collection(ctx.firestore(), `${season}/runs`))).size,
-    ).toBe(0);
+      (await getDocs(collection(ctx.firestore(), `${season}/runs`))).docs
+        .map((d) => d.id)
+        .sort(),
+    ).toEqual(expectedRunIds);
   });
 });
 test.afterAll(async () => {
@@ -245,4 +250,119 @@ test("protects drafts with a keyboard-accessible dialog at a narrow viewport", a
       () => document.documentElement.scrollWidth <= window.innerWidth,
     ),
   ).toBe(true);
+});
+
+test("explains an empty report list and keeps Add a report available", async ({
+  page,
+}) => {
+  await admin(async (ctx) => {
+    await deleteDoc(doc(ctx.firestore(), `${season}/reports/${a}`));
+    await deleteDoc(doc(ctx.firestore(), `${season}/reports/${b}`));
+  });
+  await officer(page, env);
+  await expect(
+    page.getByText(/No reports yet. Paste a Warcraft Logs link/),
+  ).toBeVisible();
+  const input = page.getByRole("textbox", { name: "Warcraft Logs reports" });
+  await input.focus();
+  await expect(input).toBeFocused();
+  await expect(page.getByRole("switch")).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Add report", exact: true }),
+  ).toBeDisabled();
+});
+
+test("shows recorded report details and refreshes metadata without changing drafts or inputs", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await seedReport(c, true);
+  expectedRunIds = ["report-metadata"];
+  await admin(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), `${season}/runs/report-metadata`), {
+      status: "succeeded",
+      requestedAt: Timestamp.fromDate(new Date("2026-10-16T03:00:00Z")),
+      reportSummaries: {
+        [a]: {
+          title: "  ",
+          night: "2026-10-15",
+          checkedAt: Timestamp.fromDate(new Date("2026-10-16T02:05:00Z")),
+        },
+        [b]: { title: "Example older report", night: "2026-10-14" },
+      },
+    });
+  });
+  await officer(page, env);
+  const row = (code: string) =>
+    page
+      .getByRole("row")
+      .filter({ has: page.getByRole("switch", { name: `Include ${code}` }) });
+  const firstRow = row(a);
+  const link = firstRow.getByRole("link", { name: a, exact: true });
+  await expect(link).toHaveAttribute(
+    "href",
+    `https://www.warcraftlogs.com/reports/${a}`,
+  );
+  await expect(firstRow.locator("time")).toHaveText(
+    "Oct 15, 2026, 7:05 PM PDT",
+  );
+  await expect(firstRow.locator("time")).toHaveAttribute(
+    "datetime",
+    "2026-10-16T02:05:00.000Z",
+  );
+  await expect(row(b)).toContainText("Last checked unavailable");
+  await expect(row(b).getByRole("link")).toHaveText("Example older report");
+  await expect(row(c)).toContainText("Metadata appears after the next run");
+  await expect(row(c)).toContainText("Last checked unavailable");
+  await link.focus();
+  await page.keyboard.press("Tab");
+  await expect(firstRow.getByRole("switch")).toBeFocused();
+  await page.keyboard.press("Space");
+  await admin(async (ctx) => {
+    await setDoc(
+      doc(ctx.firestore(), `${season}/runs/report-metadata`),
+      {
+        reportSummaries: {
+          [a]: {
+            title: "Example updated raid",
+            night: "2026-10-15",
+            checkedAt: Timestamp.fromDate(new Date("2026-10-17T02:05:00Z")),
+          },
+        },
+      },
+      { merge: true },
+    );
+  });
+  await expect(firstRow.getByRole("link")).toHaveText("Example updated raid");
+  await expect(firstRow.locator("time")).toHaveText(
+    "Oct 16, 2026, 7:05 PM PDT",
+  );
+  await expect(firstRow.getByRole("switch")).toHaveAttribute(
+    "aria-checked",
+    "false",
+  );
+  await expect(page.getByText(/1 unsaved selection change/)).toBeVisible();
+  await page.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(firstRow.getByRole("switch")).toHaveAttribute(
+    "aria-checked",
+    "true",
+  );
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth,
+    ),
+  ).toBe(true);
+  await admin(async (ctx) => {
+    for (const [code, enabled] of [
+      [a, true],
+      [b, false],
+      [c, true],
+    ] as const) {
+      const saved = (
+        await getDoc(doc(ctx.firestore(), `${season}/reports/${code}`))
+      ).data()!;
+      expect(saved.version).toBe(1);
+      expect(saved.enabled).toBe(enabled);
+    }
+  });
 });
