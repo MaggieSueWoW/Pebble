@@ -1,3 +1,4 @@
+import { authMessage } from "./authMessages";
 import type { LiveConnection } from "./useFirestore";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
@@ -183,6 +184,21 @@ export default function App({ connection }: { connection?: LiveConnection }) {
   const saved = connection?.saved ?? demoSaved;
   const { inputs, results, history } = saved;
   const canManage = !connection || connection.officer;
+  const [authPending, setAuthPending] = useState(false);
+  const authActionPending = useRef(false);
+  async function accountAction(action: () => Promise<void>) {
+    if (authActionPending.current) return;
+    authActionPending.current = true;
+    setAuthPending(true);
+    try {
+      await action();
+    } catch (error) {
+      notify(authMessage(error), true);
+    } finally {
+      authActionPending.current = false;
+      setAuthPending(false);
+    }
+  }
   const players = connection?.players ?? samplePlayers;
   const todayParts = Object.fromEntries(
     new Intl.DateTimeFormat("en-US", {
@@ -579,14 +595,19 @@ export default function App({ connection }: { connection?: LiveConnection }) {
   ) : (
     <button
       className="button primary"
+      disabled={authPending}
       onClick={() => {
         const action = connection?.user
           ? connection.signOut
           : connection?.signIn;
-        void action?.().catch((e) => notify(e.message, true));
+        if (action) void accountAction(action);
       }}
     >
-      {connection?.user ? "Sign out to switch accounts" : "Officer sign-in"}
+      {authPending
+        ? "Please wait…"
+        : connection?.user
+          ? "Sign out to switch accounts"
+          : "Officer sign-in"}
     </button>
   );
   const visibleResultNight = results.nights.some((n) => n.night === resultNight)
@@ -756,13 +777,27 @@ export default function App({ connection }: { connection?: LiveConnection }) {
             {connection?.user && (
               <button
                 className="text-button"
+                disabled={authPending}
                 onClick={() =>
                   guard(() => {
-                    void connection.signOut();
+                    void accountAction(connection.signOut);
                   })
                 }
               >
                 Sign out
+              </button>
+            )}
+            {connection?.user && (
+              <button
+                className="text-button"
+                disabled={authPending}
+                onClick={() =>
+                  guard(() => {
+                    void accountAction(connection.signIn);
+                  })
+                }
+              >
+                Switch Google account
               </button>
             )}
           </div>
@@ -800,26 +835,40 @@ export default function App({ connection }: { connection?: LiveConnection }) {
           {connection?.error && (
             <Notice tone="amber">{connection.error}</Notice>
           )}
-          {connection?.user && !connection.officer && (
-            <section className="notice" aria-labelledby="officer-access-title">
-              <Info size={16} aria-hidden="true" />
-              <div>
-                <h2 id="officer-access-title">Officer access not enabled</h2>
-                <p>
-                  This account does not have officer access. You can still read
-                  completed results. Editing inputs and running Pebble require
-                  an enabled officer account. Sign out to use another account.
-                </p>
-                <details>
-                  <summary>Account details</summary>
-                  <p>
-                    Account ID: <code>{connection.user.uid}</code>
-                  </p>
-                  <p>Use this ID when enabling officer access.</p>
-                </details>
-              </div>
-            </section>
+          {connection?.accessError && (
+            <Notice tone="amber">
+              <span role="alert">{connection.accessError}</span>{" "}
+              <button className="text-button" onClick={connection.retryAccess}>
+                Retry officer access
+              </button>
+            </Notice>
           )}
+          {connection?.user &&
+            !connection.officer &&
+            !connection.accessError && (
+              <section
+                className="notice"
+                aria-labelledby="officer-access-title"
+              >
+                <Info size={16} aria-hidden="true" />
+                <div>
+                  <h2 id="officer-access-title">Officer access not enabled</h2>
+                  <p>
+                    This account does not have officer access. You can still
+                    read completed results. Editing inputs and running Pebble
+                    require an enabled officer account. Switch Google account or
+                    sign out to use another account.
+                  </p>
+                  <details>
+                    <summary>Account details</summary>
+                    <p>
+                      Account ID: <code>{connection.user.uid}</code>
+                    </p>
+                    <p>Use this ID when enabling officer access.</p>
+                  </details>
+                </div>
+              </section>
+            )}
           {connection?.resultsError && (
             <Notice tone="amber">
               <span role="alert">{connection.resultsError}</span>{" "}

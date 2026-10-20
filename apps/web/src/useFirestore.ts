@@ -37,6 +37,8 @@ export type LiveConnection = {
   versions: Versions;
   unprocessed: boolean;
   error: string;
+  accessError: string;
+  retryAccess: () => void;
   busy: boolean;
   hasResults: boolean;
   submitting: boolean;
@@ -51,6 +53,9 @@ export type LiveConnection = {
   signIn: () => Promise<void>;
   signOut: () => Promise<void>;
 };
+const ACCESS_WAIT_MS = 15000;
+const ACCESS_ERROR =
+  "Couldn’t verify officer access. Check your connection, then retry access or switch Google accounts.";
 const names = [
   "reports",
   "players",
@@ -81,6 +86,8 @@ export function useFirestore(): {
   const [user, setUser] = useState<User | null>(null);
   const [officer, setOfficer] = useState(false);
   const [authReady, setAuthReady] = useState(false);
+  const [authAttempt, setAuthAttempt] = useState(0);
+  const [accessError, setAccessError] = useState("");
   const [documents, setDocuments] = useState<
     Record<string, Record<string, DocumentData>>
   >({});
@@ -140,21 +147,54 @@ export function useFirestore(): {
     setSubmittedRun(null);
     setBusy(false);
     setError("");
+    setAccessError("");
   }, []);
   const fail = useCallback((e: { message: string }) => setError(e.message), []);
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 15000);
     return () => clearInterval(timer);
   }, []);
+  const accessFailed = useCallback(() => {
+    clearPrivate();
+    setAccessError(ACCESS_ERROR);
+    setAuthReady(true);
+  }, [clearPrivate]);
+  const retryAccess = useCallback(() => {
+    authSession.current += 1;
+    clearPrivate();
+    setAuthReady(false);
+    setAuthGeneration(authSession.current);
+    if (!user) setAuthAttempt((old) => old + 1);
+  }, [user, clearPrivate]);
   useEffect(() => {
-    const stop = onAuthStateChanged(auth!, (next) => {
-      authSession.current += 1;
-      setAuthGeneration(authSession.current);
-      clearPrivate();
-      setUser(next);
-      setAuthReady(!next);
-    });
+    let alive = true;
+    const timeout = setTimeout(() => {
+      if (!alive) return;
+      accessFailed();
+    }, ACCESS_WAIT_MS);
+    const stop = onAuthStateChanged(
+      auth!,
+      (next) => {
+        if (!alive) return;
+        clearTimeout(timeout);
+        authSession.current += 1;
+        setAuthGeneration(authSession.current);
+        clearPrivate();
+        setUser(next);
+        setAuthReady(!next);
+      },
+      () => {
+        if (!alive) return;
+        clearTimeout(timeout);
+        authSession.current += 1;
+        setAuthGeneration(authSession.current);
+        setUser(null);
+        accessFailed();
+      },
+    );
     return () => {
+      alive = false;
+      clearTimeout(timeout);
       stop();
       authSession.current += 1;
       session.current += 1;
@@ -162,47 +202,65 @@ export function useFirestore(): {
       stopPrivate.current?.();
       stopConsumed.current?.();
     };
-  }, [clearPrivate]);
+  }, [clearPrivate, accessFailed, authAttempt]);
   useEffect(() => {
     if (!user) return;
     let alive = true;
     const own = authSession.current;
+    const timeout = setTimeout(() => {
+      if (alive && own === authSession.current) accessFailed();
+    }, ACCESS_WAIT_MS);
     // Re-grants belong to the same auth session, but load fresh private data.
     const stop = onSnapshot(
       doc(db!, "officers", user.uid),
+      { includeMetadataChanges: true },
       (snapshot) => {
         if (!alive || own !== authSession.current) return;
         const enabled = snapshot.exists() && snapshot.data().enabled === true;
+        // Cached grants do not establish current server authorization.
+        if (snapshot.metadata.fromCache) {
+          if (!enabled) clearPrivate();
+          return;
+        }
+        clearTimeout(timeout);
         if (!enabled) {
           clearPrivate();
         } else {
           authorized.current = true;
+          setAccessError("");
           setOfficer(true);
         }
         setAuthReady(true);
       },
-      (e) => {
+      () => {
         if (!alive || own !== authSession.current) return;
-        clearPrivate();
-        fail(e);
-        setAuthReady(true);
+        clearTimeout(timeout);
+        accessFailed();
       },
     );
     return () => {
       alive = false;
+      clearTimeout(timeout);
       stop();
     };
-  }, [user, authGeneration, fail, clearPrivate]);
+  }, [user, authGeneration, accessFailed, clearPrivate]);
   useEffect(() => {
     if (!officer || !authorized.current) return;
     const own = session.current;
     let alive = true;
     const current = () =>
       alive && authorized.current && own === session.current;
-    const privateFail = (e: { message: string; code?: string }) => {
-      if (!current()) return;
-      if (e.code === "permission-denied") clearPrivate();
-      fail(e);
+    const pendingInputs = new Set(names);
+    const timeout = setTimeout(() => {
+      if (current()) accessFailed();
+    }, ACCESS_WAIT_MS);
+    const inputLoaded = (name: string) => {
+      pendingInputs.delete(name);
+      if (!pendingInputs.size) clearTimeout(timeout);
+      setLoaded((old) => (old.includes(name) ? old : [...old, name]));
+    };
+    const privateFail = () => {
+      if (current()) accessFailed();
     };
     const subs = names.map((name) => {
       if (name === "settings")
@@ -216,7 +274,7 @@ export function useFirestore(): {
                 snapshot.exists() ? [["calculation", snapshot.data()]] : [],
               ),
             }));
-            setLoaded((old) => (old.includes(name) ? old : [...old, name]));
+            inputLoaded(name);
           },
           privateFail,
         );
@@ -230,7 +288,7 @@ export function useFirestore(): {
               snapshot.docs.map((d) => [d.id, d.data()]),
             ),
           }));
-          setLoaded((old) => (old.includes(name) ? old : [...old, name]));
+          inputLoaded(name);
         },
         privateFail,
       );
@@ -265,6 +323,7 @@ export function useFirestore(): {
     );
     const stop = () => {
       alive = false;
+      clearTimeout(timeout);
       subs.forEach((unsubscribe) => unsubscribe());
     };
     stopPrivate.current = stop;
@@ -272,7 +331,7 @@ export function useFirestore(): {
       stop();
       if (stopPrivate.current === stop) stopPrivate.current = null;
     };
-  }, [officer, user, accessGeneration, fail, clearPrivate]);
+  }, [officer, user, accessGeneration, accessFailed]);
   useEffect(() => {
     if (!officer || !authorized.current) return;
     const own = session.current;
@@ -308,15 +367,17 @@ export function useFirestore(): {
       },
       (e) => {
         if (!current()) return;
-        if (e.code === "permission-denied") clearPrivate();
-        else setQueue((old) => ({ ...old, ready: false, error: e.message }));
+        if (e.code === "permission-denied") {
+          accessFailed();
+          return;
+        } else setQueue((old) => ({ ...old, ready: false, error: e.message }));
       },
     );
     return () => {
       alive = false;
       stop();
     };
-  }, [officer, accessGeneration, queueAttempt, clearPrivate]);
+  }, [officer, accessGeneration, queueAttempt, accessFailed]);
   useEffect(() => {
     if (!officer || !submittedRun || !authorized.current) return;
     const own = session.current;
@@ -337,8 +398,10 @@ export function useFirestore(): {
       },
       (e) => {
         if (!alive || own !== session.current || !authorized.current) return;
-        if (e.code === "permission-denied") clearPrivate();
-        else {
+        if (e.code === "permission-denied") {
+          accessFailed();
+          return;
+        } else {
           // Keep the ID for a safe retry if this listener has terminated.
           if (submission.current?.id === id)
             submission.current.confirmed = false;
@@ -351,7 +414,7 @@ export function useFirestore(): {
       alive = false;
       stop();
     };
-  }, [officer, accessGeneration, submittedRun?.id, fail, clearPrivate]);
+  }, [officer, accessGeneration, submittedRun?.id, fail, accessFailed]);
   useEffect(() => {
     setConsumed({ run: "", versions: {} });
     if (!officer || !resultRun || !authorized.current) return;
@@ -370,7 +433,10 @@ export function useFirestore(): {
       },
       (e) => {
         if (!current()) return;
-        if (e.code === "permission-denied") clearPrivate();
+        if (e.code === "permission-denied") {
+          accessFailed();
+          return;
+        }
         fail(e);
       },
     );
@@ -383,7 +449,7 @@ export function useFirestore(): {
       cleanup();
       if (stopConsumed.current === cleanup) stopConsumed.current = null;
     };
-  }, [officer, user, accessGeneration, resultRun, fail, clearPrivate]);
+  }, [officer, user, accessGeneration, resultRun, fail, accessFailed]);
   const versions = useMemo(
     () =>
       Object.fromEntries(
@@ -657,6 +723,8 @@ export function useFirestore(): {
         (consumed.run !== resultRun ||
           stableVersions(versions) !== stableVersions(consumed.versions)),
       error,
+      accessError,
+      retryAccess,
       busy,
       hasResults,
       submitting: submitting || Boolean(submittedRun && !submittedRun.data),

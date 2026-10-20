@@ -65,7 +65,12 @@ Use a separate administrator identity with Firestore IAM write access to manage
 `officers/{uid}`. Browser officer membership does not grant that authority, and
 browser rules deny membership writes, including self-enrollment. The CLI uses
 trusted server credentials and bypasses browser rules. Keep the administrator
-credential separate from the worker credential; review its IAM scope with OPS-1.
+credential separate from the worker credential. The worker's project-level
+`roles/datastore.user` role also permits membership writes: separate identities
+are operational separation, not a collection-level IAM restriction. Treat the
+worker credential as trusted Firestore data access; browser rules cannot constrain
+it. Never put either credential in the browser or use worker credentials for
+routine officer administration.
 The examples below use a private `config-web-admin.yaml` configured with the target
 `firestore.project_id` and the administrator's `credentials_file` (or administrator
 Application Default Credentials). Never commit that config or its credentials.
@@ -98,17 +103,64 @@ project-wide, not limited to the config's season.
    Re-enable only if intended; the app loads fresh inputs without restoring drafts.
 
 The app clears private state when it observes membership loss or a private
-permission-denied error. Membership-listener errors also close officer editing and
-show an error; refresh to reconnect if that listener has terminated. Account changes
+permission-denied error. Membership and private-input listener errors close
+officer editing and show an authored recovery message. Initial Auth, server
+membership and private input loading each have a 15-second deadline, so a stalled
+connection returns to
+public results instead of leaving a permanent connecting screen. A cached enabled
+membership alone cannot grant access. Use **Retry officer access** to attach fresh
+listeners; old callbacks cannot restore the previous session. Account changes
 and sign-out invalidate prior callbacks and pending save/run UI state. An already
 submitted write is governed by server rules, and the worker rechecks membership
 before claiming a queued run. Revoking membership does not cancel a run already
 claimed by the worker or remove the user's Google/Firebase account.
 
-Automated acceptance covers hook/component state cleanup, late callbacks/actions,
-re-grant, auth changes and server-side revocation rules. Real second-officer Google
-onboarding/revocation, popup errors and hosted-domain acceptance remain pending;
-see AUTH-1 status (#8).
+Use **Switch Google account** to open Google's account chooser in Chrome; the
+existing session remains if the chooser is cancelled. **Sign out to switch
+accounts** signs out first. Popup-blocked messages explain how to allow popups and
+retry; cancelled popups allow retry after Firebase finishes its cancellation grace
+period. Domain/provider failures point to the administrator configuration rather
+than exposing raw SDK errors. A failed sign-out keeps the current session and
+shows a retry message.
+
+### Login readiness verification (October 19, 2026)
+
+Automated acceptance covers hook/component cleanup, late callbacks/actions,
+listener failures and timeouts, cached membership, re-grant, Auth changes and
+server-side revocation rules. Chrome browser tests use isolated Auth/Firestore
+emulators with synthetic accounts for onboarding, refresh, revocation during
+editing, draft removal, re-grant, sign-out, blocked popups and cancelled popups.
+A blocked popup is simulated by returning no window from `window.open`; Google
+itself and hosted domains are not exercised by that test.
+
+Read-only checks of the configured live project confirmed Google sign-in is
+enabled, its client is configured, and `localhost`, `127.0.0.1` and the default
+Firebase Hosting domains are authorized. The administrator and worker identities
+are distinct; the worker has `roles/datastore.user`. Its container runs non-root
+with a read-only root filesystem and read-only mode-0600 config/credential mounts.
+No IAM roles, service-account keys, authorized domains or old Sheets credentials
+were changed or retired. The existing Sheets bot still needs its own credentials.
+
+A second real Google account was temporarily enabled using administrator
+credentials, then left disabled. Its owner verified in incognito windows that
+access appeared without refreshing, survived refresh, and disappeared during an
+unsaved report draft after revocation. Private forms/history disappeared, the
+draft was discarded, and public results remained readable for the revoked account
+and a signed-out window, including after refresh. These were owner-observed checks
+against the existing local feature app and live Firebase; they did not deploy this
+branch or save inputs or request a live run.
+
+Validation: 100 frontend tests, 35 Chrome emulator browser tests, 17 Firestore rules
+tests and the Python worker publication/revocation integration test passed. The
+worker integration uses isolated Firestore plus synthetic WCL/MongoDB and verifies
+a request queued before revocation fails at claim without replacing public results.
+The production frontend build passed with the existing large-bundle warning.
+
+No Hosting release exists yet. Real Google consent and signed-out/signed-in smoke
+checks on the deployed hostname remain dependent on WEB-1 (#12). Configured
+provider/domain flags alone do not establish hosted acceptance. Full browser-to-worker
+queued-revocation acceptance remains separate from the passing browser and worker
+checks. Keep AUTH-1 (#8) open for these remaining checks.
 
 ## Initialize a different project or season
 

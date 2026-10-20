@@ -32,6 +32,7 @@ type Listener = {
 };
 const mock = vi.hoisted(() => ({
   auth: undefined as unknown as (user: User | null) => void,
+  authError: undefined as unknown as () => void,
   listeners: [] as Listener[],
   getDoc: vi.fn(),
   getDocs: vi.fn(),
@@ -48,8 +49,9 @@ vi.mock("./firebase", () => ({
   logOut: vi.fn(),
 }));
 vi.mock("firebase/auth", () => ({
-  onAuthStateChanged: vi.fn((_auth, next) => {
+  onAuthStateChanged: vi.fn((_auth, next, error) => {
     mock.auth = next;
+    mock.authError = error;
     return vi.fn();
   }),
 }));
@@ -389,7 +391,8 @@ describe("officer access lifecycle", () => {
     );
     expect(result.current.connection.officer).toBe(false);
     expect(result.current.connection.saved.inputs.reports).toEqual([]);
-    expect(result.current.connection.error).toBe("Access denied");
+    expect(result.current.connection.error).toBe("");
+    expect(result.current.connection.accessError).toContain("retry access");
     expect(result.current.loading).toBe(false);
   });
 
@@ -416,7 +419,10 @@ describe("officer access lifecycle", () => {
       latest("officers/officer").error(new Error("Membership unavailable")),
     );
     expect(result.current.loading).toBe(false);
-    expect(result.current.connection.error).toBe("Membership unavailable");
+    expect(result.current.connection.accessError).toContain("retry access");
+    expect(result.current.connection.accessError).not.toContain(
+      "Membership unavailable",
+    );
     expect(result.current.connection.officer).toBe(false);
   });
 
@@ -1329,4 +1335,83 @@ describe("public result loading", () => {
     expect(screen.queryByRole("alert")).toBeNull();
     expect(screen.getByText(/Everyone’s time counts/)).toBeTruthy();
   });
+});
+
+it("fails closed on an input listener error and retries with a fresh access generation", () => {
+  const { result } = renderHook(useFirestore);
+  login();
+  grant();
+  send("publicSeasons/test");
+  const oldMembership = latest("officers/officer");
+  const oldInputs = latest("seasons/test/players");
+  act(() => oldInputs.error(new Error("PRIVATE SDK PAYLOAD")));
+  expect(result.current.loading).toBe(false);
+  expect(result.current.connection.officer).toBe(false);
+  expect(result.current.connection.accessError).toContain("retry access");
+  expect(result.current.connection.accessError).not.toContain("PRIVATE");
+  act(() => result.current.connection.retryAccess());
+  expect(oldMembership.stop).toHaveBeenCalled();
+  act(() => {
+    oldMembership.next(snap({ enabled: true }));
+    oldInputs.next(snap({}, { stale: { name: "PRIVATE stale input" } }));
+  });
+  expect(result.current.connection.officer).toBe(false);
+  expect(result.current.connection.players).toEqual([]);
+  grant();
+  loadPrivate();
+  expect(result.current.connection.officer).toBe(true);
+  expect(result.current.connection.accessError).toBe("");
+  expect(result.current.loading).toBe(false);
+});
+it("requires server-confirmed membership rather than an old cached grant", () => {
+  const { result } = renderHook(useFirestore);
+  login();
+  act(() =>
+    latest("officers/officer").next({
+      ...snap({ enabled: true }),
+      metadata: { hasPendingWrites: false, fromCache: true },
+    }),
+  );
+  expect(result.current.connection.officer).toBe(false);
+  expect(mock.listeners.some((l) => l.path === "seasons/test/players")).toBe(
+    false,
+  );
+  grant();
+  expect(result.current.connection.officer).toBe(true);
+});
+it.each(["auth", "membership", "inputs"])(
+  "bounds initial %s waiting and keeps public access recoverable",
+  (phase) => {
+    vi.useFakeTimers();
+    try {
+      const { result, unmount } = renderHook(useFirestore);
+      send("publicSeasons/test");
+      if (phase !== "auth") login();
+      if (phase === "inputs") grant();
+      act(() => vi.advanceTimersByTime(15000));
+      expect(result.current.loading).toBe(false);
+      expect(result.current.connection.officer).toBe(false);
+      expect(result.current.connection.accessError).toContain("retry access");
+      expect(result.current.connection.players).toEqual([]);
+      unmount();
+    } finally {
+      vi.useRealTimers();
+    }
+  },
+);
+it("recovers from Auth observer failure and ignores callbacks from its retired subscription", () => {
+  const { result } = renderHook(useFirestore);
+  send("publicSeasons/test");
+  const old = mock.auth;
+  act(() => mock.authError());
+  expect(result.current.loading).toBe(false);
+  expect(result.current.connection.accessError).toContain("retry access");
+  act(() => result.current.connection.retryAccess());
+  act(() => old({ uid: "stale" } as User));
+  expect(result.current.connection.user).toBeNull();
+  login();
+  grant();
+  loadPrivate();
+  expect(result.current.connection.officer).toBe(true);
+  expect(result.current.connection.accessError).toBe("");
 });
