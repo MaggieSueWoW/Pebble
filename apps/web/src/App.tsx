@@ -517,6 +517,7 @@ export default function App({ connection }: { connection?: LiveConnection }) {
         unsaved ||
         Boolean(connection?.busy) ||
         Boolean(connection?.submitting) ||
+        Boolean(connection && !connection.queueReady) ||
         !canManage
       }
       title={
@@ -847,43 +848,54 @@ export default function App({ connection }: { connection?: LiveConnection }) {
                     : steps[active.stage] + "…"
                   : connection?.submitting
                     ? "Submitting run…"
-                    : connection?.resultsError
-                      ? "Latest results are unavailable"
-                      : connection?.resultsPending
-                        ? "Loading latest results…"
-                        : lastFailed
-                          ? "Last run didn’t finish"
-                          : unsaved
-                            ? "You have unsaved edits"
-                            : unprocessed
-                              ? "Changes ready for the next run"
-                              : connection && !connection.hasResults
-                                ? "No completed runs yet"
-                                : connection &&
-                                    history[0]?.status === "succeeded"
-                                  ? "Results updated"
-                                  : "You’re all caught up"}
+                    : connection?.officer && !connection.queueReady
+                      ? connection.queueError
+                        ? "Run queue is unavailable"
+                        : "Checking run queue…"
+                      : connection?.resultsError
+                        ? "Latest results are unavailable"
+                        : connection?.resultsPending
+                          ? "Loading latest results…"
+                          : lastFailed
+                            ? "Last run didn’t finish"
+                            : unsaved
+                              ? "You have unsaved edits"
+                              : unprocessed
+                                ? "Changes ready for the next run"
+                                : connection && !connection.hasResults
+                                  ? "No completed runs yet"
+                                  : connection &&
+                                      history[0]?.status === "succeeded"
+                                    ? "Results updated"
+                                    : "You’re all caught up"}
               </strong>
               <span>
                 {active
                   ? "Your last completed results stay visible while Pebble works."
                   : connection?.submitting
                     ? "Waiting for the server to confirm your request."
-                    : connection?.resultsError || connection?.resultsPending
-                      ? connection.hasResults
-                        ? "Showing the previous completed results until the latest set loads."
-                        : "The latest result set has not loaded yet."
-                      : lastFailed
-                        ? "Previous results are still available. You can run Pebble again."
-                        : unsaved
-                          ? "Save or discard your edits before running Pebble."
-                          : unprocessed
-                            ? "Saved inputs have changed. Run Pebble to update the results."
-                            : connection && !connection.hasResults
-                              ? "Add reports and Run Pebble to create the first result set."
-                              : `Last completed ${formatTime(results.completedAt)} PT · ${formatRunDate(results.completedAt)}`}
+                    : connection?.officer && !connection.queueReady
+                      ? "Waiting to check for pending runs. Your previous results stay visible."
+                      : connection?.resultsError || connection?.resultsPending
+                        ? connection.hasResults
+                          ? "Showing the previous completed results until the latest set loads."
+                          : "The latest result set has not loaded yet."
+                        : lastFailed
+                          ? "Previous results are still available. You can run Pebble again."
+                          : unsaved
+                            ? "Save or discard your edits before running Pebble."
+                            : unprocessed
+                              ? "Saved inputs have changed. Run Pebble to update the results."
+                              : connection && !connection.hasResults
+                                ? "Add reports and Run Pebble to create the first result set."
+                                : `Last completed ${formatTime(results.completedAt)} PT · ${formatRunDate(results.completedAt)}`}
               </span>
             </div>
+            {connection?.officer && connection.queueError && (
+              <button className="button" onClick={connection.retryQueue}>
+                Retry run queue
+              </button>
+            )}
             {runButton}
           </div>
           {storageError && (

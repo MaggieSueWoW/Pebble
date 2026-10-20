@@ -9,6 +9,7 @@ import {
   query,
   runTransaction,
   serverTimestamp,
+  where,
   type DocumentData,
 } from "firebase/firestore";
 import { auth, db, logOut, seasonId, seasonLabel, signIn } from "./firebase";
@@ -39,6 +40,9 @@ export type LiveConnection = {
   busy: boolean;
   hasResults: boolean;
   submitting: boolean;
+  queueReady: boolean;
+  queueError: string;
+  retryQueue: () => void;
   resultsPending: boolean;
   resultsError: string;
   retryResults: () => void;
@@ -63,6 +67,9 @@ const dataOnly = (d: DocumentData) =>
       ([k]) => !["version", "updatedBy", "updatedAt"].includes(k),
     ),
   );
+const compareActiveRuns = (a: DocumentData, b: DocumentData) =>
+  Number(b.status === "running") - Number(a.status === "running") ||
+  time(a.requestedAt).localeCompare(time(b.requestedAt));
 const time = (value: unknown) =>
   value && typeof (value as { toDate?: unknown }).toDate === "function"
     ? (value as { toDate: () => Date }).toDate().toISOString()
@@ -79,6 +86,12 @@ export function useFirestore(): {
   >({});
   const [loaded, setLoaded] = useState<string[]>([]);
   const [runs, setRuns] = useState<DocumentData[]>([]);
+  const [queue, setQueue] = useState<{
+    ready: boolean;
+    error: string;
+    runs: DocumentData[];
+  }>({ ready: false, error: "", runs: [] });
+  const [queueAttempt, setQueueAttempt] = useState(0);
   const publicResults = usePublicResults();
   const { results } = publicResults;
   const resultRun = results.signature;
@@ -119,6 +132,7 @@ export function useFirestore(): {
     setDocuments({});
     setLoaded([]);
     setRuns([]);
+    setQueue({ ready: false, error: "", runs: [] });
     setConsumed({ run: "", versions: {} });
     setHeartbeat(0);
     submission.current = null;
@@ -259,6 +273,50 @@ export function useFirestore(): {
       if (stopPrivate.current === stop) stopPrivate.current = null;
     };
   }, [officer, user, accessGeneration, fail, clearPrivate]);
+  useEffect(() => {
+    if (!officer || !authorized.current) return;
+    const own = session.current;
+    let alive = true;
+    const current = () =>
+      alive && authorized.current && own === session.current;
+    setQueue((old) => ({ ...old, ready: false, error: "" }));
+    // One snapshot covers both statuses, so claiming a queued run cannot create
+    // a false idle gap between separate queued and running listeners.
+    const stop = onSnapshot(
+      query(
+        collection(db!, "seasons", seasonId, "runs"),
+        where("status", "in", ["queued", "running"]),
+      ),
+      { includeMetadataChanges: true },
+      (snapshot) => {
+        if (!current() || snapshot.metadata.fromCache) return;
+        const active = snapshot.docs
+          .filter((d) => !d.metadata.hasPendingWrites)
+          .map((d) => ({ ...d.data(), id: d.id }))
+          .sort(compareActiveRuns);
+        setQueue({ ready: true, error: "", runs: active });
+        const first = active[0];
+        // Reuse direct tracking to retain terminal details beyond recent history,
+        // including after a reload or an uncertain submission acknowledgement.
+        if (
+          first &&
+          (!submission.current || submission.current.id === first.id)
+        ) {
+          if (submission.current) submission.current.confirmed = true;
+          setSubmittedRun({ id: first.id, data: first });
+        }
+      },
+      (e) => {
+        if (!current()) return;
+        if (e.code === "permission-denied") clearPrivate();
+        else setQueue((old) => ({ ...old, ready: false, error: e.message }));
+      },
+    );
+    return () => {
+      alive = false;
+      stop();
+    };
+  }, [officer, accessGeneration, queueAttempt, clearPrivate]);
   useEffect(() => {
     if (!officer || !submittedRun || !authorized.current) return;
     const own = session.current;
@@ -484,6 +542,9 @@ export function useFirestore(): {
     const prior = submission.current;
     if (prior?.promise) return prior.promise;
     if (prior?.confirmed) return;
+    if (!queue.ready)
+      throw new Error("Wait for the run queue to load, then try again.");
+    if (queue.runs.length) return;
     const pending = prior ?? {
       id: crypto.randomUUID(),
       promise: null,
@@ -508,7 +569,9 @@ export function useFirestore(): {
       });
       assertAccess();
       pending.confirmed = true;
-      setSubmittedRun({ id: pending.id, data: null });
+      setSubmittedRun((old) =>
+        old?.id === pending.id ? old : { id: pending.id, data: null },
+      );
     })();
     pending.promise = operation;
     try {
@@ -530,9 +593,13 @@ export function useFirestore(): {
         ...runs.filter((r) => r.id !== submittedRun.id),
       ].sort((a, b) => time(b.requestedAt).localeCompare(time(a.requestedAt)))
     : runs;
-  const activeRun = [...visibleRuns]
-    .reverse()
-    .find((r) => ["queued", "running"].includes(r.status));
+  const activeRun = [
+    ...queue.runs,
+    ...(submittedRun?.data &&
+    ["queued", "running"].includes(submittedRun.data.status)
+      ? [{ ...submittedRun.data, id: submittedRun.id }]
+      : []),
+  ].sort(compareActiveRuns)[0];
   const unseenSuccess = visibleRuns.some(
     (r) =>
       r.status === "succeeded" &&
@@ -592,6 +659,9 @@ export function useFirestore(): {
       busy,
       hasResults,
       submitting: submitting || Boolean(submittedRun && !submittedRun.data),
+      queueReady: queue.ready,
+      queueError: queue.error,
+      retryQueue: () => setQueueAttempt((old) => old + 1),
       resultsPending: publicResults.loading || unseenSuccess,
       resultsError: publicResults.error,
       retryResults: publicResults.retry,
