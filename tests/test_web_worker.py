@@ -11,6 +11,7 @@ import pytest
 from google.api_core.exceptions import ServiceUnavailable
 from google.cloud import firestore
 
+from pebble.attendance import build_attendance_projection
 from pebble.web_models import Availability, WorkerConfig, validate_snapshot, wall_ms
 from pebble.web_worker import (
     Worker,
@@ -137,6 +138,9 @@ def test_snapshot_projection_and_exclusion(config, wcl):
     first = calculate_snapshot(config, db, raw)
     assert len(first["nights"]) == 2
     assert next(p for p in first["players"] if p["id"] == "solace")["bench"] == 45
+    projected = build_attendance_projection(db)
+    assert all(p["attendance"] == projected[p["name"]] for p in first["players"])
+    assert all("attendance" not in p for n in first["nights"] for p in n["players"])
     assert "PRIVATE" not in json.dumps(first, default=str)
     raw["reports"][CODES[1]]["enabled"] = False
     second = calculate_snapshot(config, db, raw)
@@ -270,6 +274,14 @@ def test_real_firestore_run_publish_failure_and_revocation(
         )
         == 2
     )
+    published_players = list(
+        season.collection("results").document("first").collection("players").stream()
+    )
+    projected = build_attendance_projection(worker.db)
+    assert all(
+        p.to_dict()["attendance"] == projected[p.to_dict()["name"]]
+        for p in published_players
+    )
     assert not worker.process_next(), "completed requests must not run twice"
 
     def interrupted(run_ref, _output):
@@ -287,6 +299,10 @@ def test_real_firestore_run_publish_failure_and_revocation(
         .get()
         .to_dict()["complete"]
         is False
+    )
+    assert all(
+        p.reference.get().to_dict()["attendance"] == p.to_dict()["attendance"]
+        for p in published_players
     )
     # A request accepted before revocation must still fail at worker claim.
     revoked = queue("revoked")
@@ -708,3 +724,73 @@ def test_adapter_parity_representative_nights(config, monkeypatch, wcl, scenario
         assert not output["nights"] and output["warnings"]
     if scenario == "positive_short_half":
         assert next(p for p in output["players"] if p["id"] == "solace")["bench"] <= 120
+
+
+def test_attendance_projection_omits_ineligible_season_players(config, wcl):
+    raw = snapshot()
+    for pid, values in {
+        "future": {"name": "Future", "joinDate": "2026-10-16"},
+        "former": {"name": "Former", "leaveDate": "2026-10-14"},
+        "inactive": {"name": "Inactive", "active": False},
+    }.items():
+        raw["players"][pid] = meta(
+            name=values["name"],
+            className="Mage",
+            role="Damage",
+            active=values.get("active", True),
+            joinDate=values.get("joinDate", ""),
+            leaveDate=values.get("leaveDate", ""),
+        )
+    output = calculate_snapshot(config, mongomock.MongoClient().db, raw)
+    rows = {player["id"]: player for player in output["players"]}
+    assert "inactive" not in rows
+    assert "attendance" not in rows["future"]
+    assert "attendance" not in rows["former"]
+
+
+def test_attendance_payload_is_preflighted_before_publication(config, emulator):
+    from pebble.web_worker import InputError
+
+    client, season = emulator
+    worker = Worker(config, client, mongomock.MongoClient())
+    pointer = client.document("publicSeasons/worker-tests")
+    pointer.set({"latestRunId": "previous-attendance"})
+    root = season.collection("results").document("previous-attendance")
+    root.set({"complete": True})
+    old_player = root.collection("players").document("example")
+    old_player.set(
+        {
+            "attendance": {
+                "played": 10,
+                "bench": 0,
+                "possible": 10,
+                "rate": 1,
+                "weeks": [],
+            }
+        }
+    )
+    run = season.collection("runs").document("oversized-attendance")
+    run.set({"status": "running"})
+    output = {
+        "players": [
+            {
+                "id": "example",
+                "attendance": {
+                    "played": 10,
+                    "bench": 0,
+                    "possible": 10,
+                    "rate": 1,
+                    "weeks": [{"week": "2026-10-13", "status": "PBO"}] * 30000,
+                },
+            }
+        ],
+        "nights": [],
+        "weeks": [],
+        "reportCount": 0,
+        "warnings": [],
+    }
+    with pytest.raises(InputError, match="size budget"):
+        worker.publish(run, output)
+    assert not season.collection("results").document(run.id).get().exists
+    assert pointer.get().to_dict()["latestRunId"] == "previous-attendance"
+    assert old_player.get().to_dict()["attendance"]["possible"] == 10

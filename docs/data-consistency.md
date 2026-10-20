@@ -76,6 +76,26 @@ Weekly rows are projected through an explicit allowlist of engine numeric fields
 Nightly/weekly arrays remain appropriate for this raid; no new collection model
 is needed. Public warnings contain authored data-quality summaries only.
 
+Season player rows may additionally contain `attendance` with `played`, `bench`
+and `possible` minutes, `rate`, and ordered `weeks: [{week, status}]`. This
+projection calls the existing attendance statistics builder; its eligibility,
+per-half possible-minute flooring, minute normalization and Tuesday week IDs
+match the Sheets attendance output. `rate` is the raw `(played + bench) / possible`
+fraction before presentation rounding, or `null` when possible time is zero.
+Week statuses retain the established P/B/O order, including empty strings when
+that week has no applicable event. The nested minute values reflect eligible
+membership nights; they need not equal the season row's existing aggregate fields.
+
+An omitted `attendance` means the existing helper excluded that main (for example,
+active membership ended before the latest observed night or starts afterward).
+It must not be displayed as zero attendance. Only helper-eligible mains already
+present in the season player output receive the field; nightly and weekly result
+documents do not change. Older published runs legitimately lack this additive
+field until a reviewed worker release and normal recomputation. No release or
+live recomputation accompanies this source change. Notes and private attribution
+are never serialized. The existing atomic publication and size preflight apply to
+the entire nested attendance payload.
+
 Before creating staging output, publication measures every payload using the
 Firestore protobuf encoder. Documents exceeding a conservative **900,000-byte**
 budget fail without moving the public pointer; batches are limited to **400
