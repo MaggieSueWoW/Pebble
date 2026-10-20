@@ -241,6 +241,7 @@ h3 {
   display: flex;
   flex-direction: column;
   z-index: 20;
+  overflow-y: auto;
 }
 .brand {
   display: flex;
@@ -259,15 +260,11 @@ h3 {
   border-radius: 12px;
   transform: rotate(-7deg);
 }
-.brand-dot {
-  color: var(--lime);
-}
-.workspace-label {
-  font-size: 9px;
-  letter-spacing: 1.5px;
-  color: #768294;
-  font-weight: 600;
-  padding: 16px 9px 24px;
+.brand-subtitle {
+  padding: 12px 9px 26px;
+  font-size: 10px;
+  line-height: 1.8;
+  color: #a2acba;
 }
 .season-card {
   display: flex;
@@ -301,14 +298,6 @@ h3 {
   color: #a3adbb;
   display: block;
   margin-top: 5px;
-}
-.nav-group-label {
-  font-size: 9px;
-  font-weight: 650;
-  letter-spacing: 1.2px;
-  color: #768294;
-  padding-left: 11px;
-  margin-bottom: 13px;
 }
 .nav-item {
   width: 100%;
@@ -347,30 +336,21 @@ h3 {
   line-height: 20px;
   text-align: center;
 }
-.sidebar-note {
-  margin: auto 10px 25px;
+.sidebar-footer {
+  margin-top: auto;
+  padding-top: 32px;
+}
+.sidebar-footer > .connection {
+  margin: 0 7px 20px;
+}
+.account-actions {
   display: flex;
-  gap: 10px;
-  align-items: flex-start;
-  padding-top: 40px;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  margin-top: 10px;
 }
-.sidebar-note p {
+.account-actions .text-button {
   font-size: 10px;
-  line-height: 1.9;
-  color: #798699;
-}
-.sidebar-note strong {
-  font-weight: 400;
-  color: #a2acba;
-}
-.tiny-pebble {
-  margin-top: 4px;
-  display: inline-block;
-  width: 12px;
-  height: 14px;
-  background: #53624b;
-  border-radius: 65% 40% 58% 50%;
-  transform: rotate(35deg);
 }
 .officer {
   display: flex;
@@ -394,6 +374,13 @@ h3 {
 }
 .officer > div {
   flex: 1;
+  min-width: 0;
+}
+.officer strong {
+  overflow-wrap: anywhere;
+}
+.avatar {
+  flex-shrink: 0;
 }
 .officer strong {
   font-size: 11px;
@@ -450,43 +437,6 @@ h3 {
 main {
   margin-left: 224px;
   min-height: 100vh;
-}
-.topbar {
-  height: 72px;
-  border-bottom: 1px solid #242a35;
-  padding: 0 38px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  background: #10131a;
-}
-.breadcrumb {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  font-size: 11px;
-  color: #8e99aa;
-}
-.breadcrumb svg {
-  color: #505d70;
-}
-.breadcrumb strong {
-  color: #ccd4df;
-  font-weight: 500;
-}
-.topbar-right {
-  display: flex;
-  align-items: center;
-  gap: 25px;
-}
-.prototype-label {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  color: #968ba8;
-  font-size: 8px;
-  font-weight: 600;
-  letter-spacing: 0.9px;
 }
 .connection {
   display: flex;
@@ -1544,9 +1494,6 @@ tbody tr:last-child td {
   .content {
     padding-top: 48px;
   }
-  .topbar {
-    padding-left: max(38px, calc((100vw - 224px - 1224px) / 2));
-  }
 }
 @media (max-width: 1150px) {
   .sidebar {
@@ -1556,9 +1503,6 @@ tbody tr:last-child td {
   }
   main {
     margin-left: 200px;
-  }
-  .topbar {
-    padding: 0 25px;
   }
   .content {
     padding-left: 25px;
@@ -1589,9 +1533,6 @@ tbody tr:last-child td {
   }
   .player-availability > .small {
     font-size: 9px;
-  }
-  .topbar-right {
-    gap: 16px;
   }
   td {
     padding-left: 14px;
@@ -1624,10 +1565,6 @@ tbody tr:last-child td {
     width: 31px;
     height: 31px;
   }
-  .workspace-label {
-    font-size: 8px;
-    padding-left: 5px;
-  }
   .season-card {
     padding: 10px 7px;
   }
@@ -1640,25 +1577,12 @@ tbody tr:last-child td {
   .nav-item {
     padding-left: 9px;
   }
-  .nav-group-label {
-    font-size: 8px;
-  }
-  .sidebar-note {
-    margin-left: 4px;
-  }
-  .sidebar-note p {
-    font-size: 9px;
-  }
   main {
     margin-left: 180px;
   }
-  .topbar,
   .content {
     padding-left: 21px;
     padding-right: 21px;
-  }
-  .prototype-label {
-    display: none;
   }
   .page-heading {
     align-items: flex-start;
@@ -1818,14 +1742,11 @@ tbody tr:last-child td {
   .brand > span {
     font-size: 25px;
   }
-  .workspace-label {
-    display: none;
+  .brand-subtitle {
+    padding: 10px 0 18px;
   }
   .season-card {
-    display: none;
-  }
-  .nav-group-label {
-    display: none;
+    margin-bottom: 0;
   }
   .sidebar nav {
     display: flex;
@@ -1860,9 +1781,15 @@ tbody tr:last-child td {
   .nav-item.active {
     background: #c3ec9109;
   }
-  .sidebar-note,
+  .sidebar-footer {
+    padding-top: 18px;
+  }
+  .sidebar-footer > .connection {
+    margin: 0 4px 14px;
+  }
   .officer {
-    display: none;
+    margin-top: 14px;
+    padding: 14px 4px;
   }
   .demo-controls {
     position: absolute;
@@ -1892,14 +1819,6 @@ tbody tr:last-child td {
   }
   main {
     margin-left: 0;
-  }
-  .topbar {
-    height: 46px;
-    padding: 0 19px;
-  }
-  .breadcrumb {
-    font-size: 10px;
-    gap: 8px;
   }
   .connection {
     font-size: 9px;

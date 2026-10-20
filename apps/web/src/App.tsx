@@ -672,24 +672,7 @@ export default function App({ connection }: { connection?: LiveConnection }) {
           ? "Submitting run…"
           : "Run Pebble"}
     </button>
-  ) : (
-    <button
-      className="button primary"
-      disabled={authPending}
-      onClick={() => {
-        const action = connection?.user
-          ? connection.signOut
-          : connection?.signIn;
-        if (action) void accountAction(action);
-      }}
-    >
-      {authPending
-        ? "Please wait…"
-        : connection?.user
-          ? "Sign out to switch accounts"
-          : "Officer sign-in"}
-    </button>
-  );
+  ) : null;
   const weeks = results.weeks ?? [];
   const hasResultPeriod = (period: string) =>
     results.nights.some((n) => n.night === period) ||
@@ -779,25 +762,22 @@ export default function App({ connection }: { connection?: LiveConnection }) {
           }}
         >
           <img src="/pebble.svg" width="36" height="36" alt="" />
-          <span>
-            pebble<span className="brand-dot">.</span>
-          </span>
+          <span>pebble</span>
         </a>
-        <div className="workspace-label">
-          {canManage ? "OFFICER WORKSPACE" : "TEAM RESULTS"}
-        </div>
+        <p className="brand-subtitle">
+          More time raiding,
+          <br />
+          less time in spreadsheets.
+        </p>
         <div className="season-card">
           <span className="season-icon">
             <Sparkles size={18} />
           </span>
           <div>
             <strong>{connection?.label ?? "Midnight"}</strong>
-            <span>
-              {connection ? "Raid time fairness" : "Season 1 · Sample data"}
-            </span>
+            {!connection && <span>Season 1 · Sample data</span>}
           </div>
         </div>
-        <div className="nav-group-label">MANAGE YOUR RAID</div>
         <nav aria-label="Main navigation">
           {(
             [
@@ -834,142 +814,128 @@ export default function App({ connection }: { connection?: LiveConnection }) {
               </button>
             ))}
         </nav>
-        <div className="sidebar-note">
-          <span className="tiny-pebble" />
-          <p>
-            More time raiding.
-            <br />
-            <strong>Less time in spreadsheets.</strong>
-          </p>
-        </div>
-        {!connection && (
-          <details className="demo-controls">
-            <summary>
-              <FlaskConical size={15} /> Prototype controls{" "}
-              <ChevronDown size={13} />
-            </summary>
-            <p>Everything here is sample data, saved in this browser.</p>
-            <label className="control-line">
-              <span>Bot online</span>
-              <input
-                type="checkbox"
-                checked={online}
-                disabled={active?.status === "running"}
-                onChange={(e) => setOnline(e.target.checked)}
-              />
-            </label>
-            <label className="control-line">
-              <span>Fail next run</span>
-              <input
-                type="checkbox"
-                checked={failNext}
-                onChange={(e) => setFailNext(e.target.checked)}
-              />
-            </label>
-            <button
-              disabled={Boolean(active)}
-              className="text-button"
-              onClick={() =>
-                guard(() => {
-                  setSaved(freshState());
-                  nightChosen.current = false;
-                  setNight(defaultNight);
-                  setSelected("Example");
-                  availabilityEditor.cancel();
-                  timingEditor.cancel();
-                  setResultNight("season");
-                  setFailNext(false);
-                  setOnline(true);
-                  notify("Sample data reset.");
-                })
-              }
-            >
-              <RotateCcw size={13} /> Reset sample data
-            </button>
-          </details>
-        )}
-        <div className="officer">
-          <span className="avatar">
-            {connection
-              ? connection.user?.displayName?.slice(0, 2).toUpperCase() || "P"
-              : "MS"}
-          </span>
-          <div>
-            <strong>
-              {connection
-                ? connection.user?.displayName || "Team member"
-                : "Example Officer"}
-            </strong>
-            <span>
-              {connection
-                ? connection.officer
-                  ? "Officer"
-                  : connection.user
-                    ? "Officer access is not enabled"
-                    : "Public results"
-                : "Officer · Demo session"}
+        <div className="sidebar-footer">
+          {canManage && (
+            <span className={`connection ${online ? "" : "offline"}`}>
+              {online ? <Wifi size={14} /> : <WifiOff size={14} />}
+              {online ? "Local bot online" : "Local bot offline"}
             </span>
-            {connection?.user && (
+          )}
+          {!connection && (
+            <details className="demo-controls">
+              <summary>
+                <FlaskConical size={15} /> Prototype controls{" "}
+                <ChevronDown size={13} />
+              </summary>
+              <p>Everything here is sample data, saved in this browser.</p>
+              <label className="control-line">
+                <span>Bot online</span>
+                <input
+                  type="checkbox"
+                  checked={online}
+                  disabled={active?.status === "running"}
+                  onChange={(e) => setOnline(e.target.checked)}
+                />
+              </label>
+              <label className="control-line">
+                <span>Fail next run</span>
+                <input
+                  type="checkbox"
+                  checked={failNext}
+                  onChange={(e) => setFailNext(e.target.checked)}
+                />
+              </label>
               <button
+                disabled={Boolean(active)}
                 className="text-button"
-                disabled={authPending}
                 onClick={() =>
                   guard(() => {
-                    void accountAction(connection.signOut);
+                    setSaved(freshState());
+                    nightChosen.current = false;
+                    setNight(defaultNight);
+                    setSelected("Example");
+                    availabilityEditor.cancel();
+                    timingEditor.cancel();
+                    setResultNight("season");
+                    setFailNext(false);
+                    setOnline(true);
+                    notify("Sample data reset.");
                   })
                 }
               >
-                Sign out
+                <RotateCcw size={13} /> Reset sample data
               </button>
-            )}
-            {connection?.user && (
-              <button
-                className="text-button"
-                disabled={authPending}
-                onClick={() =>
-                  guard(() => {
-                    void accountAction(connection.signIn);
-                  })
-                }
-              >
-                Switch Google account
-              </button>
-            )}
+            </details>
+          )}
+          <div className="officer">
+            <span className="avatar">
+              {connection ? (
+                connection.user ? (
+                  (connection.user.displayName || connection.user.email || "P")
+                    .slice(0, 2)
+                    .toUpperCase()
+                ) : (
+                  <Users size={16} />
+                )
+              ) : (
+                "MS"
+              )}
+            </span>
+            <div>
+              <strong>
+                {connection
+                  ? connection.user
+                    ? connection.user.displayName ||
+                      connection.user.email ||
+                      "Signed in"
+                    : "Signed out"
+                  : "Example Officer"}
+              </strong>
+              <span>
+                {connection
+                  ? connection.officer
+                    ? "Officer"
+                    : connection.user
+                      ? "Officer access is not enabled"
+                      : "Public results"
+                  : "Officer · Demo session"}
+              </span>
+              {connection && (
+                <div className="account-actions">
+                  <button
+                    className="text-button"
+                    disabled={authPending}
+                    onClick={() =>
+                      guard(() => {
+                        void accountAction(connection.signIn);
+                      })
+                    }
+                  >
+                    {connection.user
+                      ? "Switch Google account"
+                      : "Officer sign-in"}
+                  </button>
+                  {connection.user && (
+                    <button
+                      className="text-button"
+                      disabled={authPending}
+                      onClick={() =>
+                        guard(() => {
+                          void accountAction(connection.signOut);
+                        })
+                      }
+                    >
+                      Sign out
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+            {canManage && <ShieldCheck size={17} />}
           </div>
-          <ShieldCheck size={17} />
         </div>
       </aside>
       <main>
-        <header className="topbar">
-          <div className="breadcrumb">
-            Workspace <ChevronRight size={13} />
-            <strong>
-              {page === "reports"
-                ? "Reports"
-                : page === "overrides"
-                  ? "Overrides"
-                  : page === "settings"
-                    ? "Settings"
-                    : page === "roster"
-                      ? "Roster"
-                      : "Results"}
-            </strong>
-          </div>
-          <div className="topbar-right">
-            <span className="prototype-label">
-              <FlaskConical size={13} />{" "}
-              {connection ? connection.label : "INTERACTIVE PROTOTYPE"}
-            </span>
-            <span className={`connection ${online ? "" : "offline"}`}>
-              {online ? <Wifi size={14} /> : <WifiOff size={14} />}
-              {!canManage
-                ? "Public results"
-                : online
-                  ? "Local bot online"
-                  : "Local bot offline"}
-            </span>
-          </div>
-        </header>
         <div className="content">
           {connection?.error && (
             <Notice tone="amber">{connection.error}</Notice>

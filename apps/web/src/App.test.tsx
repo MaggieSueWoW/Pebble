@@ -409,9 +409,7 @@ it("keeps public sign-in and explains non-officer access with collapsed account 
   expect(screen.queryByRole("button", { name: "Overrides" })).toBeNull();
   expect(screen.queryByRole("button", { name: "Run Pebble" })).toBeNull();
   await act(async () =>
-    fireEvent.click(
-      screen.getByRole("button", { name: "Sign out to switch accounts" }),
-    ),
+    fireEvent.click(screen.getByRole("button", { name: "Sign out" })),
   );
   expect(c.signOut).toHaveBeenCalledTimes(1);
   expect(c.saveInputs).not.toHaveBeenCalled();
@@ -430,9 +428,7 @@ it("announces an account-switch failure without attempting another sign-in", asy
   c.signOut = vi.fn().mockRejectedValue(new Error("Sign-out unavailable"));
   render(<App connection={c} />);
   await act(async () =>
-    fireEvent.click(
-      screen.getByRole("button", { name: "Sign out to switch accounts" }),
-    ),
+    fireEvent.click(screen.getByRole("button", { name: "Sign out" })),
   );
   expect(screen.getByRole("alert").textContent).toContain(
     "Couldn’t complete the account action",
