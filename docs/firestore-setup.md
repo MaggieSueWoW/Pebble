@@ -138,7 +138,11 @@ To import existing Sheets inputs without changing the Sheet:
 This creates missing input documents and updates calculation settings. It does not
 replace existing reports, roster entries, or overrides. It preserves positive
 available-minute and negative unavailable-minute overrides and normalizes Sheets
-time formats. Importing does not start a run. The generic `web import-inputs
+time formats. Both import paths validate the effective season before committing
+missing inputs in one transaction (at most 400 writes). Invalid references or
+legacy values fail without partial writes. See [data contracts and parity](data-consistency.md)
+for supported formats, regional aliases, size bounds and manual retention.
+Importing does not start a run. The generic `web import-inputs
 --file inputs.json` command can load validated input collections from JSON.
 
 There is no hardcoded backend project dependency. Changing projects requires new

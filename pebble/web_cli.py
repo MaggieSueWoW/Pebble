@@ -12,7 +12,7 @@ import click
 from google.cloud import firestore
 from pymongo import MongoClient
 
-from .web_models import INPUT_MODELS, CalculationInput
+from .web_models import CalculationInput
 from .web_worker import InputError, Worker, firestore_client, load_worker_config
 
 
@@ -107,31 +107,20 @@ def set_officer(config, uid, enabled):
 @click.option("--file", "filename", required=True, type=click.Path(exists=True))
 def import_inputs(config, filename):
     """Import JSON input collections; existing documents are left unchanged."""
-    from datetime import datetime, timezone
     from pathlib import Path
 
-    _, client = resources(config)
-    settings = load_worker_config(config)
-    values = json.loads(Path(filename).read_text())
-    if set(values) - set(INPUT_MODELS):
+    from .web_data import import_domain
+
+    settings, client = resources(config)
+    try:
+        values = json.loads(Path(filename).read_text())
+        import_domain(client, settings.firestore.season_id, values)
+    except (ValueError, TypeError):
         raise click.ClickException(
-            "Import accepts reports, players, characters, nightOverrides, availabilityOverrides"
-        )
-    for name, docs in values.items():
-        for key, value in docs.items():
-            ref = client.document(
-                f"seasons/{settings.firestore.season_id}/{name}/{key}"
-            )
-            if ref.get().exists:
-                continue
-            record = {
-                **value,
-                "version": 1,
-                "updatedBy": "local-admin",
-                "updatedAt": datetime.now(timezone.utc),
-            }
-            INPUT_MODELS[name].model_validate(record)
-            ref.create(record)
+            "Invalid import. Check schemas, references, dates and the 400-write limit; no inputs were written."
+        ) from None
+    finally:
+        client.close()
     click.echo("Imported missing input documents. Run Pebble to compute results.")
 
 
@@ -148,6 +137,10 @@ def import_sheets_command(config, sheets_config, sheets_credentials):
         counts = import_sheets(
             client, settings.firestore.season_id, sheets_config, sheets_credentials
         )
-    except ValueError as exc:
-        raise click.ClickException(str(exc)) from exc
+    except (ValueError, TypeError):
+        raise click.ClickException(
+            "Invalid Sheets import. Check references, dates/times, values and the 400-write limit; no inputs were written."
+        ) from None
+    finally:
+        client.close()
     click.echo(json.dumps(counts))

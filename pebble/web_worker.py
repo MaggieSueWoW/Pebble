@@ -31,6 +31,7 @@ from .mongo_client import ensure_indexes
 from .pipeline import compute_results
 from .utils.time import ms_to_pt_iso, night_id_from_ms
 from .wcl_client import WCLClient, _is_retryable
+from .web_identity import mapped_bundle
 from .web_models import (
     INPUT_MODELS,
     CalculationInput,
@@ -38,6 +39,7 @@ from .web_models import (
     validate_snapshot,
     wall_ms,
 )
+from .web_publication import publication_batches
 
 log = logging.getLogger(__name__)
 RPC_OPTIONS = {"timeout": 10, "retry": Retry(initial=0.2, maximum=1, timeout=10)}
@@ -195,12 +197,6 @@ def calculate_snapshot(
     ]
     if roster:
         db.team_roster.insert_many(roster)
-    aliases = {
-        (f"{c.name}-{c.realm}" if c.realm else c.name): inputs["players"][
-            c.playerId
-        ].name
-        for c in inputs["characters"].values()
-    }
     stage("Fetching reports")
     wcl = WCLClient(
         config.wcl.client_id,
@@ -245,7 +241,13 @@ def calculate_snapshot(
             ):
                 doc[field] = wall_ms(getattr(timing, attribute)) if timing else None
             db.reports.insert_one(doc)
-            persist_report_fights(db, code, bundle, start, night)
+            try:
+                actors_bundle = mapped_bundle(bundle, inputs)
+            except ValueError:
+                raise InputError(
+                    "Report region is missing. Refresh the report cache before resolving character mappings."
+                ) from None
+            persist_report_fights(db, code, actors_bundle, start, night)
             summaries[code] = {
                 "title": doc["title"],
                 "night": night,
@@ -261,19 +263,8 @@ def calculate_snapshot(
             "pre": a.pre.effective(),
             "post": a.post.effective(),
         }
-    compute_results(config, db, log, roster_map=aliases, overrides_by_night=overrides)
+    compute_results(config, db, log, overrides_by_night=overrides)
     qa = {r["night_id"]: r for r in db.night_qa.find({}, {"_id": 0})}
-    for a in inputs["availabilityOverrides"].values():
-        if a.nightId in qa:
-            for half in ("pre", "post"):
-                value = getattr(a, half)
-                if (
-                    value.mode == "partial"
-                    and value.minutes > qa[a.nightId][f"mythic_{half}_min"]
-                ):
-                    raise InputError(
-                        f"Partial availability exceeds {half}-break duration on {a.nightId}"
-                    )
 
     def player_metadata(pid, player):
         return {
@@ -293,6 +284,8 @@ def calculate_snapshot(
         return {
             **metadata[name],
             "played": sum(r["played_total_min"] for r in rows),
+            "prePlayed": sum(r["played_pre_min"] for r in rows),
+            "postPlayed": sum(r["played_post_min"] for r in rows),
             "bench": sum(r["bench_total_min"] for r in rows),
             "preBench": sum(r["bench_pre_min"] for r in rows),
             "postBench": sum(r["bench_post_min"] for r in rows),
@@ -546,7 +539,6 @@ class Worker:
 
     def publish(self, run_ref, output):
         root = self.season.collection("results").document(run_ref.id)
-        root.set({"complete": False}, **RPC_OPTIONS)
         writes = [
             (root.collection("players").document(p["id"]), p) for p in output["players"]
         ]
@@ -557,15 +549,45 @@ class Worker:
         weeks = {}
         for row in output["weeks"]:
             weeks.setdefault(row["game_week"], []).append(
-                {k: v for k, v in row.items() if k != "updated_at"}
+                {
+                    k: row[k]
+                    for k in (
+                        "game_week",
+                        "main",
+                        "played_min",
+                        "bench_min",
+                        "bench_pre_min",
+                        "bench_post_min",
+                    )
+                }
             )
         writes += [
             (root.collection("weeks").document(week), {"players": rows})
             for week, rows in weeks.items()
         ]
-        for offset in range(0, len(writes), 400):
+        # Validate every document before creating staging data or uploading a batch.
+        try:
+            publication_batches(
+                [
+                    (
+                        root,
+                        {
+                            "complete": True,
+                            "reportCount": output["reportCount"],
+                            "warnings": output["warnings"],
+                        },
+                    )
+                ]
+            )
+            batches = publication_batches(writes)
+        except ValueError:
+            raise InputError(
+                "Results exceed the supported Firestore size budget. Reduce the season or roster size."
+            ) from None
+        root.set({"complete": False}, **RPC_OPTIONS)
+        for writes_batch in batches:
             batch = self.client.batch()
-            for ref, value in writes[offset : offset + 400]:
+            for ref, value in writes_batch:
                 batch.set(ref, value)
             batch.commit(**RPC_OPTIONS)
 

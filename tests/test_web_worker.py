@@ -531,3 +531,176 @@ def test_worker_heartbeat_runs_at_most_once_per_minute(config, monkeypatch):
     worker.run(stop=stop)
     worker.heartbeat.assert_called_once()
     assert intervals == [60]
+
+
+@pytest.mark.parametrize(
+    "scenario",
+    [
+        "multiple_reports",
+        "excluded",
+        "no_mythic",
+        "positive_short_half",
+        "negative_minutes",
+        "eligibility",
+        "zero_played",
+        "rounding",
+        "alias",
+        "pacific_boundary",
+    ],
+)
+def test_adapter_parity_representative_nights(config, monkeypatch, wcl, scenario):
+    """Compare web adaptation with the established Sheets calculation inputs."""
+    import logging
+    from copy import deepcopy
+
+    from pebble.ingest import persist_report_fights
+    from pebble.pipeline import compute_results
+    from pebble.utils.time import night_id_from_ms
+    from pebble.wcl_client import WCLClient
+    from pebble.web_models import validate_snapshot
+
+    raw = snapshot()
+    raw["availabilityOverrides"] = {}
+    raw["settings"] = {}
+    fetch = WCLClient.fetch_report_bundle
+    bundles = {code: fetch(None, code) for code in CODES}
+    if scenario == "multiple_reports":
+        bundles[CODES[1]] = deepcopy(bundles[CODES[0]])
+        # Overlapping reports must deduplicate fights, rather than double time.
+    elif scenario == "excluded":
+        raw["reports"][CODES[1]]["enabled"] = False
+    elif scenario == "no_mythic":
+        for bundle in bundles.values():
+            for fight in bundle["fights"]:
+                fight["difficulty"] = 4
+    elif scenario in ("positive_short_half", "negative_minutes"):
+        raw["availabilityOverrides"]["2026-10-15_solace"] = meta(
+            nightId="2026-10-15",
+            playerId="solace",
+            pre=(
+                {"mode": "partial", "minutes": 120}
+                if scenario == "positive_short_half"
+                else {"mode": "unavailableFor", "minutes": 5}
+            ),
+            post={"mode": "available"},
+        )
+    elif scenario == "eligibility":
+        raw["players"]["solace"]["joinDate"] = "2026-10-15"
+        raw["players"]["maggie"]["leaveDate"] = "2026-10-14"
+        raw["players"]["inactive"] = meta(
+            name="Inactive", className="Druid", active=False
+        )
+    elif scenario == "zero_played":
+        raw["availabilityOverrides"]["2026-10-15_solace"] = meta(
+            nightId="2026-10-15",
+            playerId="solace",
+            pre={"mode": "available"},
+            post={"mode": "available"},
+        )
+    elif scenario == "rounding":
+        for bundle in bundles.values():
+            bundle["fights"][0]["endTime"] += 29_000
+            bundle["fights"][1]["endTime"] += 31_000
+            bundle["endTime"] += 31_000
+    elif scenario == "alias":
+        raw["characters"]["alt"] = meta(
+            name="Alt", realm="TestRealm", region="us", playerId="maggie"
+        )
+        for bundle in bundles.values():
+            bundle["region"] = {"compactName": "US"}
+            bundle["masterData"]["actors"][0]["name"] = "Alt"
+    elif scenario == "pacific_boundary":
+        for bundle in bundles.values():
+            # UTC's next date is still the raid's Pacific date, across DST change.
+            bundle["startTime"] = wall_ms("2026-11-01T18:00")
+            bundle["endTime"] = bundle["startTime"] + 4_200_000
+    monkeypatch.setattr(
+        WCLClient, "fetch_report_bundle", lambda _, code: deepcopy(bundles[code])
+    )
+    web_db = mongomock.MongoClient().web
+    output = calculate_snapshot(config, web_db, raw)
+    inputs = validate_snapshot(raw)
+    legacy = mongomock.MongoClient().legacy
+    legacy.team_roster.insert_many(
+        [
+            {
+                "main": p.name,
+                "active": p.active,
+                "join_night": p.joinDate,
+                "leave_night": p.leaveDate,
+            }
+            for p in inputs["players"].values()
+        ]
+    )
+    for code, report in inputs["reports"].items():
+        if not report.enabled:
+            continue
+        b = bundles[code]
+        night = night_id_from_ms(b["startTime"])
+        legacy.reports.insert_one(
+            {
+                "code": code,
+                "night_id": night,
+                "start_ms": b["startTime"],
+                "end_ms": b["endTime"],
+            }
+        )
+        persist_report_fights(legacy, code, b, b["startTime"], night)
+    aliases = {
+        f"{c.name}-{c.realm}": inputs["players"][c.playerId].name
+        for c in inputs["characters"].values()
+    }
+    overrides = {}
+    for a in inputs["availabilityOverrides"].values():
+        overrides.setdefault(a.nightId, {})[inputs["players"][a.playerId].name] = {
+            "pre": a.pre.effective(),
+            "post": a.post.effective(),
+        }
+    compute_results(
+        config,
+        legacy,
+        logging.getLogger("parity"),
+        roster_map=aliases,
+        overrides_by_night=overrides,
+    )
+    fields = (
+        "night_id",
+        "main",
+        "played_pre_min",
+        "played_post_min",
+        "bench_pre_min",
+        "bench_post_min",
+    )
+
+    def rows(db):
+        return sorted(tuple(r[k] for k in fields) for r in db.bench_night_totals.find())
+
+    assert rows(web_db) == rows(legacy)
+    week_fields = (
+        "game_week",
+        "main",
+        "played_min",
+        "bench_min",
+        "bench_pre_min",
+        "bench_post_min",
+    )
+
+    def weeks(db):
+        return sorted(
+            tuple(r[k] for k in week_fields) for r in db.bench_week_totals.find()
+        )
+
+    assert weeks(web_db) == weeks(legacy)
+    for p in output["players"]:
+        assert p["played"] == p["prePlayed"] + p["postPlayed"]
+        assert p["bench"] == p["preBench"] + p["postBench"]
+        assert p["played"] == sum(
+            n["players"][i]["played"]
+            for n in output["nights"]
+            for i, v in enumerate(n["players"])
+            if v["id"] == p["id"]
+        )
+    if scenario == "no_mythic":
+        assert not output["nights"] and output["warnings"]
+    if scenario == "positive_short_half":
+        assert next(p for p in output["players"] if p["id"] == "solace")["bench"] <= 120

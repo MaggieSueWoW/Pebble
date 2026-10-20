@@ -106,3 +106,86 @@ test('revocation removes private access from an existing session while completed
   });
   await assertSucceeds(getDocFromServer(report));
 });
+
+const families = {
+  reports: [code, { enabled: true, notes: '' }],
+  players: ['p2', { name: 'Exampletwo', className: 'Druid', role: 'Healer', active: true, joinDate: '2026-10-01', leaveDate: '2026-11-01', notes: '' }],
+  characters: ['c1', { name: 'Examplealt', realm: 'Test Realm', region: 'us', playerId: 'p1' }],
+  nightOverrides: ['2026-10-15', { start: '2026-10-15T19:00', breakStart: '2026-10-15T20:00', breakEnd: '2026-10-15T20:15', end: '2026-10-15T21:00', notes: '' }],
+  availabilityOverrides: ['2026-10-15_p1', { nightId: '2026-10-15', playerId: 'p1', pre: { mode: 'available' }, post: { mode: 'unavailableFor', minutes: 15 }, notes: '' }],
+  settings: ['calculation', { tz: 'America/Los_Angeles', breakWindowStart: '20:50', breakWindowEnd: '21:30', minBreakMinutes: 10, maxBreakMinutes: 30, defaultMythicStart: '', postExtensionMinutes: 5 }],
+};
+for (const [family, [id, domain]] of Object.entries(families)) {
+  test(`${family}: full write contract, forged metadata, stale versions and revocation`, async () => {
+    const db = env.authenticatedContext('officer').firestore();
+    const ref = doc(db, `${season}/${family}/${id}`);
+    await assertSucceeds(setDoc(ref, { ...domain, ...meta() }));
+    for (const change of [meta('officer', 1), meta('officer', 3), { ...meta('other', 2) }, { ...meta('officer', 2), updatedAt: new Date(0) }, { ...meta('officer', 2), version: 2.5 }, { ...meta('officer', 2), derived: 'forged' }]) {
+      await assertFails(updateDoc(ref, change));
+    }
+    await assertSucceeds(updateDoc(ref, meta('officer', 2)));
+    await assertFails(deleteDoc(ref));
+    for (const reader of [env.unauthenticatedContext().firestore(), env.authenticatedContext('member').firestore()]) {
+      await assertFails(getDocFromServer(doc(reader, `${season}/${family}/${id}`)));
+      await assertFails(getDocsFromServer(collection(reader, `${season}/${family}`)));
+      await assertFails(setDoc(doc(reader, `${season}/${family}/${id}`), { ...domain, ...meta('member', 3) }));
+    }
+    await env.withSecurityRulesDisabled(ctx => setDoc(doc(ctx.firestore(), 'officers/officer'), { enabled: false }));
+    await assertFails(updateDoc(ref, meta('officer', 3)));
+    await assertFails(getDocFromServer(ref));
+  });
+}
+
+test('roster and character shape, enums, references and calendar-shaped ordering', async () => {
+  const db = env.authenticatedContext('officer').firestore();
+  const [pid, player] = families.players;
+  const pref = doc(db, `${season}/players/${pid}`);
+  for (const invalid of [{ active: 'true' }, { className: 'Wizard' }, { role: 'Officer' }, { name: '' }, { name: 'X'.repeat(33) }, { joinDate: '2026-13-01' }, { leaveDate: '2026-09-01' }, { notes: 'x'.repeat(1001) }]) {
+    await assertFails(setDoc(pref, { ...player, ...invalid, ...meta() }));
+  }
+  const [cid, character] = families.characters;
+  for (const invalid of [{ region: 'US' }, { playerId: 'missing' }, { playerId: '' }, { playerId: 'p1/subpath' }, { name: '' }, { realm: 'x'.repeat(101) }]) {
+    await assertFails(setDoc(doc(db, `${season}/characters/${cid}`), { ...character, ...invalid, ...meta() }));
+  }
+  await assertFails(setDoc(doc(db, `${season}/players/invalid.id`), { ...player, ...meta() }));
+});
+
+test('calculation settings reject type/range/order violations and unknown documents', async () => {
+  const [id, settings] = families.settings;
+  const db = env.authenticatedContext('officer').firestore();
+  for (const invalid of [{ tz: 'UTC' }, { breakWindowStart: '' }, { breakWindowEnd: '25:00' }, { breakWindowStart: '22:00' }, { minBreakMinutes: 0 }, { maxBreakMinutes: 121 }, { minBreakMinutes: 31 }, { defaultMythicStart: '7 PM' }, { postExtensionMinutes: -1 }, { postExtensionMinutes: 61 }, { postExtensionMinutes: '5' }]) {
+    await assertFails(setDoc(doc(db, `${season}/settings/${id}`), { ...settings, ...invalid, ...meta() }));
+  }
+  await assertFails(setDoc(doc(db, `${season}/settings/unknown`), { ...settings, ...meta() }));
+});
+
+test('timing requires ordered explicit boundaries; worker owns actual calendar/DST validation', async () => {
+  const [id, timing] = families.nightOverrides;
+  const db = env.authenticatedContext('officer').firestore();
+  for (const invalid of [{ end: '2026-10-15T18:00' }, { breakEnd: '2026-10-15T19:30' }, { start: '2026-10-15T25:00' }, { breakStart: '' }]) {
+    await assertFails(setDoc(doc(db, `${season}/nightOverrides/${id}`), { ...timing, ...invalid, ...meta() }));
+  }
+  // Rules validate shape and lexical order, not leap years or DST: SDK/worker
+  // validation is still mandatory even when browser writes passed these rules.
+  await assertSucceeds(setDoc(doc(db, `${season}/nightOverrides/2026-02-30`), { start: '2026-02-30T19:00', breakStart: '', breakEnd: '', end: '', ...meta() }));
+});
+
+test('no browser can write any output family; public cannot enumerate roots or read absent-parent staging', async () => {
+  const db = env.authenticatedContext('officer').firestore();
+  for (const child of ['players/p1', 'nights/2026-10-15', 'weeks/2026-10-13']) {
+    await assertFails(setDoc(doc(db, `${season}/results/forged/${child}`), { complete: true }));
+  }
+  await env.withSecurityRulesDisabled(async ctx => {
+    for (const child of ['players/p1', 'nights/2026-10-15', 'weeks/2026-10-13']) {
+      await setDoc(doc(ctx.firestore(), `${season}/results/orphan/${child}`), { note: 'private staging' });
+      await setDoc(doc(ctx.firestore(), `${season}/results/ready/${child}`), { played: 1 });
+    }
+    await setDoc(doc(ctx.firestore(), `${season}/results/ready`), { complete: true });
+  });
+  const anon = env.unauthenticatedContext().firestore();
+  await assertFails(getDocsFromServer(collection(anon, `${season}/results`)));
+  for (const family of ['players', 'nights', 'weeks']) {
+    await assertFails(getDocsFromServer(collection(anon, `${season}/results/orphan/${family}`)));
+    await assertSucceeds(getDocsFromServer(collection(anon, `${season}/results/ready/${family}`)));
+  }
+});

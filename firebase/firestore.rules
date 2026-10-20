@@ -10,16 +10,18 @@ service cloud.firestore {
     function notes(d) { return !('notes' in d) || text(d.notes, 1000); }
     function versioned() {
       let d = request.resource.data;
-      return d.version is int && d.updatedBy == request.auth.uid && d.updatedAt == request.time
+      return d.version is int && d.version >= 1 && d.updatedBy == request.auth.uid && d.updatedAt == request.time
         && (resource == null ? d.version == 1 : d.version == resource.data.version + 1);
     }
     function fields(d, required, optional) {
       return d.keys().hasAll(required.concat(['version', 'updatedBy', 'updatedAt']))
         && d.keys().hasOnly(required.concat(optional).concat(['version', 'updatedBy', 'updatedAt']));
     }
-    function day(value) { return value is string && value.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$'); }
+    function validId(value) { return value is string && value.matches('^[A-Za-z0-9_-]{1,100}$'); }
+    function day(value) { return value is string && value.matches('^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$'); }
+    function ordered(a, b) { return a == '' || b == '' || a < b; }
     function optionalDay(value) { return value == '' || day(value); }
-    function wall(value) { return value is string && (value == '' || value.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}T([01][0-9]|2[0-3]):[0-5][0-9]$')); }
+    function wall(value) { return value is string && (value == '' || value.matches('^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])T([01][0-9]|2[0-3]):[0-5][0-9]$')); }
     function availability(a) {
       return a is map && a.keys().hasAll(['mode'])
         && ((a.mode in ['automatic', 'available', 'unavailable'] && a.keys().hasOnly(['mode']))
@@ -35,13 +37,13 @@ service cloud.firestore {
       allow read: if officer();
       match /reports/{code} {
         allow read: if officer();
-        allow create, update: if officer() && versioned() && code.matches('^[A-Za-z0-9]{16}$')
+        allow create, update: if officer() && validId(season) && versioned() && code.matches('^[A-Za-z0-9]{16}$')
           && fields(request.resource.data, ['enabled'], ['notes']) && request.resource.data.enabled is bool && notes(request.resource.data);
       }
       match /players/{id} {
         allow read: if officer();
-        allow create, update: if officer() && versioned()
-          && fields(request.resource.data, ['name', 'className', 'role', 'active', 'joinDate', 'leaveDate'], ['notes'])
+        allow create, update: if officer() && validId(season) && versioned()
+          && validId(id) && fields(request.resource.data, ['name', 'className', 'role', 'active', 'joinDate', 'leaveDate'], ['notes'])
           && text(request.resource.data.name, 32) && request.resource.data.name.size() > 0
           && request.resource.data.className in ['Death Knight','Demon Hunter','Druid','Evoker','Hunter','Mage','Monk','Paladin','Priest','Rogue','Shaman','Warlock','Warrior','Unknown']
           && request.resource.data.role in ['Tank','Healer','Damage','Unknown'] && request.resource.data.active is bool
@@ -51,28 +53,34 @@ service cloud.firestore {
       }
       match /characters/{id} {
         allow read: if officer();
-        allow create, update: if officer() && versioned()
-          && fields(request.resource.data, ['name','realm','region','playerId'], [])
+        allow create, update: if officer() && validId(season) && versioned()
+          && validId(id) && fields(request.resource.data, ['name','realm','region','playerId'], [])
           && text(request.resource.data.name, 32) && request.resource.data.name.size() > 0
           && text(request.resource.data.realm, 100)
           && request.resource.data.region in ['us','eu','kr','tw','cn']
-          && text(request.resource.data.playerId, 100)
+          && validId(request.resource.data.playerId)
           && exists(/databases/$(database)/documents/seasons/$(season)/players/$(request.resource.data.playerId));
       }
       match /nightOverrides/{night} {
         allow read: if officer();
-        allow create, update: if officer() && versioned() && day(night)
+        allow create, update: if officer() && validId(season) && versioned() && day(night)
           && fields(request.resource.data, ['start','breakStart','breakEnd','end'], ['notes'])
           && wall(request.resource.data.start) && wall(request.resource.data.breakStart)
           && wall(request.resource.data.breakEnd) && wall(request.resource.data.end)
           && ((request.resource.data.breakStart == '') == (request.resource.data.breakEnd == ''))
+          && ordered(request.resource.data.start, request.resource.data.breakStart)
+          && ordered(request.resource.data.start, request.resource.data.breakEnd)
+          && ordered(request.resource.data.start, request.resource.data.end)
+          && ordered(request.resource.data.breakStart, request.resource.data.breakEnd)
+          && ordered(request.resource.data.breakStart, request.resource.data.end)
+          && ordered(request.resource.data.breakEnd, request.resource.data.end)
           && notes(request.resource.data);
       }
       match /availabilityOverrides/{id} {
         allow read: if officer();
-        allow create, update: if officer() && versioned()
+        allow create, update: if officer() && validId(season) && versioned()
           && fields(request.resource.data, ['nightId','playerId','pre','post'], ['notes'])
-          && day(request.resource.data.nightId) && text(request.resource.data.playerId, 100)
+          && day(request.resource.data.nightId) && validId(request.resource.data.playerId)
           && id == request.resource.data.nightId + '_' + request.resource.data.playerId
           && (resource == null || (request.resource.data.nightId == resource.data.nightId && request.resource.data.playerId == resource.data.playerId))
           && exists(/databases/$(database)/documents/seasons/$(season)/players/$(request.resource.data.playerId))
@@ -80,12 +88,13 @@ service cloud.firestore {
       }
       match /settings/calculation {
         allow read: if officer();
-        allow create, update: if officer() && versioned()
+        allow create, update: if officer() && validId(season) && versioned()
           && fields(request.resource.data, ['tz','breakWindowStart','breakWindowEnd','minBreakMinutes','maxBreakMinutes','defaultMythicStart','postExtensionMinutes'], [])
           && request.resource.data.tz == 'America/Los_Angeles'
           && request.resource.data.breakWindowStart.matches('^([01][0-9]|2[0-3]):[0-5][0-9]$')
           && request.resource.data.breakWindowEnd.matches('^([01][0-9]|2[0-3]):[0-5][0-9]$')
           && (request.resource.data.defaultMythicStart == '' || request.resource.data.defaultMythicStart.matches('^([01][0-9]|2[0-3]):[0-5][0-9]$'))
+          && request.resource.data.breakWindowStart < request.resource.data.breakWindowEnd
           && request.resource.data.minBreakMinutes is int && request.resource.data.maxBreakMinutes is int
           && request.resource.data.minBreakMinutes >= 1 && request.resource.data.maxBreakMinutes <= 120
           && request.resource.data.minBreakMinutes <= request.resource.data.maxBreakMinutes
@@ -93,7 +102,7 @@ service cloud.firestore {
       }
       match /runs/{run} {
         allow read: if officer();
-        allow create: if officer() && request.resource.data.keys().hasOnly(['status','requestedBy','requestedAt'])
+        allow create: if officer() && validId(season) && validId(run) && request.resource.data.keys().hasOnly(['status','requestedBy','requestedAt'])
           && request.resource.data.status == 'queued' && request.resource.data.requestedBy == request.auth.uid
           && request.resource.data.requestedAt == request.time;
       }
