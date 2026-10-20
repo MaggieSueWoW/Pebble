@@ -1619,3 +1619,77 @@ it("saves only one roster document with its expected version and rejects stale o
     result.current.connection.savePlayer("stable", value, 3),
   ).rejects.toThrow("Officer access changed");
 });
+
+it("normalizes and saves one character mapping, rejects stale versions and missing relationships, and blocks revoked access", async () => {
+  const { result } = renderHook(useFirestore);
+  login();
+  grant();
+  loadPrivate();
+  send(
+    "seasons/test/players",
+    {},
+    { main: { name: "Example", active: false, version: 1 } },
+  );
+  const value = {
+    name: " Étoile ",
+    realm: " Example Realm ",
+    region: " US ",
+    playerId: "main",
+  };
+  const set = vi.fn();
+  mock.transaction.mockImplementation(async (_db, callback) =>
+    callback({
+      get: async (ref: { path: string }) => ({ ...snap({ version: 3 }), ref }),
+      set,
+    }),
+  );
+  await act(async () =>
+    expect(
+      await result.current.connection.saveCharacter("stable", value, 3),
+    ).toBe(4),
+  );
+  expect(set).toHaveBeenCalledTimes(1);
+  expect(set.mock.calls[0][0].path).toBe("seasons/test/characters/stable");
+  expect(set.mock.calls[0][1]).toMatchObject({
+    name: "Étoile",
+    realm: "Example Realm",
+    region: "us",
+    playerId: "main",
+    version: 4,
+    updatedBy: "officer",
+  });
+  set.mockClear();
+  await act(async () => {
+    await expect(
+      result.current.connection.saveCharacter("stable", value, 2),
+    ).rejects.toThrow("Another officer");
+  });
+  expect(set).not.toHaveBeenCalled();
+  await expect(
+    result.current.connection.saveCharacter(
+      "stable",
+      { ...value, playerId: "missing" },
+      3,
+    ),
+  ).rejects.toThrow("Choose an existing main");
+  send(
+    "seasons/test/characters",
+    {},
+    {
+      other: {
+        name: "éTOILE",
+        realm: "EXAMPLE REALM",
+        region: "us",
+        playerId: "main",
+        version: 1,
+      },
+    },
+  );
+  await expect(
+    result.current.connection.saveCharacter("new", value, 0),
+  ).rejects.toThrow("already have a mapping");
+  revoke();
+  await expect(
+    result.current.connection.saveCharacter("stable", value, 3),
+  ).rejects.toThrow("Officer access changed");
+});

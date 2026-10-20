@@ -39,6 +39,9 @@ function connection(players: Player[] = []): LiveConnection {
     },
     players,
     roster: [],
+    characters: [],
+    saveCharacter: vi.fn(),
+
     calculation: defaultCalculation(),
     saveCalculation: vi.fn(async (_value, version) => version + 1),
     savePlayer: vi.fn(),

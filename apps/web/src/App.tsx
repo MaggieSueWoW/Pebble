@@ -1,10 +1,9 @@
 import { authMessage } from "./authMessages";
 import type { LiveConnection } from "./useFirestore";
-import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   Activity,
   ArrowDown,
-  ArrowRight,
   ArrowUpRight,
   BarChart3,
   Check,
@@ -21,7 +20,6 @@ import {
   Play,
   RotateCcw,
   Search,
-  Settings2,
   ShieldCheck,
   SlidersHorizontal,
   Sparkles,
@@ -47,9 +45,9 @@ import {
   type Inputs,
   type Page,
   type Saved,
-  type WeeklyPlayerResult,
 } from "./model";
 
+import { ResultRow } from "./ResultRow";
 import { useReportEditor } from "./useReportEditor";
 import { ReportsPanel } from "./ReportsPanel";
 import { AvailabilityEditor } from "./AvailabilityEditor";
@@ -57,6 +55,8 @@ import { useAvailabilityEditor } from "./useAvailabilityEditor";
 import { TimingEditor } from "./TimingEditor";
 import { OverrideTabs } from "./OverrideTabs";
 import { useTimingEditor } from "./useTimingEditor";
+import { CharacterMappingsPanel } from "./CharacterMappingsPanel";
+import { useCharacterEditor } from "./useCharacterEditor";
 import { CalculationEditor } from "./CalculationEditor";
 import { useCalculationEditor } from "./useCalculationEditor";
 import { defaultCalculation } from "./calculation";
@@ -391,6 +391,17 @@ export default function App({ connection }: { connection?: LiveConnection }) {
     Boolean(connection?.busy),
     Boolean(connection?.officer),
   );
+  const characterEditor = useCharacterEditor(
+    connection?.characters ?? [],
+    connection?.roster ?? [],
+    async (id, value, expected) => {
+      if (!connection)
+        throw new Error("Character mappings require an officer connection.");
+      return connection.saveCharacter(id, value, expected);
+    },
+    Boolean(connection?.busy),
+    Boolean(connection?.officer),
+  );
   const calculationEditor = useCalculationEditor(
     connection?.calculation ?? defaultCalculation(),
     connection?.versions["settings/calculation"] ?? 0,
@@ -403,6 +414,8 @@ export default function App({ connection }: { connection?: LiveConnection }) {
     Boolean(connection?.officer),
   );
   const unsaved =
+    characterEditor.dirty ||
+    characterEditor.saving ||
     calculationEditor.dirty ||
     calculationEditor.saving ||
     rosterEditor.dirty ||
@@ -556,10 +569,12 @@ export default function App({ connection }: { connection?: LiveConnection }) {
     availabilityEditor.cancel();
     timingEditor.cancel();
     rosterEditor.cancel();
+    characterEditor.cancel();
     calculationEditor.cancel();
   }
   function guard(action: () => void) {
     if (
+      characterEditor.saving ||
       calculationEditor.saving ||
       rosterEditor.saving ||
       reportEditor.saving ||
@@ -1161,15 +1176,27 @@ export default function App({ connection }: { connection?: LiveConnection }) {
             <CalculationEditor editor={calculationEditor} />
           )}
           {page === "roster" && connection?.officer && (
-            <RosterPanel
-              roster={connection.roster}
-              editor={rosterEditor}
-              select={(id) => {
-                if (id !== rosterEditor.id)
-                  guard(() => rosterEditor.select(id));
-              }}
-              add={() => guard(rosterEditor.add)}
-            />
+            <>
+              <RosterPanel
+                roster={connection.roster}
+                editor={rosterEditor}
+                select={(id) => {
+                  if (id !== rosterEditor.id)
+                    guard(() => rosterEditor.select(id));
+                }}
+                add={() => guard(rosterEditor.add)}
+              />
+              <CharacterMappingsPanel
+                characters={connection.characters}
+                roster={connection.roster}
+                editor={characterEditor}
+                select={(id) => {
+                  if (id !== characterEditor.id)
+                    guard(() => characterEditor.select(id));
+                }}
+                add={() => guard(characterEditor.add)}
+              />
+            </>
           )}
           {page === "overrides" && (
             <>
@@ -1591,106 +1618,5 @@ export default function App({ connection }: { connection?: LiveConnection }) {
         }}
       />
     </div>
-  );
-}
-function ResultRow({
-  player,
-  row,
-  index,
-  expanded,
-  onExpand,
-  onEdit,
-}: {
-  player: (typeof samplePlayers)[number];
-  row: ReturnType<typeof calculate>["players"][number] | WeeklyPlayerResult;
-  index: number;
-  expanded: boolean;
-  onExpand: () => void;
-  onEdit?: () => void;
-}) {
-  const total = row.played + row.bench;
-  const detailId = useId();
-  return (
-    <>
-      <tr>
-        <td className="muted rank">{String(index + 1).padStart(2, "0")}</td>
-        <td>
-          <button
-            className="result-name"
-            onClick={onExpand}
-            aria-expanded={expanded}
-            aria-controls={detailId}
-          >
-            <span className="class-dot" style={{ background: player.color }} />
-            <span>
-              <strong style={{ color: player.color }}>{player.name}</strong>
-              <span className="cell-subtitle">{player.className}</span>
-            </span>
-          </button>
-        </td>
-        <td className="numeric">{minutes(row.played)}</td>
-        <td className="numeric bench-value">{minutes(row.bench)}</td>
-        <td>
-          <div
-            className="time-bar"
-            aria-label={`${row.played} minutes played, ${row.bench} minutes benched`}
-          >
-            <span
-              style={{ width: `${total ? (row.played / total) * 100 : 0}%` }}
-            />
-            <i />
-          </div>
-          <span className="small muted">
-            {total
-              ? `${Math.round((row.played / total) * 100)}% played`
-              : "No recorded time"}
-            {"overridden" in row && row.overridden ? " · adjusted" : ""}
-          </span>
-        </td>
-        <td>
-          <button
-            className="icon-button"
-            aria-label={`Details for ${player.name}`}
-            onClick={onExpand}
-            aria-expanded={expanded}
-            aria-controls={detailId}
-          >
-            {expanded ? <ChevronDown size={17} /> : <ChevronRight size={17} />}
-          </button>
-        </td>
-      </tr>
-      <tr className="result-detail" hidden={!expanded}>
-        <td colSpan={6}>
-          <div
-            id={detailId}
-            role="region"
-            aria-label={`Availability breakdown for ${player.name}`}
-          >
-            <span>
-              Before break bench <strong>{row.preBench} min</strong>
-            </span>
-            <span>
-              After break bench <strong>{row.postBench} min</strong>
-            </span>
-            {"overridden" in row && (
-              <span>
-                Availability{" "}
-                <strong>
-                  {row.overridden
-                    ? "Officer adjustment applied"
-                    : "Automatically inferred"}
-                </strong>
-              </span>
-            )}
-            {onEdit && (
-              <button className="text-button" onClick={onEdit}>
-                <Settings2 size={14} /> Edit availability{" "}
-                <ArrowRight size={14} />
-              </button>
-            )}
-          </div>
-        </td>
-      </tr>
-    </>
   );
 }

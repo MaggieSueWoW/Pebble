@@ -1186,3 +1186,70 @@ for (const signedIn of [false, true]) {
     ).toBe(true);
   });
 }
+
+for (const signedIn of [false, true]) {
+  test(`recorded played breakdowns follow result periods for ${signedIn ? "officers" : "public readers"}`, async ({
+    page,
+  }) => {
+    await admin(async (ctx) => {
+      const db = ctx.firestore();
+      const playerRef = doc(db, `${season}/results/baseline/players/player-a`);
+      const nightRef = doc(
+        db,
+        `${season}/results/baseline/nights/${nights.baseline}`,
+      );
+      const nightData = (await getDoc(nightRef)).data()!;
+      await setDoc(
+        playerRef,
+        { prePlayed: 13, postPlayed: 47 },
+        { merge: true },
+      );
+      await setDoc(
+        nightRef,
+        {
+          players: [
+            {
+              ...nightData.players[0],
+              prePlayed: 0,
+              postPlayed: 60,
+              overridden: true,
+            },
+          ],
+        },
+        { merge: true },
+      );
+    });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await resultsPage(page, signedIn);
+    const details = page.getByRole("button", {
+      name: "Details for Baseline Player",
+    });
+    const breakdown = page.getByRole("region", {
+      name: "Availability breakdown for Baseline Player",
+    });
+    await details.focus();
+    await page.keyboard.press("Enter");
+    await expect(breakdown).toContainText("Before break played 13 min");
+    await expect(breakdown).toContainText("After break played 47 min");
+    await expect(breakdown).toContainText("Before break bench 10 min");
+    await expect(breakdown).toContainText("After break bench 20 min");
+    await expect(
+      breakdown.getByRole("button", { name: "Edit availability" }),
+    ).toHaveCount(signedIn ? 1 : 0);
+    await page
+      .getByRole("combobox", { name: "Result period" })
+      .selectOption(nights.baseline);
+    await expect(breakdown).toHaveCount(0);
+    await details.focus();
+    await page.keyboard.press("Enter");
+    await expect(breakdown).toContainText("Before break played 0 min");
+    await expect(breakdown).toContainText("After break played 60 min");
+    await expect(breakdown).toContainText("Officer adjustment applied");
+    await expect(breakdown).not.toContainText("undefined");
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= window.innerWidth,
+      ),
+    ).toBe(true);
+  });
+}

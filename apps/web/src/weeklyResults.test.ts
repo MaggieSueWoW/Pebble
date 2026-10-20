@@ -35,6 +35,8 @@ it("preserves stored weekly minutes, zero rows and historical names without priv
         className: "Mage",
         role: "Damage",
         played: 999,
+        prePlayed: 500,
+        postPlayed: 499,
         bench: 999,
         preBench: 999,
         postBench: 0,
@@ -63,4 +65,6 @@ it("preserves stored weekly minutes, zero rows and historical names without priv
   });
   expect(JSON.stringify(weeks)).not.toContain("not public");
   expect(weeks[0].players[1]).not.toHaveProperty("overridden");
+  expect(weeks[0].players[1]).not.toHaveProperty("prePlayed");
+  expect(weeks[0].players[1]).not.toHaveProperty("postPlayed");
 });

@@ -55,6 +55,9 @@ export type PlayerResult = {
   color?: string;
   id: string;
   played: number;
+  /** Recorded worker breakdown; older publications can omit these fields. */
+  prePlayed?: number;
+  postPlayed?: number;
   bench: number;
   preBench: number;
   postBench: number;
@@ -379,6 +382,8 @@ export function calculate(
         return {
           id: p.id,
           played: playedPre + playedPost,
+          prePlayed: playedPre,
+          postPlayed: playedPost,
           bench: preBench + postBench,
           preBench,
           postBench,
@@ -399,6 +404,8 @@ export function calculate(
     return {
       id: p.id,
       played: rows.reduce((s, r) => s + r.played, 0),
+      prePlayed: rows.reduce((s, r) => s + r.prePlayed, 0),
+      postPlayed: rows.reduce((s, r) => s + r.postPlayed, 0),
       bench: rows.reduce((s, r) => s + r.bench, 0),
       preBench: rows.reduce((s, r) => s + r.preBench, 0),
       postBench: rows.reduce((s, r) => s + r.postBench, 0),
