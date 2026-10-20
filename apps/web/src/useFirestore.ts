@@ -87,7 +87,9 @@ export function useFirestore(): {
   const [now, setNow] = useState(Date.now());
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  const [consumed, setConsumed] = useState<Versions>({});
+  const [consumed, setConsumed] = useState<{ run: string; versions: Versions }>(
+    { run: "", versions: {} },
+  );
   const submission = useRef<{
     id: string;
     promise: Promise<void> | null;
@@ -117,7 +119,7 @@ export function useFirestore(): {
     setDocuments({});
     setLoaded([]);
     setRuns([]);
-    setConsumed({});
+    setConsumed({ run: "", versions: {} });
     setHeartbeat(0);
     submission.current = null;
     setSubmitting(false);
@@ -293,7 +295,7 @@ export function useFirestore(): {
     };
   }, [officer, accessGeneration, submittedRun?.id, fail, clearPrivate]);
   useEffect(() => {
-    setConsumed({});
+    setConsumed({ run: "", versions: {} });
     if (!officer || !resultRun || !authorized.current) return;
     const own = session.current;
     let alive = true;
@@ -302,7 +304,11 @@ export function useFirestore(): {
     const stop = onSnapshot(
       doc(db!, "seasons", seasonId, "runs", resultRun),
       (snapshot) => {
-        if (current()) setConsumed(snapshot.data()?.inputVersions ?? {});
+        if (current())
+          setConsumed({
+            run: resultRun,
+            versions: snapshot.data()?.inputVersions ?? {},
+          });
       },
       (e) => {
         if (!current()) return;
@@ -579,7 +585,9 @@ export function useFirestore(): {
         : null,
       versions,
       unprocessed:
-        officer && stableVersions(versions) !== stableVersions(consumed),
+        officer &&
+        (consumed.run !== resultRun ||
+          stableVersions(versions) !== stableVersions(consumed.versions)),
       error,
       busy,
       hasResults,

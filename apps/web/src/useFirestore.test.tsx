@@ -807,6 +807,27 @@ describe("public result loading", () => {
     expect(result.current.connection.unprocessed).toBe(false);
   });
 
+  it("waits for the displayed run's captured versions and ignores abandoned metadata", async () => {
+    const { result } = renderHook(useFirestore);
+    login();
+    grant();
+    loadPrivate();
+    await publicResults();
+    const captured = result.current.connection.versions;
+    send("seasons/test/runs/ready", { inputVersions: captured });
+    expect(result.current.connection.unprocessed).toBe(false);
+    const old = latest("seasons/test/runs/ready");
+    await act(async () =>
+      latest("publicSeasons/test").next(snap({ latestRunId: "new" })),
+    );
+    expect(result.current.connection.saved.results.signature).toBe("new");
+    expect(result.current.connection.unprocessed).toBe(true);
+    act(() => old.next(snap({ inputVersions: captured })));
+    expect(result.current.connection.unprocessed).toBe(true);
+    send("seasons/test/runs/new", { inputVersions: captured });
+    expect(result.current.connection.unprocessed).toBe(false);
+  });
+
   it("pins a complete view to the newest pointer when reads finish out of order", async () => {
     const { result } = renderHook(useFirestore);
     await publicResults();
@@ -965,6 +986,72 @@ describe("public result loading", () => {
       screen.getByRole("status", { name: "Run status" }).textContent,
     ).toContain("Changes ready for the next run");
     expect(screen.queryByText("Loading latest results…")).toBeNull();
+  });
+
+  it("resets a missing result period and keeps rows consistent when result nights change", async () => {
+    let currentNight = "2026-10-14";
+    let currentName = "Baseline Player";
+    mock.getDocs.mockImplementation(async (ref: { path: string }) => {
+      const row = {
+        id: "p1",
+        name: currentName,
+        className: "Mage",
+        played: 90,
+        bench: 30,
+        preBench: 10,
+        postBench: 20,
+        overridden: false,
+        nights: 1,
+      };
+      return ref.path.endsWith("/players")
+        ? snap({}, { p1: row })
+        : snap(
+            {},
+            {
+              night: {
+                night: currentNight,
+                duration: 120,
+                reports: 1,
+                players: [row],
+              },
+            },
+          );
+    });
+    render(<Root />);
+    act(() => mock.auth(null));
+    await publicResults();
+    fireEvent.change(screen.getByRole("combobox", { name: "Result period" }), {
+      target: { value: currentNight },
+    });
+    expect(screen.getByText("Baseline Player")).toBeTruthy();
+    currentNight = "2026-10-15";
+    currentName = "New Player";
+    await act(async () =>
+      latest("publicSeasons/test").next(snap({ latestRunId: "new" })),
+    );
+    expect(
+      (
+        screen.getByRole("combobox", {
+          name: "Result period",
+        }) as HTMLSelectElement
+      ).value,
+    ).toBe("season");
+    expect(screen.getByText("New Player")).toBeTruthy();
+    expect(screen.queryByText("Baseline Player")).toBeNull();
+    // A later result containing the former night must not silently reselect it.
+    currentNight = "2026-10-14";
+    currentName = "Later Player";
+    await act(async () =>
+      latest("publicSeasons/test").next(snap({ latestRunId: "later" })),
+    );
+    expect(
+      (
+        screen.getByRole("combobox", {
+          name: "Result period",
+        }) as HTMLSelectElement
+      ).value,
+    ).toBe("season");
+    expect(screen.getByText("Later Player")).toBeTruthy();
   });
 
   it("shows a usable public error and retry control even before any results load", async () => {

@@ -548,11 +548,24 @@ export default function App({ connection }: { connection?: LiveConnection }) {
       Officer sign-in
     </button>
   );
+  const visibleResultNight = results.nights.some((n) => n.night === resultNight)
+    ? resultNight
+    : "season";
+  useEffect(() => {
+    if (
+      resultNight !== "season" &&
+      !results.nights.some((n) => n.night === resultNight)
+    ) {
+      setResultNight("season");
+      setExpandedPlayer(null);
+    }
+  }, [results.nights, resultNight]);
   const latestNight = results.nights.find((n) => n.night === night);
   const resultRows = (
-    resultNight === "season"
+    visibleResultNight === "season"
       ? results.players
-      : (results.nights.find((n) => n.night === resultNight)?.players ?? [])
+      : (results.nights.find((n) => n.night === visibleResultNight)?.players ??
+        [])
   )
     .filter((r) => r.played + r.bench > 0)
     .sort(
@@ -1126,11 +1139,7 @@ export default function App({ connection }: { connection?: LiveConnection }) {
                   </div>
                   <select
                     aria-label="Result period"
-                    value={
-                      results.nights.some((n) => n.night === resultNight)
-                        ? resultNight
-                        : "season"
-                    }
+                    value={visibleResultNight}
                     onChange={(e) => {
                       setResultNight(e.target.value);
                       setExpandedPlayer(null);
@@ -1189,10 +1198,10 @@ export default function App({ connection }: { connection?: LiveConnection }) {
                                 : () => {
                                     guard(() => {
                                       const n =
-                                        resultNight === "season"
+                                        visibleResultNight === "season"
                                           ? (results.nights[0]?.night ??
                                             nightOptions[0])
-                                          : resultNight;
+                                          : visibleResultNight;
                                       setNight(n);
                                       setSelected(row.id);
                                       setOverrideTab("availability");

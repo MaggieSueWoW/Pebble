@@ -1,0 +1,420 @@
+import { test, expect, type Page } from "@playwright/test";
+import {
+  initializeTestEnvironment,
+  type RulesTestEnvironment,
+} from "@firebase/rules-unit-testing";
+import {
+  collection,
+  doc,
+  getDoc,
+  getDocs,
+  setDoc,
+  Timestamp,
+  writeBatch,
+} from "firebase/firestore";
+import { readFileSync } from "node:fs";
+import { officer } from "./officer";
+const season = "seasons/test-reports",
+  report = "AAAAAAAAAAAAAAAA";
+const captured = { [`reports/${report}`]: 1, "players/player-a": 1 };
+const nights = {
+  baseline: "2026-10-14",
+  delayed: "2026-10-15",
+  latest: "2026-10-16",
+};
+let env: RulesTestEnvironment,
+  expectedRequests = 0,
+  expectedReportVersion = 1;
+let releases: (() => void)[] = [];
+const admin = (
+  fn: Parameters<RulesTestEnvironment["withSecurityRulesDisabled"]>[0],
+) => env.withSecurityRulesDisabled(fn);
+const status = (page: Page) => page.getByRole("status", { name: "Run status" });
+async function seedResult(
+  id: string,
+  name: string,
+  night: string,
+  complete = true,
+  reports = 2,
+) {
+  await admin(async (ctx) => {
+    const db = ctx.firestore(),
+      batch = writeBatch(db);
+    const row = {
+      id: "player-a",
+      name,
+      className: "Mage",
+      role: "Damage",
+      color: "#b9c7d8",
+      played: reports * 60,
+      bench: 30,
+      preBench: 10,
+      postBench: 20,
+      overridden: false,
+      nights: 1,
+    };
+    batch.set(doc(db, `${season}/results/${id}`), {
+      complete,
+      reportCount: reports,
+      completedAt: Timestamp.now(),
+    });
+    batch.set(doc(db, `${season}/results/${id}/players/player-a`), row);
+    batch.set(doc(db, `${season}/results/${id}/nights/${night}`), {
+      night,
+      duration: 180,
+      reports,
+      players: [row],
+      timing: {
+        start: `${night}T19:00`,
+        breakStart: `${night}T20:00`,
+        breakEnd: `${night}T20:15`,
+        end: `${night}T22:00`,
+        notes: "",
+      },
+    });
+    await batch.commit();
+  });
+}
+async function publish(id: string, inputVersions = captured) {
+  await admin(async (ctx) => {
+    const db = ctx.firestore(),
+      batch = writeBatch(db),
+      ref = doc(db, `${season}/runs/${id}`);
+    const exists = (await getDoc(ref)).exists();
+    batch.set(
+      ref,
+      {
+        ...(!exists
+          ? { requestedBy: "fixture", requestedAt: Timestamp.now() }
+          : {}),
+        status: "succeeded",
+        completedAt: Timestamp.now(),
+        inputVersions,
+      },
+      { merge: true },
+    );
+    batch.set(doc(db, "publicSeasons/test-reports"), { latestRunId: id });
+    await batch.commit();
+  });
+}
+async function resultsPage(page: Page, signedIn = true) {
+  if (signedIn) {
+    await officer(page, env);
+    await page
+      .getByRole("navigation")
+      .getByRole("button", { name: /^Results/ })
+      .click();
+  } else await page.goto("/");
+  await expect(
+    page.getByText("Baseline Player", { exact: true }),
+  ).toBeVisible();
+}
+async function holdReads(page: Page, id: string) {
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  releases.push(release);
+  const state = { hits: 0, release };
+  await page.route(
+    /google\.firestore\.v1\.Firestore\/Listen\/channel/,
+    async (route) => {
+      const request = route.request();
+      const values = [
+        ...new URLSearchParams(request.postData() ?? "").values(),
+      ];
+      if (
+        request.method() === "POST" &&
+        values.some((value) => value.includes(`${season}/results/${id}`))
+      ) {
+        state.hits++;
+        await gate;
+      }
+      await route.continue();
+    },
+  );
+  return state;
+}
+test.beforeAll(async () => {
+  env = await initializeTestEnvironment({
+    projectId: "demo-pebble-reports",
+    firestore: {
+      host: "127.0.0.1",
+      port: 8180,
+      rules: readFileSync(
+        new URL("../../../firebase/firestore.rules", import.meta.url),
+        "utf8",
+      ),
+    },
+  });
+});
+test.beforeEach(async () => {
+  releases = [];
+  expectedRequests = 0;
+  expectedReportVersion = 1;
+  await env.clearFirestore();
+  await seedResult("baseline", "Baseline Player", nights.baseline, true, 1);
+  await admin(async (ctx) => {
+    const db = ctx.firestore(),
+      at = Timestamp.fromMillis(Date.now() - 3600000);
+    await setDoc(doc(db, `${season}/reports/${report}`), {
+      enabled: true,
+      notes: "Baseline",
+      version: 1,
+      updatedBy: "fixture",
+      updatedAt: at,
+    });
+    await setDoc(doc(db, `${season}/players/player-a`), {
+      name: "Example Player",
+      className: "Mage",
+      role: "Damage",
+      active: true,
+      joinDate: "",
+      leaveDate: "",
+      version: 1,
+      updatedBy: "fixture",
+      updatedAt: at,
+    });
+    await setDoc(doc(db, `${season}/runs/baseline`), {
+      status: "succeeded",
+      requestedBy: "fixture",
+      requestedAt: at,
+      completedAt: at,
+      inputVersions: captured,
+    });
+    await setDoc(doc(db, "publicSeasons/test-reports"), {
+      latestRunId: "baseline",
+    });
+    await setDoc(doc(db, "bot/status"), { lastHeartbeatAt: Timestamp.now() });
+  });
+});
+test.afterEach(async () => {
+  releases.forEach((release) => release());
+  await admin(async (ctx) => {
+    const db = ctx.firestore();
+    const requests = (
+      await getDocs(collection(db, `${season}/runs`))
+    ).docs.filter((d) => d.data().requestedBy !== "fixture");
+    expect(requests).toHaveLength(expectedRequests);
+    expect(
+      (await getDoc(doc(db, `${season}/reports/${report}`))).data()?.version,
+    ).toBe(expectedReportVersion);
+    expect(
+      (
+        await getDoc(doc(db, `${season}/results/baseline/players/player-a`))
+      ).data()?.name,
+    ).toBe("Baseline Player");
+  });
+});
+test.afterAll(async () => {
+  await env?.cleanup();
+});
+test("retains the complete view during held reads and swaps rows, totals and nights together", async ({
+  page,
+}) => {
+  await resultsPage(page);
+  await page
+    .getByRole("combobox", { name: "Result period" })
+    .selectOption(nights.baseline);
+  const held = await holdReads(page, "delayed");
+  await seedResult("delayed", "Delayed Player", nights.delayed);
+  await publish("delayed");
+  await expect.poll(() => held.hits).toBeGreaterThan(0);
+  await expect(status(page)).toContainText("Loading latest results");
+  await expect(status(page)).not.toContainText("Results updated");
+  await expect(
+    page.getByText("Baseline Player", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("combobox", { name: "Result period" }),
+  ).toHaveValue(nights.baseline);
+  held.release();
+  await expect(page.getByText("Delayed Player", { exact: true })).toBeVisible();
+  await expect(page.getByText("Baseline Player", { exact: true })).toHaveCount(
+    0,
+  );
+  await expect(
+    page.getByRole("combobox", { name: "Result period" }),
+  ).toHaveValue("season");
+  await expect(
+    page.getByRole("combobox", { name: "Result period" }).locator("option"),
+  ).toHaveText(["Season to date", "Thursday, October 15"]);
+  await expect(
+    page.getByText("2 included reports", { exact: true }),
+  ).toBeVisible();
+  await expect(status(page)).toContainText("Results updated");
+});
+test("public read denial preserves prior results and keyboard retry recovers on a narrow screen", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await resultsPage(page, false);
+  await seedResult("staging", "Staging Player", nights.latest, false);
+  await publish("staging");
+  await expect(page.getByRole("alert")).toContainText(
+    "Couldn’t load the latest results",
+  );
+  await expect(
+    page.getByText("Baseline Player", { exact: true }),
+  ).toBeVisible();
+  await expect(page.getByText("Staging Player", { exact: true })).toHaveCount(
+    0,
+  );
+  await expect(status(page)).toContainText("Latest results are unavailable");
+  await admin(async (ctx) => {
+    await setDoc(
+      doc(ctx.firestore(), `${season}/results/staging`),
+      { complete: true },
+      { merge: true },
+    );
+  });
+  await page.getByRole("button", { name: "Retry loading results" }).focus();
+  await page.keyboard.press("Enter");
+  await expect(page.getByText("Staging Player", { exact: true })).toBeVisible();
+  await expect(page.getByRole("alert")).toHaveCount(0);
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth,
+    ),
+  ).toBe(true);
+});
+test("officers reject incomplete output even with permission to read its children", async ({
+  page,
+}) => {
+  await resultsPage(page);
+  await seedResult("incomplete", "Incomplete Player", nights.latest, false);
+  await publish("incomplete");
+  await expect(page.getByRole("alert")).toContainText("Couldn’t load");
+  await expect(
+    page.getByText("Baseline Player", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("Incomplete Player", { exact: true }),
+  ).toHaveCount(0);
+  await admin(async (ctx) => {
+    await setDoc(
+      doc(ctx.firestore(), `${season}/results/incomplete`),
+      { complete: true },
+      { merge: true },
+    );
+  });
+  await page.getByRole("button", { name: "Retry loading results" }).click();
+  await expect(
+    page.getByText("Incomplete Player", { exact: true }),
+  ).toBeVisible();
+});
+test("a superseded delayed fetch never replaces the latest published view", async ({
+  page,
+}) => {
+  await resultsPage(page);
+  await page.evaluate(() => {
+    const views: string[] = [];
+    (window as unknown as { resultViews: string[] }).resultViews = views;
+    new MutationObserver(() =>
+      views.push(document.querySelector(".results-card")?.textContent ?? ""),
+    ).observe(document.getElementById("root")!, {
+      childList: true,
+      subtree: true,
+      characterData: true,
+    });
+  });
+  const held = await holdReads(page, "delayed");
+  await seedResult("delayed", "Delayed Player", nights.delayed);
+  await publish("delayed");
+  await expect.poll(() => held.hits).toBeGreaterThan(0);
+  await seedResult("latest", "Latest Player", nights.latest, true, 3);
+  await publish("latest");
+  held.release();
+  await expect(page.getByText("Latest Player", { exact: true })).toBeVisible();
+  await expect(status(page)).toContainText("Results updated");
+  await expect(
+    page.getByRole("combobox", { name: "Result period" }).locator("option"),
+  ).toHaveText(["Season to date", "Friday, October 16"]);
+  const views = await page.evaluate(
+    () => (window as unknown as { resultViews: string[] }).resultViews,
+  );
+  expect(views.some((view) => view.includes("Delayed Player"))).toBe(false);
+});
+test("an edit saved during computation still needs another run after completion loads", async ({
+  page,
+}) => {
+  await officer(page, env);
+  expectedRequests = 1;
+  await page.getByRole("button", { name: "Run Pebble", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Run queued" })).toBeDisabled();
+  let id = "";
+  await admin(async (ctx) => {
+    id = (
+      await getDocs(collection(ctx.firestore(), `${season}/runs`))
+    ).docs.find((d) => d.id !== "baseline")!.id;
+    await setDoc(
+      doc(ctx.firestore(), `${season}/runs/${id}`),
+      {
+        status: "running",
+        stage: "Calculating results",
+        inputVersions: captured,
+      },
+      { merge: true },
+    );
+  });
+  expectedReportVersion = 2;
+  await page.getByRole("switch", { name: `Include ${report}` }).click();
+  await page.getByRole("button", { name: "Save selection" }).click();
+  await expect(
+    page.getByRole("button", { name: "Save selection" }),
+  ).toHaveCount(0);
+  await page
+    .getByRole("navigation")
+    .getByRole("button", { name: /^Results/ })
+    .click();
+  const held = await holdReads(page, id);
+  await seedResult(id, "Completed Player", nights.latest);
+  await publish(id);
+  await expect.poll(() => held.hits).toBeGreaterThan(0);
+  await expect(status(page)).toContainText("Loading latest results");
+  await expect(
+    page.getByText("Baseline Player", { exact: true }),
+  ).toBeVisible();
+  await page.getByText("Run history", { exact: true }).click();
+  await expect(
+    page.getByText("Computation completed", { exact: true }).first(),
+  ).toBeVisible();
+  await expect(status(page)).not.toContainText("Results updated");
+  held.release();
+  await expect(
+    page.getByText("Completed Player", { exact: true }),
+  ).toBeVisible();
+  await expect(status(page)).toContainText("Changes ready for the next run");
+  await expect(
+    page.getByRole("button", { name: "Run Pebble", exact: true }),
+  ).toBeEnabled();
+});
+
+test("public first-load failure exposes retry without trapping the app on Connecting", async ({
+  page,
+}) => {
+  await seedResult("first-load", "First Loaded Player", nights.latest, false);
+  await publish("first-load");
+  await page.goto("/");
+  await expect(page.getByRole("alert")).toContainText(
+    "Couldn’t load the latest results",
+  );
+  await expect(
+    page.getByRole("button", { name: "Retry loading results" }),
+  ).toBeEnabled();
+  await expect(
+    page.getByRole("heading", { name: "Connecting to Pebble…" }),
+  ).toHaveCount(0);
+  await admin(async (ctx) => {
+    await setDoc(
+      doc(ctx.firestore(), `${season}/results/first-load`),
+      { complete: true },
+      { merge: true },
+    );
+  });
+  await page.getByRole("button", { name: "Retry loading results" }).click();
+  await expect(
+    page.getByText("First Loaded Player", { exact: true }),
+  ).toBeVisible();
+  await expect(page.getByRole("alert")).toHaveCount(0);
+});
