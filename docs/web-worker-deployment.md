@@ -30,8 +30,8 @@ the legacy `.env`, which may override isolation config. Do not set
 values, as in the existing private deployment mechanism.
 
 The worker requires its Firestore `roles/datastore.user` account and WCL secrets,
-not Sheets access. Retain the old Sheets account while the legacy bot or imports
-need it. Removing its IAM/key is a separate retirement decision.
+not Sheets access. Retain the old Sheets account while the legacy bot
+needs it. Removing its IAM/key is a separate retirement decision.
 
 Host networking reaches existing published Mongo/Redis at 127.0.0.1 without
 changing either dependency. Preserve any required authentication in private URI

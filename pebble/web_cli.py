@@ -122,25 +122,3 @@ def import_inputs(config, filename):
     finally:
         client.close()
     click.echo("Imported missing input documents. Run Pebble to compute results.")
-
-
-@web.command("import-sheets")
-@click.option("--config", default="config-web.yaml", show_default=True)
-@click.option("--sheets-config", required=True, type=click.Path(exists=True))
-@click.option("--sheets-credentials", required=True, type=click.Path(exists=True))
-def import_sheets_command(config, sheets_config, sheets_credentials):
-    """Import existing Sheets inputs into this season without changing Sheets."""
-    from .web_import import import_sheets
-
-    settings, client = resources(config)
-    try:
-        counts = import_sheets(
-            client, settings.firestore.season_id, sheets_config, sheets_credentials
-        )
-    except (ValueError, TypeError):
-        raise click.ClickException(
-            "Invalid Sheets import. Check references, dates/times, values and the 400-write limit; no inputs were written."
-        ) from None
-    finally:
-        client.close()
-    click.echo(json.dumps(counts))

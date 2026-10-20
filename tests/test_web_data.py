@@ -1,6 +1,5 @@
 """DATA-1 import atomicity, identities, domain validation and storage budgets."""
 
-import json
 import os
 import uuid
 from copy import deepcopy
@@ -10,8 +9,7 @@ import pytest
 
 from pebble.web_data import import_domain
 from pebble.web_identity import mapped_bundle
-from pebble.web_import import sheet_availability, sheet_day, sheet_time
-from pebble.web_models import CalculationInput, validate_snapshot, wall_ms
+from pebble.web_models import CalculationInput, validate_snapshot
 from pebble.web_publication import document_bytes, publication_batches
 from pebble.web_worker import firestore_client
 
@@ -98,7 +96,14 @@ def test_import_rejects_metadata_unknown_collections_and_write_limit(db):
         import_domain(c, s, {"reports": reports})
     assert not list(c.collection("seasons").document(s).collection("reports").stream())
     with pytest.raises(ValueError):
-        import_domain(c, s, {"players": {"p": player()}}, {"breakWindowStart": "25:00"})
+        import_domain(
+            c,
+            s,
+            {
+                "players": {"p": player()},
+                "settings": {"calculation": {"breakWindowStart": "25:00"}},
+            },
+        )
     assert not list(c.collection("seasons").document(s).collection("players").stream())
 
 
@@ -170,42 +175,6 @@ def test_region_realm_and_case_scoped_aliases_do_not_modify_cached_bundle():
     )
     with pytest.raises(ValueError, match="multiple"):
         validate_snapshot(raw)
-
-
-@pytest.mark.parametrize(
-    "value,expected",
-    [
-        ("Y", {"mode": "available"}),
-        ("0", {"mode": "unavailable"}),
-        ("-15.0", {"mode": "unavailableFor", "minutes": 15}),
-        (45.0, {"mode": "partial", "minutes": 45}),
-        ("-", {"mode": "automatic"}),
-    ],
-)
-def test_legacy_numeric_availability(value, expected):
-    assert sheet_availability(value) == expected
-
-
-@pytest.mark.parametrize("value", ["maybe", "NaN", "1.5"])
-def test_bad_legacy_availability_fails_instead_of_becoming_automatic(value):
-    with pytest.raises(ValueError):
-        sheet_availability(value)
-
-
-def test_legacy_dates_and_numeric_wall_times():
-    assert sheet_day("10/15/2026") == "2026-10-15"
-    assert sheet_day(46310) == "2026-10-15"
-    assert sheet_time(0.75, wall_ms("2026-10-15T00:00")) == wall_ms("2026-10-15T18:00")
-    with pytest.raises(ValueError):
-        sheet_day("not a date")
-    with pytest.raises(ValueError):
-        sheet_time(0.123456, wall_ms("2026-10-15T00:00"))
-    with pytest.raises(ValueError, match="whole-minute"):
-        sheet_time("19:00:30", wall_ms("2026-10-15T00:00"))
-    with pytest.raises(ValueError, match="does not exist"):
-        sheet_time("02:30", wall_ms("2026-03-08T00:00"))
-    with pytest.raises(ValueError, match="ambiguous"):
-        sheet_time("01:30", wall_ms("2026-11-01T00:00"))
 
 
 @pytest.mark.parametrize(
@@ -284,126 +253,6 @@ def test_publication_size_and_batch_budgets():
     )
     with pytest.raises(ValueError, match="size budget"):
         publication_batches([(1, night), (2, {"players": [p] * 10000})])
-
-
-def test_sheets_import_rejects_missing_references_before_import(monkeypatch):
-    from types import SimpleNamespace
-    from unittest.mock import Mock
-
-    from pebble.web_import import import_sheets
-    from pebble.web_models import WorkerConfig
-
-    keys = ("reports", "team_roster", "roster_map", "availability_overrides")
-    time = WorkerConfig(
-        firestore={"project_id": "demo-pebble", "season_id": "test"},
-        mongo={"uri": "mongodb://127.0.0.1"},
-        wcl={"client_id": "fake", "client_secret": "fake"},
-    ).time
-    settings = SimpleNamespace(
-        sheets=SimpleNamespace(
-            tabs=SimpleNamespace(**{k: k for k in keys}),
-            starts=SimpleNamespace(**{k: "A1" for k in keys}),
-        ),
-        time=time,
-    )
-    rows = {
-        "team_roster": [["Main", "Active?"], ["Example", "TRUE"]],
-        "reports": [],
-        "roster_map": [["Alt", "Main"], ["Alt-Realm", "Missing"]],
-        "availability_overrides": [],
-    }
-    monkeypatch.setattr("pebble.web_import.SheetsClient", Mock())
-    monkeypatch.setattr("pebble.web_import.load_settings", lambda *a, **k: settings)
-    monkeypatch.setattr("pebble.web_import._sheet_values_batch", lambda *a, **k: rows)
-    save = Mock()
-    monkeypatch.setattr("pebble.web_import.import_domain", save)
-    with pytest.raises(ValueError, match="missing main reference"):
-        import_sheets(Mock(), "test", "config", "credentials")
-    save.assert_not_called()
-    rows["roster_map"] = []
-    rows["availability_overrides"] = [
-        ["Night", "Main", "Avail Pre?"],
-        ["2026-10-15", "Missing", "45"],
-    ]
-    with pytest.raises(ValueError, match="missing main reference"):
-        import_sheets(Mock(), "test", "config", "credentials")
-    save.assert_not_called()
-    rows["availability_overrides"] = []
-    rows["reports"] = [
-        ["Report URL", "Report Start (PT)", "Break Override Start (PT)"],
-        ["https://www.warcraftlogs.com/reports/aB3dE6gH9jK2mN5p", "", "8:00 PM"],
-    ]
-    with pytest.raises(ValueError, match="valid report date"):
-        import_sheets(Mock(), "test", "config", "credentials")
-    save.assert_not_called()
-
-
-def test_parity_reports_numeric_changes_and_explicit_zero_rows():
-    from pebble.web_parity import compare_sheet_results
-
-    rows = {
-        "bench_night_totals": [
-            [
-                "Night ID",
-                "Main",
-                "Played Total (min)",
-                "Bench Pre (min)",
-                "Bench Post (min)",
-                "Bench Total (min)",
-            ],
-            ["2026-10-15", "Example", 30, 10, 5, 15],
-        ],
-        "bench_week_totals": [
-            [
-                "Game Week",
-                "Main",
-                "Played Week (min)",
-                "Bench Pre (min)",
-                "Bench Post (min)",
-                "Bench Week (min)",
-            ],
-            ["2026-10-13", "Example", 30, 10, 5, 15],
-        ],
-        "bench_rankings": [
-            ["Main", "Time Played (min)", "Bench Season-to-date (min)"],
-            ["Example", 30, 15],
-        ],
-    }
-    p = {"name": "Example", "played": 30, "preBench": 10, "postBench": 5, "bench": 15}
-    public = {
-        "players": [p],
-        "nights": [
-            {
-                "night": "2026-10-15",
-                "players": [
-                    p,
-                    dict(p, name="Zero", played=0, preBench=0, postBench=0, bench=0),
-                ],
-            }
-        ],
-        "weeks": [
-            {
-                "players": [
-                    {
-                        "main": "Example",
-                        "game_week": "2026-10-13",
-                        "played_min": 30,
-                        "bench_pre_min": 10,
-                        "bench_post_min": 5,
-                        "bench_min": 15,
-                    }
-                ]
-            }
-        ],
-    }
-    result = compare_sheet_results(rows, public)
-    assert all(v["differentRows"] == 0 for v in result.values())
-    assert result["nightly"]["equivalentMissingZeroRows"] == 1
-    p["played"] = 31
-    result = compare_sheet_results(rows, public)
-    assert result["nightly"]["differentRows"] == 1
-    assert result["season"]["differentRows"] == 1
-    assert "Example" not in json.dumps(result)
 
 
 def test_oversized_publication_never_creates_staging_or_changes_pointer(db):

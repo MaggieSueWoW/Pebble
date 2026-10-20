@@ -15,9 +15,7 @@ from .web_models import (
 MAX_IMPORT_WRITES = 400
 
 
-def import_domain(
-    client, season_id: str, values: dict, calculation: dict | None = None
-):
+def import_domain(client, season_id: str, values: dict):
     """Validate the entire effective season, then atomically create missing inputs.
 
     Existing inputs win, so this is not a synchronization or overwrite command.
@@ -47,8 +45,6 @@ def import_domain(
             record = {**value, **meta}
             INPUT_MODELS[name].model_validate(record)
             prepared[name][key] = record
-    if calculation is not None:
-        CalculationInput.model_validate({**calculation, **meta})
     season = client.collection("seasons").document(season_id)
 
     @firestore.transactional
@@ -73,19 +69,7 @@ def import_domain(
         validate_snapshot(effective)
         for value in existing["settings"].values():
             CalculationInput.model_validate(value)
-        settings_record = None
-        if calculation is not None:
-            current = existing["settings"].get("calculation", {})
-            settings_record = {
-                **calculation,
-                **meta,
-                "version": current.get("version", 0) + 1,
-            }
-            CalculationInput.model_validate(settings_record)
-        if (
-            sum(map(len, pending.values())) + (settings_record is not None)
-            > MAX_IMPORT_WRITES
-        ):
+        if sum(map(len, pending.values())) > MAX_IMPORT_WRITES:
             raise ValueError(
                 "Import exceeds 400 writes; split into reference-complete groups"
             )
@@ -95,11 +79,6 @@ def import_domain(
                     season.collection(name).document(key),
                     {**record, "updatedAt": firestore.SERVER_TIMESTAMP},
                 )
-        if settings_record is not None:
-            tx.set(
-                season.collection("settings").document("calculation"),
-                {**settings_record, "updatedAt": firestore.SERVER_TIMESTAMP},
-            )
         return {name: len(docs) for name, docs in pending.items()}
 
     return save(client.transaction(max_attempts=3))

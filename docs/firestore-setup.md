@@ -128,22 +128,17 @@ firebase deploy --only firestore --project YOUR_PROJECT_ID
 Officer membership is administered separately from browser sign-in; see
 [onboarding and revocation](#officer-onboarding-and-revocation) above.
 
-To import existing Sheets inputs without changing the Sheet:
+Season 2 uses the web inputs and reprocesses all included Warcraft Logs reports
+when Run Pebble is requested. Set roster, character mappings, availability,
+calculation settings and report selection in the officer workspace. No Sheets
+import, Sheets output copy or Sheets credentials are required for the web worker.
 
-```sh
-.venv/bin/python -m pebble.cli web import-sheets --config config-web.yaml \
-  --sheets-config PATH_TO_SEASON_CONFIG --sheets-credentials PATH_TO_SHEETS_CREDENTIALS
-```
-
-This creates missing input documents and updates calculation settings. It does not
-replace existing reports, roster entries, or overrides. It preserves positive
-available-minute and negative unavailable-minute overrides and normalizes Sheets
-time formats. Both import paths validate the effective season before committing
-missing inputs in one transaction (at most 400 writes). Invalid references or
-legacy values fail without partial writes. See [data contracts and parity](data-consistency.md)
-for supported formats, regional aliases, size bounds and manual retention.
-Importing does not start a run. The generic `web import-inputs
---file inputs.json` command can load validated input collections from JSON.
+The optional administrator `web import-inputs --file inputs.json` command accepts
+explicit JSON input collections. It validates the effective season before
+committing missing inputs in one transaction (at most 400 writes), leaves existing
+inputs unchanged and does not start a run. It is not part of the normal S2 setup
+or reprocessing workflow. See [data contracts and parity](data-consistency.md)
+for identities, publication bounds and manual retention.
 
 There is no hardcoded backend project dependency. Changing projects requires new
 credentials/membership and migrating any desired data; changing IDs alone does

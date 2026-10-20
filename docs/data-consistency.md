@@ -1,35 +1,35 @@
-# Data contracts, S2 parity and migration (DATA-1)
+# Data contracts and S2 recomputation (DATA-1)
 
 Implementation targets `codex/pebble-web-app`; no production deployment or legacy
-bot restart is part of this change. Firestore inputs and complete results remain
-authoritative for the web app; Sheets remains a separate editing authority until
-cutover is agreed in #14. Do not import over web edits to reconcile authorities.
+bot restart is part of this change. Season 2 uses the intended web inputs and
+reprocesses all included Warcraft Logs reports whenever Run Pebble is requested.
+Cached WCL bundles may avoid upstream reads, but calculations rebuild the web
+materializations. Set roster, character mappings, eligibility, availability,
+settings and report selection in the officer workspace. The web workflow has no
+Sheets import command and requires no Sheets credentials or output migration.
+Existing live inputs are not reset by this change. Legacy bot retirement and the
+editing-authority cutover remain separate decisions in #14.
 
-## Parity evidence
+## Reference calculation evidence
 
-On October 19, 2026, a read-only comparison of the existing S2 Sheets output and
-published web run `72d7f351-e451-4770-91c8-f72c8dad585e` found **zero numeric
-differences** across 75 nightly rows, 81 weekly rows and 28 season totals. The web
-view includes nine additional all-zero nightly rows that Sheets omits. These are
-presentation rows, not extra played/bench minutes; the comparator reports this
-representation difference separately rather than silently dropping nonzero rows.
+A read-only reference comparison on October 19, 2026 found zero numeric differences
+between existing S2 Sheets output and published web run
+`72d7f351-e451-4770-91c8-f72c8dad585e`: 75 nightly rows, 81 weekly rows and 28 season
+totals. The web view includes nine additional all-zero nightly presentation rows,
+not extra played/bench minutes. Recalculating the same existing web inputs and
+three cached WCL bundles with this branch in in-memory Mongo also matched.
+No inputs or results were imported from Sheets for those checks. Private extracts
+are not committed; the comparison is historical reference evidence, not a future
+S2 setup dependency.
 
-The same migrated Firestore inputs and three existing cached WCL bundles were
-recalculated with this branch in an in-memory Mongo database. All numeric totals
-still matched those Sheets tables. No upstream WCL request, production write,
-re-import or recompute request was performed for this comparison. Private inputs,
-notes, credentials, player identifiers and raw extracts are not committed. The
-reusable `compare_sheet_results` function in `pebble/web_parity.py` returns counts,
-not names; supply read-only table extracts and the public result collections.
-
-Fixtures compare the web adapter with the established Sheets calculation inputs
-for overlapping multi-report nights, exclusion, no-Mythic nights, positive and
-negative minute overrides, join/leave/active eligibility, zero played time,
-short halves, rounding, aliases and Pacific date boundaries. Separate tests reject
-nonexistent dates, DST gaps/ambiguity and out-of-night timing. Positive partial
-availability larger than a half is **clamped to that half**, matching the existing
-engine; it no longer fails only in the web adapter. Timed unavailability retains
-the engine's negative-minute semantics. These do not change the Sheets engine.
+Fixtures compare the web adapter with the established calculation engine for
+overlapping multi-report nights, exclusions, no-Mythic nights, signed minute
+overrides, join/leave/active eligibility, zero played time, short halves, rounding,
+aliases and Pacific boundaries. Separate tests reject nonexistent dates, DST
+ambiguity/gaps and out-of-night timing. Positive partial availability larger than
+a half is clamped to that half, matching the established engine; timed
+unavailability retains its negative-minute semantics. The Sheets engine itself
+is unchanged.
 
 Main names are season-wide identities. Explicit character aliases match
 **region + realm + name**, with casefolding for names/realms and lowercase region
@@ -41,28 +41,20 @@ missing report region with configured aliases fails with an actionable message
 rather than guessing US. Refresh only the affected web cache entry if an old
 bundle lacks region; never flush legacy Redis keys.
 
-## Import and rule boundaries
+## Input and rule boundaries
 
-Both JSON and Sheets imports validate schemas, calendar/domain constraints and
-references against the entire effective target season **before any writes**.
-Missing input documents are created in one Firestore transaction; existing input
-documents win. An import is not an overwrite or synchronization tool. Sheets
-imports deliberately update calculation settings in that same transaction.
-Concurrent target changes cause transaction retry, not partial application.
+The optional administrator JSON command validates schemas, calendar/domain
+constraints and references against the entire effective target season before
+any writes. Missing input documents are created in one Firestore transaction;
+existing inputs win. This is not a synchronization or overwrite command and is
+not required for normal S2 setup or reprocessing. It does not read Sheets or
+write calculation settings. Configure calculation settings in the UI.
 
-Imports are limited to 400 writes per transaction. Split larger migrations into
-reference-complete groups (players before their characters/availability); do not
-silently chunk a file and leave a partially valid season. Input JSON contains
-only domain fields; version, actor and server timestamp metadata are authored by
-the importer. Invalid references, duplicate source identities, unknown values,
-unparseable dates/times and oversize notes now fail rather than disappearing,
-becoming automatic availability or being truncated.
-
-Legacy formatted dates and numeric Sheets serial dates are supported. Wall times
-accept formatted values or fractions of a day at whole-minute precision. Whole
-numeric minute cells such as `45.0` and `-15.0` preserve their intended meaning;
-fractional/nonfinite minutes are rejected. Legacy character mappings are US
-unless deliberately edited before import; the old Sheets map has no region field.
+JSON files contain only domain fields; version, actor and server timestamp
+metadata are authored by the importer. Imports are limited to 400 writes per
+transaction. Split larger files into reference-complete groups (players before
+their characters/availability); do not silently chunk partially valid seasons.
+Concurrent target changes cause transaction retry instead of partial application.
 
 Rules cover reports, players, characters, night overrides, availability overrides
 and calculation settings. They enforce allowed keys/types, attributable server
@@ -89,8 +81,8 @@ Firestore protobuf encoder. Documents exceeding a conservative **900,000-byte**
 budget fail without moving the public pointer; batches are limited to **400
 writes and 8,000,000 bytes**. The write count is an application limit; byte
 budgets leave headroom below Firestore's documented 1 MiB document and 10 MiB
-request limits ([Firebase limits](https://firebase.google.com/docs/firestore/quotas)). Final publication remains the existing
-three-document transaction: complete root, public pointer and successful run.
+request limits ([Firebase limits](https://firebase.google.com/docs/firestore/quotas)).
+Final publication remains the existing three-document transaction: complete root, public pointer and successful run.
 
 The actual S2 replay's largest night measured 8,402 bytes and its largest week
 4,722 bytes, including 1 KiB path/metadata headroom. Synthetic 200-player Unicode
@@ -124,7 +116,7 @@ reviewed dry-run inventory and normal backup/recovery procedures.
    counts, and resume the designated web worker. If the pointer/status changed or
    a candidate is ambiguous, abort rather than widening the deletion scope.
 
-## Deployment audit and isolated migration
+## Deployment audit and isolated project/season checks
 
 The read-only audit found deployed rules **exactly matched the feature base** and
 the `runs(status ASC, requestedAt ASC)` collection index was `READY` (the service
@@ -136,10 +128,11 @@ by the same read-only comparison; do not claim the new rules are live.
 
 Emulator tests explicitly import into a second `demo-` project and a different
 season, verify both start empty, and prove source documents stay unchanged.
-Changing project/season configuration does not copy anything. Migration requires
-an explicit validated import, separate membership/auth setup, destination indexes
-and rules, and a destination calculation. Do not copy a public pointer without its
-complete results or assume that moving input documents transfers Authentication
+Changing project/season configuration does not copy anything. A new destination
+requires its intended inputs, separate membership/auth setup, destination indexes
+and rules, and a destination calculation. Enter inputs in the officer workspace
+and reprocess the logs; no Sheets migration is needed. Do not copy a public
+pointer without its complete results or assume that moving input documents transfers Authentication
 users or officer authorization. Coordinate actual cutover through #14.
 
 Reproduce Python tests with a dedicated demo Firestore emulator and
