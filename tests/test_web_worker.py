@@ -288,10 +288,14 @@ def test_real_firestore_run_publish_failure_and_revocation(
         .to_dict()["complete"]
         is False
     )
-    client.document("officers/test-officer").set({"enabled": False})
+    # A request accepted before revocation must still fail at worker claim.
     revoked = queue("revoked")
+    client.document("officers/test-officer").set({"enabled": False})
     worker.process_next()
-    assert revoked.get().to_dict()["status"] == "failed"
+    revoked_data = revoked.get().to_dict()
+    assert revoked_data["status"] == "failed"
+    assert revoked_data["error"] == "Requester no longer has officer access."
+    assert not season.collection("results").document("revoked").get().exists
     assert pointer.get().to_dict()["latestRunId"] == "first"
     interrupted_ref = queue("interrupted")
     interrupted_ref.update({"status": "running"})

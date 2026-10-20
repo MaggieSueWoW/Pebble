@@ -25,9 +25,12 @@ authorized domains. Officers can save inputs and queue runs. Everyone can read
 the last complete result set without login. Signed-in accounts without officer
 access see a read-only explanation and a Sign out to switch accounts action.
 Account details keeps the setup ID available without showing it in the main message.
+Switch Google account opens the account chooser. Login failures show recovery
+instructions; failed access verification returns to public results with a retry
+action instead of leaving the page connecting indefinitely.
 
 See [Firebase and worker setup](../../docs/firestore-setup.md) for backend setup,
-credentials, importing Sheets inputs, emulator checks, and changing projects.
+credentials, officer onboarding/revocation, emulator checks, and changing projects.
 
 ```sh
 npm test
@@ -63,6 +66,11 @@ Firebase configuration. It clears only that isolated emulator's Firestore data;
 keep these ports free. No worker is started. Editor tests assert zero run requests;
 workflow tests create only their expected synthetic requests in this demo
 project. Failure traces stay in ignored `test-results/`.
+
+Auth coverage adds onboarding, session refresh, revocation during editing,
+re-grant without stale drafts, sign-out and popup blocked/cancelled recovery. It
+uses emulated Google accounts; real Google consent and hosted-domain acceptance
+are separate checks recorded with AUTH-1 (#8).
 
 Coverage includes report validation/deduplication, add/re-enable, selection
 save/cancel, delayed and denied saves, concurrent version conflicts, draft
