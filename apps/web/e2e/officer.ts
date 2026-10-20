@@ -2,7 +2,7 @@ import { expect, type Page } from "@playwright/test";
 import type { RulesTestEnvironment } from "@firebase/rules-unit-testing";
 import { doc, setDoc } from "firebase/firestore";
 
-export async function officer(page: Page, env: RulesTestEnvironment) {
+export async function signIn(page: Page) {
   await page.goto("/");
   const popupPromise = page.waitForEvent("popup");
   await page.getByRole("button", { name: "Officer sign-in" }).click();
@@ -14,9 +14,17 @@ export async function officer(page: Page, env: RulesTestEnvironment) {
     .fill(`officer-${Date.now()}@example.test`);
   await popup.locator("#display-name-input").fill("Example Officer");
   await popup.locator("#sign-in").click();
-  const notice = page.getByText(/This account does not have officer access/);
+  const notice = page.getByRole("region", {
+    name: "Officer access not enabled",
+  });
   await expect(notice).toBeVisible();
-  const uid = (await notice.innerText()).split("Firebase UID:")[1].trim();
+  await notice.getByText("Account details", { exact: true }).click();
+  const uid = (await notice.locator("code").innerText()).trim();
+  return uid;
+}
+
+export async function officer(page: Page, env: RulesTestEnvironment) {
+  const uid = await signIn(page);
   await env.withSecurityRulesDisabled(async (ctx) => {
     await setDoc(doc(ctx.firestore(), `officers/${uid}`), { enabled: true });
   });

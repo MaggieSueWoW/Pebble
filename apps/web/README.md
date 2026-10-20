@@ -22,7 +22,9 @@ Never place a service account or WCL secret in a `VITE_` variable.
 
 Open http://127.0.0.1:5173. Google sign-in requires this host in Firebase Auth's
 authorized domains. Officers can save inputs and queue runs. Everyone can read
-the last complete result set without login.
+the last complete result set without login. Signed-in accounts without officer
+access see a read-only explanation and a Sign out to switch accounts action.
+Account details keeps the setup ID available without showing it in the main message.
 
 See [Firebase and worker setup](../../docs/firestore-setup.md) for backend setup,
 credentials, importing Sheets inputs, emulator checks, and changing projects.
@@ -118,3 +120,10 @@ that rows, result periods and totals stay consistent, and that an edit saved dur
 new run after older captured input versions arrive. Queue/completion/publication
 transitions are synthetic emulator fixtures; one freshness case submits a single
 expected emulator request, with no worker process.
+
+
+Access coverage signs in a synthetic non-officer, opens account details with the
+keyboard, grants and revokes officer membership, and signs out through the visible
+account-switch action. Published results remain readable while private controls
+and unsaved private drafts disappear on revocation. These cases create no requests
+or input changes; all sign-in helpers use the visible account-details disclosure.
