@@ -134,3 +134,10 @@ period with no player time. Public guidance stays read-only; officers can use
 Manage reports to review inputs without a write or run request. Empty recent
 history has an explicit message while queued progress and previous results remain
 available. Loading and result errors retain their separate states.
+
+
+Overrides tabs use Left/Right and Home/End to move focus without changing editors.
+Enter/Space or a click activates the focused tab through the existing draft/save
+guards. Both tabs link to the visible, labelled tab panel; only one tab is in the
+keyboard tab order. Acceptance checks keyboard focus, Escape/discard restoration,
+pending-save activation, panel relationships and narrow layout.

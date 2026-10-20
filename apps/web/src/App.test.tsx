@@ -469,3 +469,20 @@ it("explains empty recent history without hiding active progress or previous res
   expect(screen.queryByText("No completed runs in recent history.")).toBeNull();
   expect(screen.getByText("Completed fixture")).toBeTruthy();
 });
+
+it("labels the visible override panel from its selected tab and links both controls", () => {
+  render(<App connection={connection([alpha])} />);
+  overrides();
+  const availability = screen.getByRole("tab", { name: "Player availability" });
+  const timing = screen.getByRole("tab", { name: "Raid timing" });
+  expect(screen.getByRole("tabpanel", { name: "Player availability" }).id).toBe(
+    availability.getAttribute("aria-controls"),
+  );
+  fireEvent.click(timing);
+  expect(screen.getByRole("tabpanel", { name: "Raid timing" }).id).toBe(
+    timing.getAttribute("aria-controls"),
+  );
+  expect(
+    screen.queryByRole("tabpanel", { name: "Player availability" }),
+  ).toBeNull();
+});
