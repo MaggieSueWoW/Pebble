@@ -127,3 +127,10 @@ keyboard, grants and revokes officer membership, and signs out through the visib
 account-switch action. Published results remain readable while private controls
 and unsaved private drafts disappear on revocation. These cases create no requests
 or input changes; all sign-in helpers use the visible account-details disclosure.
+
+
+Empty-results coverage distinguishes no completed result set from a completed
+period with no player time. Public guidance stays read-only; officers can use
+Manage reports to review inputs without a write or run request. Empty recent
+history has an explicit message while queued progress and previous results remain
+available. Loading and result errors retain their separate states.

@@ -5,6 +5,7 @@ import {
 } from "@firebase/rules-unit-testing";
 import {
   collection,
+  deleteDoc,
   doc,
   getDoc,
   getDocs,
@@ -711,4 +712,123 @@ test("explains non-officer access through grant, revocation and keyboard sign-ou
       () => document.documentElement.scrollWidth <= window.innerWidth,
     ),
   ).toBe(true);
+});
+
+test("public empty results distinguish no completed run from a completed period with no player time", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await admin(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), "publicSeasons/test-reports"), {});
+  });
+  await page.goto("/");
+  await expect(page.getByText(/No completed results yet/)).toContainText(
+    "after an officer runs Pebble",
+  );
+  await expect(
+    page.getByRole("button", { name: "Manage reports" }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole("heading", { name: "No player time for this period" }),
+  ).toHaveCount(0);
+  await seedResult("empty", "Empty Player", nights.latest);
+  await admin(async (ctx) => {
+    await deleteDoc(
+      doc(ctx.firestore(), `${season}/results/empty/players/player-a`),
+    );
+    await setDoc(
+      doc(ctx.firestore(), `${season}/results/empty/nights/${nights.latest}`),
+      { players: [] },
+      { merge: true },
+    );
+  });
+  await publish("empty");
+  await expect(
+    page.getByRole("heading", { name: "No player time for this period" }),
+  ).toBeVisible();
+  await expect(page.getByText(/No completed results yet/)).toHaveCount(0);
+  await expect(
+    page.getByText(
+      /No player time was recorded for this period in the completed results/,
+    ),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Manage reports" }),
+  ).toHaveCount(0);
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth,
+    ),
+  ).toBe(true);
+});
+
+test("officer empty periods and recent history keep progress visible and link to Reports without writes", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await admin(async (ctx) => {
+    const db = ctx.firestore();
+    await setDoc(
+      doc(db, `${season}/results/baseline/nights/${nights.latest}`),
+      {
+        night: nights.latest,
+        players: [],
+        duration: 0,
+        reports: 0,
+        timing: { start: "", breakStart: "", breakEnd: "", end: "", notes: "" },
+      },
+    );
+    await deleteDoc(doc(db, `${season}/runs/baseline`));
+    await setDoc(doc(db, `${season}/runs/active-fixture`), {
+      status: "queued",
+      requestedBy: "fixture",
+      requestedAt: Timestamp.now(),
+    });
+  });
+  await resultsPage(page);
+  await page
+    .getByRole("combobox", { name: "Result period" })
+    .selectOption(nights.latest);
+  await expect(
+    page.getByRole("heading", { name: "No player time for this period" }),
+  ).toBeVisible();
+  await expect(
+    page.getByText(/Use Manage reports to review the included logs/),
+  ).toBeVisible();
+  await expect(page.getByRole("button", { name: "Run queued" })).toBeDisabled();
+  const history = page.getByText("Run history", { exact: true });
+  await history.click();
+  await expect(
+    page.getByText("No completed runs in recent history.", { exact: true }),
+  ).toBeVisible();
+  await page
+    .getByRole("combobox", { name: "Result period" })
+    .selectOption("season");
+  await expect(
+    page.getByText("Baseline Player", { exact: true }),
+  ).toBeVisible();
+  await page
+    .getByRole("combobox", { name: "Result period" })
+    .selectOption(nights.latest);
+  await page.getByRole("button", { name: "Manage reports" }).focus();
+  await page.keyboard.press("Enter");
+  await expect(
+    page.getByRole("heading", { name: "Add a report" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("textbox", { name: "Warcraft Logs reports" }),
+  ).toHaveValue("");
+  await expect(page.getByRole("button", { name: "Run queued" })).toBeDisabled();
+  await admin(async (ctx) => {
+    const saved = (
+      await getDoc(doc(ctx.firestore(), `${season}/reports/${report}`))
+    ).data()!;
+    expect(saved.enabled).toBe(true);
+    expect(saved.version).toBe(1);
+    expect(
+      (await getDocs(collection(ctx.firestore(), `${season}/runs`))).docs.map(
+        (d) => d.id,
+      ),
+    ).toEqual(["active-fixture"]);
+  });
 });
