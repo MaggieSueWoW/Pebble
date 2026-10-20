@@ -195,3 +195,18 @@ Weekly acceptance covers stored totals, historical/zero rows, safe metadata mapp
 weekly read failure/retry, officer/public access, keyboard details, narrow layout
 and atomic publication replacement. Attendance, possible time, weekly P/B/O, richer
 nightly explanations/diagnostics and shareable routes remain tracked in #11.
+
+
+Season and nightly result details show the worker's recorded pre/post played
+minutes beside the existing pre/post bench minutes. Zero is displayed as zero;
+a missing played half is labelled Not recorded, without splitting or inferring
+from the total. Weekly output has no played-half fields, so weekly details omit
+those labels. The recorded per-row adjustment flag retains its existing general
+explanation; no per-half availability or private provenance is invented. The
+existing atomic completed-run loader supplies the fields with no extra reads.
+
+Played-breakdown coverage checks recorded values, zero/missing halves, weekly
+omission, public/officer visibility, period changes, keyboard details and narrow
+layout. The illustrative sample calculation supplies its own played halves only
+in sample mode. Attendance, possible time, weekly P/B/O, richer availability/source
+explanations, private diagnostics and shareable links remain in #11.
