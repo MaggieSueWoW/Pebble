@@ -26,6 +26,7 @@ from redis.exceptions import AuthenticationError, AuthorizationError
 from redis.exceptions import ConnectionError as RedisConnectionError
 from redis.exceptions import TimeoutError as RedisTimeoutError
 
+from .attendance import build_attendance_projection
 from .ingest import WOW_CLASS_COLORS, persist_report_fights
 from .mongo_client import ensure_indexes
 from .pipeline import compute_results
@@ -315,6 +316,10 @@ def calculate_snapshot(
         for p in inputs["players"].values()
         if p.active
     ]
+    attendance = build_attendance_projection(db)
+    for player in totals:
+        if player["name"] in attendance:
+            player["attendance"] = attendance[player["name"]]
     nights = []
     warnings = []
     for night, q in sorted(qa.items(), reverse=True):
