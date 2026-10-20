@@ -581,3 +581,117 @@ it.each([true, false])(
     expect(screen.getByText("Recorded warning")).toBeTruthy();
   },
 );
+
+it("links both result disclosure controls to stable hidden detail content", () => {
+  const c = connection([alpha]);
+  c.hasResults = true;
+  c.saved.results.players = [
+    {
+      id: alpha.id,
+      name: alpha.name,
+      className: "Mage",
+      played: 60,
+      bench: 30,
+      preBench: 10,
+      postBench: 20,
+      overridden: false,
+      nights: 1,
+    },
+  ];
+  render(<App connection={c} />);
+  fireEvent.click(screen.getByRole("button", { name: /^Results/ }));
+  const detail = screen.getByRole("button", {
+    name: "Details for Example Alpha",
+  });
+  const name = screen.getByRole("button", { name: /Example Alpha.*Mage/ });
+  const id = detail.getAttribute("aria-controls")!;
+  expect(name.getAttribute("aria-controls")).toBe(id);
+  expect(document.getElementById(id)?.closest("tr")?.hidden).toBe(true);
+  fireEvent.click(detail);
+  expect(
+    screen.getByRole("region", {
+      name: "Availability breakdown for Example Alpha",
+    }).id,
+  ).toBe(id);
+  fireEvent.click(name);
+  expect(document.getElementById(id)?.closest("tr")?.hidden).toBe(true);
+  expect(detail.getAttribute("aria-expanded")).toBe("false");
+});
+
+it.each(["results", "queue"] as const)(
+  "recovers focus after a disappearing %s retry without putting actions in Run status",
+  async (kind) => {
+    const c = connection();
+    if (kind === "results") c.resultsError = "Result read unavailable";
+    else {
+      c.queueReady = false;
+      c.queueError = "Queue read unavailable";
+    }
+    const { rerender } = render(<App connection={c} />);
+    const retry = () =>
+      rerender(
+        <App
+          connection={{
+            ...c,
+            resultsError: "",
+            resultsPending: kind === "results",
+            queueError: "",
+            queueReady: true,
+          }}
+        />,
+      );
+    c.retryResults = retry;
+    c.retryQueue = retry;
+    rerender(<App connection={{ ...c }} />);
+    const button = screen.getByRole("button", {
+      name: kind === "results" ? "Retry loading results" : "Retry run queue",
+    });
+    button.focus();
+    fireEvent.click(button);
+    await waitFor(() =>
+      expect(document.activeElement).toBe(
+        document.getElementById("page-title"),
+      ),
+    );
+    const status = screen.getByRole("status", { name: "Run status" });
+    expect(status.getAttribute("aria-atomic")).toBe("true");
+    expect(status.querySelector("button")).toBeNull();
+  },
+);
+
+it("connects report/availability validation and names the discard dialog", () => {
+  render(<App connection={connection([alpha])} />);
+  const input = screen.getByRole("textbox", { name: "Warcraft Logs reports" });
+  fireEvent.change(input, { target: { value: "invalid" } });
+  expect(input.getAttribute("aria-describedby")).toContain("report-validation");
+  expect(document.getElementById("report-validation")?.textContent).toContain(
+    "invalid",
+  );
+  fireEvent.click(screen.getByRole("button", { name: /^Results/ }));
+  const dialog = document.querySelector("dialog")!;
+  expect(
+    document.getElementById(dialog.getAttribute("aria-labelledby")!)
+      ?.textContent,
+  ).toBe("Keep your changes?");
+  expect(
+    document.getElementById(dialog.getAttribute("aria-describedby")!)
+      ?.textContent,
+  ).toContain("unsaved edits");
+  fireEvent.click(
+    screen.getByRole("button", { name: "Discard edits", hidden: true }),
+  );
+  overrides();
+  fireEvent.change(screen.getByRole("combobox", { name: "Before break" }), {
+    target: { value: "partial" },
+  });
+  const minutes = screen.getByRole("spinbutton", {
+    name: "Before break available minutes",
+  });
+  fireEvent.change(minutes, { target: { value: "0" } });
+  expect(minutes.getAttribute("aria-describedby")).toContain(
+    "availability-validation",
+  );
+  expect(
+    document.getElementById("availability-validation")?.getAttribute("role"),
+  ).toBe("alert");
+});

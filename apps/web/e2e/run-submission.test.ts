@@ -201,7 +201,7 @@ test("coalesces held clicks, announces offline queue/stages, and preserves resul
   await expect(runStatus(page)).toContainText(
     "Waiting for the server to confirm",
   );
-  await expect(runStatus(page)).toHaveClass(/is-running/);
+  await expect(runStatus(page).locator("..")).toHaveClass(/is-running/);
   expect(await requests()).toHaveLength(0);
   expectedRequests = 1;
   release();

@@ -1,6 +1,6 @@
 import { authMessage } from "./authMessages";
 import type { LiveConnection } from "./useFirestore";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import {
   Activity,
   ArrowDown,
@@ -157,13 +157,15 @@ function ConfirmDiscard({
     <dialog
       ref={ref}
       className="confirm-dialog"
+      aria-labelledby="discard-title"
+      aria-describedby="discard-description"
       onCancel={(e) => {
         e.preventDefault();
         cancel();
       }}
     >
-      <h2>Keep your changes?</h2>
-      <p>
+      <h2 id="discard-title">Keep your changes?</h2>
+      <p id="discard-description">
         You have unsaved edits. Save them before leaving, or discard them to
         continue.
       </p>
@@ -393,6 +395,13 @@ export default function App({ connection }: { connection?: LiveConnection }) {
     `${p.name} ${p.className}`.toLowerCase().includes(search.toLowerCase()),
   );
 
+  function retryWithFocus(retry: () => void) {
+    retry();
+    setTimeout(() => {
+      if (document.activeElement === document.body)
+        document.getElementById("page-title")?.focus({ preventScroll: true });
+    }, 0);
+  }
   function notify(text: string, error = false) {
     clearTimeout(toastTimer.current);
     setToast({ text, error });
@@ -873,7 +882,10 @@ export default function App({ connection }: { connection?: LiveConnection }) {
           {connection?.resultsError && (
             <Notice tone="amber">
               <span role="alert">{connection.resultsError}</span>{" "}
-              <button className="text-button" onClick={connection.retryResults}>
+              <button
+                className="text-button"
+                onClick={() => retryWithFocus(connection.retryResults)}
+              >
                 Retry loading results
               </button>
             </Notice>
@@ -896,7 +908,7 @@ export default function App({ connection }: { connection?: LiveConnection }) {
                   ? "THE LATEST PICTURE"
                   : "A LITTLE LESS RAID ADMIN"}
               </div>
-              <h1>
+              <h1 id="page-title" tabIndex={-1}>
                 {page === "reports"
                   ? "Raid reports"
                   : page === "overrides"
@@ -931,8 +943,6 @@ export default function App({ connection }: { connection?: LiveConnection }) {
           </div>
           <div
             className={`run-strip ${active || connection?.submitting || waitingForResults ? "is-running" : ""} ${(lastFailed || resultLoadFailed) && !active && !connection?.submitting ? "has-error" : ""}`}
-            role="status"
-            aria-label="Run status"
           >
             <div
               className={`strip-icon ${active || connection?.submitting || waitingForResults ? "running-icon" : ""}`}
@@ -949,7 +959,12 @@ export default function App({ connection }: { connection?: LiveConnection }) {
                 <CheckCheck size={19} />
               )}
             </div>
-            <div className="strip-copy">
+            <div
+              className="strip-copy"
+              role="status"
+              aria-label="Run status"
+              aria-atomic="true"
+            >
               <strong>
                 {active
                   ? active.status === "queued" && !online
@@ -1001,7 +1016,10 @@ export default function App({ connection }: { connection?: LiveConnection }) {
               </span>
             </div>
             {connection?.officer && connection.queueError && (
-              <button className="button" onClick={connection.retryQueue}>
+              <button
+                className="button"
+                onClick={() => retryWithFocus(connection.retryQueue)}
+              >
                 Retry run queue
               </button>
             )}
@@ -1500,6 +1518,7 @@ function ResultRow({
   onEdit?: () => void;
 }) {
   const total = row.played + row.bench;
+  const detailId = useId();
   return (
     <>
       <tr>
@@ -1509,6 +1528,7 @@ function ResultRow({
             className="result-name"
             onClick={onExpand}
             aria-expanded={expanded}
+            aria-controls={detailId}
           >
             <span className="class-dot" style={{ background: player.color }} />
             <span>
@@ -1540,39 +1560,42 @@ function ResultRow({
             aria-label={`Details for ${player.name}`}
             onClick={onExpand}
             aria-expanded={expanded}
+            aria-controls={detailId}
           >
             {expanded ? <ChevronDown size={17} /> : <ChevronRight size={17} />}
           </button>
         </td>
       </tr>
-      {expanded && (
-        <tr className="result-detail">
-          <td colSpan={6}>
-            <div>
-              <span>
-                Before break bench <strong>{row.preBench} min</strong>
-              </span>
-              <span>
-                After break bench <strong>{row.postBench} min</strong>
-              </span>
-              <span>
-                Availability{" "}
-                <strong>
-                  {row.overridden
-                    ? "Officer adjustment applied"
-                    : "Automatically inferred"}
-                </strong>
-              </span>
-              {onEdit && (
-                <button className="text-button" onClick={onEdit}>
-                  <Settings2 size={14} /> Edit availability{" "}
-                  <ArrowRight size={14} />
-                </button>
-              )}
-            </div>
-          </td>
-        </tr>
-      )}
+      <tr className="result-detail" hidden={!expanded}>
+        <td colSpan={6}>
+          <div
+            id={detailId}
+            role="region"
+            aria-label={`Availability breakdown for ${player.name}`}
+          >
+            <span>
+              Before break bench <strong>{row.preBench} min</strong>
+            </span>
+            <span>
+              After break bench <strong>{row.postBench} min</strong>
+            </span>
+            <span>
+              Availability{" "}
+              <strong>
+                {row.overridden
+                  ? "Officer adjustment applied"
+                  : "Automatically inferred"}
+              </strong>
+            </span>
+            {onEdit && (
+              <button className="text-button" onClick={onEdit}>
+                <Settings2 size={14} /> Edit availability{" "}
+                <ArrowRight size={14} />
+              </button>
+            )}
+          </div>
+        </td>
+      </tr>
     </>
   );
 }

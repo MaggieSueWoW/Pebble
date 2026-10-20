@@ -72,11 +72,19 @@ export function ReportsPanel({
             "https://www.warcraftlogs.com/reports/…\nOr a 16-character report code"
           }
           spellCheck={false}
-          aria-describedby="report-help"
+          aria-describedby={
+            parsed.some((p) => p.state === "invalid")
+              ? "report-help report-validation"
+              : "report-help"
+          }
           aria-invalid={parsed.some((p) => p.state === "invalid")}
         />
         {parsed.length > 0 && (
-          <ul className="parse-results" aria-live="polite">
+          <ul
+            id="report-validation"
+            className="parse-results"
+            aria-live="polite"
+          >
             {parsed.map((item, i) => (
               <li
                 key={`${item.raw}-${i}`}
