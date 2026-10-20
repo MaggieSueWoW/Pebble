@@ -99,10 +99,16 @@ and heartbeat; they never start or contact a worker. Previous completed results
 and unrelated input versions are checked throughout these cases.
 
 
+Published result warnings appear on Results for officers and public readers. They
+stay with the displayed completed run during loading or failure, change with a
+successful result replacement, and disappear when the new result has no warnings.
+Warning text is shown as recorded, without new source fetches.
+
 Result-loading coverage holds result reads, rejects incomplete output for officers
 and public readers, exercises retry (including first-load errors), and supersedes
-a delayed fetch with a newer publication. It checks that rows, result periods and
-totals stay consistent, and that an edit saved during computation still needs a
+a delayed fetch with a newer publication. Warning coverage checks retained and
+replaced warnings, missing warnings, keyboard retry and narrow layout. It checks
+that rows, result periods and totals stay consistent, and that an edit saved during computation still needs a
 new run after older captured input versions arrive. Queue/completion/publication
 transitions are synthetic emulator fixtures; one freshness case submits a single
 expected emulator request, with no worker process.

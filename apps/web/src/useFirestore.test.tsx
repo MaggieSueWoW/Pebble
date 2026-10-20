@@ -969,6 +969,52 @@ describe("run submission", () => {
 });
 
 describe("public result loading", () => {
+  it("keeps warnings with the completed view through failed reads, retry and clearing", async () => {
+    const { result } = renderHook(useFirestore);
+    mock.getDoc.mockResolvedValueOnce(
+      snap({ ...completed().data(), warnings: ["Baseline warning"] }),
+    );
+    await publicResults();
+    expect(result.current.connection.saved.results.warnings).toEqual([
+      "Baseline warning",
+    ]);
+    const players = deferred<Snapshot>();
+    mock.getDoc.mockResolvedValueOnce(
+      snap({ ...completed().data(), warnings: ["New warning"] }),
+    );
+    mock.getDocs.mockReturnValueOnce(players.promise);
+    send("publicSeasons/test", { latestRunId: "new" });
+    await act(async () => {});
+    expect(result.current.connection.saved.results.warnings).toEqual([
+      "Baseline warning",
+    ]);
+    await act(async () => players.reject(new Error("Read unavailable")));
+    expect(result.current.connection.resultsError).not.toBe("");
+    expect(result.current.connection.saved.results.warnings).toEqual([
+      "Baseline warning",
+    ]);
+    act(() => result.current.connection.retryResults());
+    mock.getDoc.mockResolvedValueOnce(
+      snap({ ...completed().data(), warnings: ["New warning"] }),
+    );
+    await act(async () =>
+      latest("publicSeasons/test").next(snap({ latestRunId: "new" })),
+    );
+    expect(result.current.connection.saved.results.signature).toBe("new");
+    expect(result.current.connection.saved.results.warnings).toEqual([
+      "New warning",
+    ]);
+    mock.getDoc.mockResolvedValueOnce(completed());
+    await act(async () =>
+      latest("publicSeasons/test").next(
+        snap({ latestRunId: "without-warnings" }),
+      ),
+    );
+    expect(result.current.connection.saved.results.warnings).toEqual([]);
+    send("publicSeasons/test");
+    expect(result.current.connection.saved.results.warnings).toEqual([]);
+  });
+
   it("waits for every child collection before replacing the displayed set", async () => {
     const { result } = renderHook(useFirestore);
     await publicResults();

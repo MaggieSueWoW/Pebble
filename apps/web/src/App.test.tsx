@@ -166,3 +166,36 @@ it("waits for a removed player's pending save before selecting a replacement", a
   expect(notes().value).toBe("");
   expect(c.saveInputs).toHaveBeenCalledTimes(1);
 });
+
+it.each([true, false])(
+  "shows published warning text on Results for officer=%s and hides empty warnings",
+  (officer) => {
+    const c = connection();
+    c.officer = officer;
+    c.hasResults = true;
+    const warning = "2026-10-14: unknown characters: <Example>";
+    c.saved.results.warnings = [
+      warning,
+      "2026-10-15: no Mythic encounters; no bench totals for this night",
+    ];
+    const { rerender } = render(<App connection={c} />);
+    if (officer)
+      fireEvent.click(screen.getByRole("button", { name: /^Results/ }));
+    const region = screen.getByRole("region", { name: "Result warnings" });
+    expect(region.querySelectorAll("li")).toHaveLength(2);
+    expect(region.textContent).toContain(warning);
+    expect(region.querySelector("example")).toBeNull();
+    rerender(
+      <App
+        connection={{
+          ...c,
+          saved: { ...c.saved, results: { ...c.saved.results, warnings: [] } },
+        }}
+      />,
+    );
+    expect(
+      screen.queryByRole("region", { name: "Result warnings" }),
+    ).toBeNull();
+    expect(c.requestRun).not.toHaveBeenCalled();
+  },
+);
