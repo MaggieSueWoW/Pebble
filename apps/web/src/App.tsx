@@ -37,6 +37,7 @@ import {
   formatTime,
   freshState,
   minutes,
+  playerDetails,
   nightOptions as sampleNights,
   players as samplePlayers,
   signature,
@@ -302,6 +303,20 @@ export default function App({ connection }: { connection?: LiveConnection }) {
     Boolean(connection?.busy),
     players.some((player) => player.id === selected),
   );
+  const selectedPlayer = players.find((player) => player.id === selected);
+  useEffect(() => {
+    if (
+      !selectedPlayer &&
+      !availabilityEditor.dirty &&
+      !availabilityEditor.saving
+    )
+      setSelected(firstPlayer);
+  }, [
+    selectedPlayer,
+    firstPlayer,
+    availabilityEditor.dirty,
+    availabilityEditor.saving,
+  ]);
   const detectedTiming = connection
     ? (results.nights.find((item) => item.night === night)?.timing ??
       blankTiming())
@@ -1071,9 +1086,9 @@ export default function App({ connection }: { connection?: LiveConnection }) {
                               <strong style={{ color: player.color }}>
                                 {player.name}
                               </strong>
-                              <span>
-                                {player.className} · {player.role}
-                              </span>
+                              {playerDetails(player) && (
+                                <span>{playerDetails(player)}</span>
+                              )}
                             </span>
                             <span className="player-availability">
                               {overridden ? (
@@ -1092,7 +1107,11 @@ export default function App({ connection }: { connection?: LiveConnection }) {
                         );
                       })}
                       {!visiblePlayers.length && (
-                        <p className="empty-state">No matching players.</p>
+                        <p className="empty-state" role="status">
+                          {players.length
+                            ? "No matching players. Try another search."
+                            : "No players in the roster yet."}
+                        </p>
                       )}
                     </div>
                     <div className="table-footnote">
@@ -1101,7 +1120,7 @@ export default function App({ connection }: { connection?: LiveConnection }) {
                     </div>
                   </section>
                   <AvailabilityEditor
-                    player={players.find((player) => player.id === selected)}
+                    player={selectedPlayer}
                     editor={availabilityEditor}
                     span={span}
                   />

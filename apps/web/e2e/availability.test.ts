@@ -5,6 +5,7 @@ import {
 } from "@firebase/rules-unit-testing";
 import {
   collection,
+  deleteDoc,
   doc,
   getDoc,
   getDocs,
@@ -411,4 +412,134 @@ test("protects player/night/tab/page drafts and supports keyboard navigation on 
       () => document.documentElement.scrollWidth <= window.innerWidth,
     ),
   ).toBe(true);
+});
+
+test("handles roster arrival, clean removal, search and unknown metadata", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await admin(async (ctx) => {
+    await deleteDoc(doc(ctx.firestore(), `${season}/players/player-a`));
+    await deleteDoc(doc(ctx.firestore(), `${season}/players/player-b`));
+  });
+  await officer(page, env);
+  await page
+    .getByRole("navigation")
+    .getByRole("button", { name: "Overrides", exact: true })
+    .click();
+  await expect(page.getByText("No players in the roster yet.")).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Save adjustment" }),
+  ).toHaveCount(0);
+  await admin(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), `${season}/players/player-a`), {
+      name: "Example Alpha",
+      className: "Mage",
+      role: "Unknown",
+      active: true,
+      ...meta(1),
+    });
+  });
+  const editor = page.getByRole("region", {
+    name: "Player availability editor",
+  });
+  await expect(
+    editor.getByRole("heading", { name: "Example Alpha", exact: true }),
+  ).toBeVisible();
+  await expect(editor.locator(".editor-heading p")).toHaveText("Mage");
+  await expect(
+    page.getByRole("button", { name: /Example Alpha/ }),
+  ).not.toContainText("Unknown");
+  await admin(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), `${season}/players/player-b`), {
+      name: "Example Beta",
+      className: "",
+      role: "Healer",
+      active: true,
+      ...meta(1),
+    });
+  });
+  const search = page.getByRole("textbox", { name: "Search players" });
+  await search.fill("Beta");
+  await expect(
+    editor.getByRole("heading", { name: "Example Alpha", exact: true }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: /Example Beta/ }).focus();
+  await page.keyboard.press("Enter");
+  await expect(editor.locator(".editor-heading p")).toHaveText("Healer");
+  await search.fill("no match");
+  await expect(
+    page.getByText("No matching players. Try another search."),
+  ).toBeVisible();
+  await expect(
+    editor.getByRole("heading", { name: "Example Beta", exact: true }),
+  ).toBeVisible();
+  await admin(async (ctx) => {
+    await deleteDoc(doc(ctx.firestore(), `${season}/players/player-b`));
+    await setDoc(
+      doc(ctx.firestore(), `${season}/players/player-a`),
+      { className: " Unknown ", role: "" },
+      { merge: true },
+    );
+  });
+  await expect(
+    editor.getByRole("heading", { name: "Example Alpha", exact: true }),
+  ).toBeVisible();
+  await expect(editor.locator(".editor-heading p")).toHaveCount(0);
+  await search.fill("");
+  await expect(
+    page.getByRole("button", { name: /Example Alpha/ }),
+  ).not.toContainText(/Unknown| · /);
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth,
+    ),
+  ).toBe(true);
+});
+
+test("preserves a removed player's draft and recovers after cancel without writing it", async ({
+  page,
+}) => {
+  await open(page);
+  await notes(page).fill("Retained roster draft");
+  const removeAlpha = () =>
+    admin(async (ctx) => {
+      await deleteDoc(doc(ctx.firestore(), `${season}/players/player-a`));
+    });
+  await removeAlpha();
+  await expect(
+    page.getByText(/This player is no longer in the roster/),
+  ).toBeVisible();
+  await expect(saveButton(page)).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Run Pebble", exact: true }),
+  ).toBeDisabled();
+  await admin(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), `${season}/players/player-a`), {
+      name: "Example Alpha",
+      className: "Mage",
+      role: "Damage",
+      active: true,
+      ...meta(1),
+    });
+  });
+  await expect(notes(page)).toHaveValue("Retained roster draft");
+  await removeAlpha();
+  await page.getByRole("button", { name: "Cancel edits", exact: true }).focus();
+  await page.keyboard.press("Enter");
+  await expect(
+    page.getByRole("heading", { name: "Example Beta", exact: true }),
+  ).toBeVisible();
+  await expect(notes(page)).toHaveValue("Other player");
+  await admin(async (ctx) => {
+    expect((await getDoc(doc(ctx.firestore(), path))).data()?.notes).toBe(
+      "Saved Alpha",
+    );
+    expect((await getDoc(doc(ctx.firestore(), path))).data()?.version).toBe(1);
+    await deleteDoc(doc(ctx.firestore(), `${season}/players/player-b`));
+  });
+  await expect(page.getByText("No players in the roster yet.")).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Select a player", exact: true }),
+  ).toBeVisible();
 });

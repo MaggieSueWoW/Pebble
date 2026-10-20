@@ -214,6 +214,34 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("officer access lifecycle", () => {
+  it("keeps an empty officer roster separate from historical public result players", async () => {
+    mock.getDocs.mockImplementation(async (ref: { path: string }) =>
+      snap(
+        {},
+        ref.path.endsWith("/players")
+          ? {
+              former: {
+                name: "Former Player",
+                className: "Mage",
+                role: "Damage",
+              },
+            }
+          : {},
+      ),
+    );
+    const { result } = renderHook(useFirestore);
+    login();
+    grant();
+    send("seasons/test/players");
+    await publicResults();
+    expect(result.current.connection.saved.results.players[0].name).toBe(
+      "Former Player",
+    );
+    expect(result.current.connection.players).toEqual([]);
+    revoke();
+    expect(result.current.connection.players[0].name).toBe("Former Player");
+  });
+
   it("clears all private state on revocation, stops listeners and retains public results", async () => {
     const { result } = renderHook(useFirestore);
     login();

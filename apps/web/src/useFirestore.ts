@@ -447,7 +447,7 @@ export function useFirestore(): {
   }));
   const publicPlayers = results.players as (Results["players"][number] &
     Player)[];
-  const allPlayers = roster.length
+  const allPlayers = officer
     ? roster.map((p) => ({
         ...p,
         color: publicPlayers.find((r) => r.id === p.id)?.color ?? p.color,

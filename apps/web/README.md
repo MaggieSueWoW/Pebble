@@ -69,6 +69,10 @@ Availability coverage adds
 mode/minute validation, save/cancel/reset, delayed/denied saves, version conflicts,
 newer edits during saves, and player/night/tab/page navigation. Each availability
 case verifies unrelated reports, timings and player/night overrides stay unchanged.
+Roster coverage checks late arrival and clean removal, search-independent selection,
+missing class/role labels, and retention of a removed player's draft until explicit
+cancel or roster return. The editor waits for pending saves before choosing a
+replacement. An empty officer roster stays separate from historical result players.
 
 
 Timing coverage adds save/cancel/reset, blank and detected values, ordering and
