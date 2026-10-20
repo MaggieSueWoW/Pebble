@@ -40,6 +40,7 @@ from .web_models import (
     validate_snapshot,
     wall_ms,
 )
+from .web_provenance import availability_explanation, night_diagnostics
 from .web_publication import publication_batches
 
 log = logging.getLogger(__name__)
@@ -321,6 +322,7 @@ def calculate_snapshot(
         if player["name"] in attendance:
             player["attendance"] = attendance[player["name"]]
     nights = []
+    diagnostics = {}
     warnings = []
     for night, q in sorted(qa.items(), reverse=True):
         if q["mythic_end_ms"] <= q["mythic_start_ms"]:
@@ -344,6 +346,14 @@ def calculate_snapshot(
             for p in inputs["players"].values()
             if p.active
         ]
+        recorded = {r["main"]: r for r in nightly if r["night_id"] == night}
+        for row in rows:
+            if row["name"] in recorded:
+                row["availability"] = availability_explanation(
+                    recorded[row["name"]],
+                    inputs["availabilityOverrides"].get(f"{night}_{row['id']}"),
+                )
+        diagnostics[night] = night_diagnostics(q, inputs["nightOverrides"].get(night))
         nights.append(
             {
                 "night": night,
@@ -370,6 +380,7 @@ def calculate_snapshot(
         "weeks": list(db.bench_week_totals.find({}, {"_id": 0})),
         "reportCount": len(enabled),
         "reportSummaries": summaries,
+        "nightDiagnostics": diagnostics,
         "warnings": warnings,
     }
 
@@ -532,14 +543,21 @@ class Worker:
             raw,
             stage=lambda stage: ref.update({"stage": stage}, **RPC_OPTIONS),
         )
-        ref.update(
-            {
-                "stage": "Updating results",
-                "reportSummaries": output["reportSummaries"],
-                "warnings": output["warnings"],
-            },
-            **RPC_OPTIONS,
-        )
+        metadata = {
+            "stage": "Updating results",
+            "reportSummaries": output["reportSummaries"],
+            "warnings": output["warnings"],
+            "nightDiagnostics": output.get("nightDiagnostics", {}),
+        }
+        try:
+            publication_batches(
+                [(ref, {**(ref.get(**RPC_OPTIONS).to_dict() or {}), **metadata})]
+            )
+        except ValueError:
+            raise InputError(
+                "Run diagnostics exceed the supported Firestore size budget. Reduce the season size."
+            ) from None
+        ref.update(metadata, **RPC_OPTIONS)
         self.publish(ref, output)
 
     def publish(self, run_ref, output):

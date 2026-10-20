@@ -189,3 +189,21 @@ test('no browser can write any output family; public cannot enumerate roots or r
     await assertSucceeds(getDocsFromServer(collection(anon, `${season}/results/ready/${family}`)));
   }
 });
+
+
+test('recorded availability stays public while night diagnostics require current officer access', async () => {
+  const runPath = `${season}/runs/provenance`;
+  await env.withSecurityRulesDisabled(async ctx => {
+    await setDoc(doc(ctx.firestore(), runPath), { status: 'succeeded', nightDiagnostics: { '2026-10-15': { reportCount: 1, mythicFights: 2, unmappedCharacters: 0, breakMinutes: null, timing: { start: 'detected', end: 'detected', break: 'none' } } } });
+    await setDoc(doc(ctx.firestore(), `${season}/results/provenance`), { complete: true });
+    await setDoc(doc(ctx.firestore(), `${season}/results/provenance/nights/2026-10-15`), { players: [{ id: 'p1', availability: { pre: { available: true, mode: 'partial' }, post: { available: false, mode: 'automatic' }, source: 'override' } }] });
+  });
+  const officer = env.authenticatedContext('officer').firestore();
+  await assertSucceeds(getDoc(doc(officer, runPath)));
+  for (const reader of [env.unauthenticatedContext(), env.authenticatedContext('member')]) {
+    await assertFails(getDoc(doc(reader.firestore(), runPath)));
+    await assertSucceeds(getDoc(doc(reader.firestore(), `${season}/results/provenance/nights/2026-10-15`)));
+  }
+  await env.withSecurityRulesDisabled(async ctx => { await setDoc(doc(ctx.firestore(), 'officers/officer'), { enabled: false }); });
+  await assertFails(getDocFromServer(doc(officer, runPath)));
+});

@@ -161,3 +161,38 @@ Reproduce Python tests with a dedicated demo Firestore emulator and
 `FIRESTORE_EMULATOR_HOST=127.0.0.1:8281 PEBBLE_RULES_TEST_PROJECT=demo-pebble-data1 npm --prefix firebase test`.
 Use separate synthetic projects and run these suites serially; never target live
 Firestore or change the live browser's environment to run emulator acceptance.
+
+
+## Recorded availability explanations and private night diagnostics
+
+Newly calculated nightly player rows with a computed bench-night record include
+`availability: {pre: {available, mode}, post: {available, mode}, source}`. The
+booleans copy the engine's half availability flags; the modes copy the captured
+per-half input (`automatic`, `available`, `unavailable`, `partial`, or
+`unavailableFor`). An available flag can represent partial availability and does
+not promise a full half of available time. Recorded played/bench minutes remain
+the numeric result. `source` copies the engine's whole-row priority (`override`,
+`last_fight`, `blocks`, or `none`), not a separately inferred cause for each half.
+No calculation changes or extra upstream reads are involved. Rows without computed
+bench data and older publications omit the field; absence means not recorded,
+not automatic availability. Season and weekly rows do not acquire half sources.
+
+The existing officer-only run document additionally carries `nightDiagnostics`,
+keyed by processed night. Its allowlist contains source-report and Mythic-fight
+counts, unmapped-character count, nullable recorded break minutes, and timing
+source labels. Start is `override`, `configured` (the worker's default-start
+setting actually applied), or `detected`; end is `override` or `detected`; break
+is `override`, `detected`, or `none`. These labels come from computed night QA
+and captured timing inputs. No raw candidates, unknown-character names, notes,
+credentials or service errors are copied. The diagnostic map is never written to
+a public result document.
+
+Only officer metadata for the displayed completed run may be shown beside its
+selected night. Access changes clear it; old runs without diagnostics show not
+recorded. The run document, including existing metadata and the new map, is
+preflighted against the existing document-size budget before its metadata update;
+oversize failure leaves the prior completed public pointer intact. Public nested
+availability remains covered by the existing result publication preflight.
+
+These are additive source changes for a reviewed release. No running worker is
+updated, deployed or asked to recompute as part of preparing this contract.

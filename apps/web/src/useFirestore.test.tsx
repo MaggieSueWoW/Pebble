@@ -1061,6 +1061,54 @@ describe("public result loading", () => {
     expect(result.current.connection.resultSources).toEqual([]);
   });
 
+  it("keeps private diagnostics tied to the displayed run and clears them on access loss", async () => {
+    const { result } = renderHook(useFirestore);
+    login();
+    grant();
+    await publicResults();
+    const old = latest("seasons/test/runs/ready");
+    const diagnostic = {
+      reportCount: 2,
+      mythicFights: 4,
+      unmappedCharacters: 1,
+      breakMinutes: 15,
+      timing: { start: "configured", end: "detected", break: "override" },
+    };
+    send("seasons/test/runs/ready", {
+      nightDiagnostics: { "2026-10-15": diagnostic },
+    });
+    expect(result.current.connection.resultDiagnostics).toEqual({
+      "2026-10-15": diagnostic,
+    });
+    // An unfinished publication must not replace diagnostics for the retained view.
+    const players = deferred<Snapshot>();
+    mock.getDoc.mockResolvedValueOnce(completed());
+    mock.getDocs.mockReturnValueOnce(players.promise);
+    send("publicSeasons/test", { latestRunId: "new" });
+    await act(async () => {});
+    expect(result.current.connection.resultDiagnostics).toEqual({
+      "2026-10-15": diagnostic,
+    });
+    await act(async () => players.resolve(snap()));
+    expect(result.current.connection.resultDiagnostics).toEqual({});
+    act(() =>
+      old.next(snap({ nightDiagnostics: { "2026-10-15": diagnostic } })),
+    );
+    expect(result.current.connection.resultDiagnostics).toEqual({});
+    send("seasons/test/runs/new", {
+      nightDiagnostics: { "2026-10-16": diagnostic },
+    });
+    expect(result.current.connection.resultDiagnostics).toEqual({
+      "2026-10-16": diagnostic,
+    });
+    revoke();
+    expect(result.current.connection.resultDiagnostics).toEqual({});
+    expect(result.current.connection.saved.results.signature).toBe("new");
+    grant();
+    send("seasons/test/runs/new");
+    expect(result.current.connection.resultDiagnostics).toEqual({});
+  });
+
   it("keeps warnings with the completed view through failed reads, retry and clearing", async () => {
     const { result } = renderHook(useFirestore);
     mock.getDoc.mockResolvedValueOnce(
