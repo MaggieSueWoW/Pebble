@@ -1,0 +1,72 @@
+name: Checks
+on:
+  pull_request:
+  push:
+    branches: [codex/pebble-web-app]
+concurrency:
+  group: checks-${{ github.ref }}
+  cancel-in-progress: true
+permissions:
+  contents: read
+jobs:
+  python-and-rules:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: firebase/package-lock.json
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "21"
+      - run: pip install -e '.[dev]'
+      - run: npm ci --prefix firebase
+      - run: npm install --global firebase-tools@15.22.4
+      # Rules clear their demo project's data; finish them before worker tests.
+      - run: firebase emulators:exec --only firestore --project demo-pebble --config firebase.json "npm --prefix firebase test && python -m pytest -q"
+  web:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "21"
+      - run: npm ci --prefix apps/web
+      - run: npm install --global firebase-tools@15.22.4
+      - run: node --test scripts/web-release.test.mjs
+      - run: npm --prefix apps/web test
+      - name: Build public fixture release without credentials
+        run: |
+          mkdir -p deploy/private
+          node --input-type=module -e '
+            import { writeFileSync } from "node:fs";
+            writeFileSync("deploy/private/web-check.json", JSON.stringify({
+              environment: "test", projectId: "pebble-hosting-check", siteId: "pebble-hosting-check",
+              apiKey: "AIza" + "A".repeat(35), authDomain: "pebble-hosting-check.firebaseapp.com",
+              appId: "1:123:web:abcdef", seasonId: "test", seasonLabel: "CI fixture"
+            }));'
+          node scripts/web-release.mjs deploy/private/web-check.json build
+      - name: Check SPA and cache headers with Hosting emulator
+        run: firebase emulators:exec --only hosting --project demo-pebble-hosting --config firebase.json "node scripts/check-web-host.mjs http://127.0.0.1:5080 $(git rev-parse HEAD) deploy/private/web-check.json"
+      - run: cd apps/web && npx playwright install --with-deps chrome
+      - run: npm --prefix apps/web run test:browser
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: browser-failure-traces
+          path: apps/web/test-results/
+          retention-days: 7
