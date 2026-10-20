@@ -1421,3 +1421,116 @@ test("browser Back preserves officer drafts until discard and blocks pending sav
     page.getByRole("combobox", { name: "Result period" }),
   ).toHaveValue(nights.baseline);
 });
+
+test("recorded season rankings preserve eligibility, zero rows, tie order and undefined ratios", async ({
+  page,
+}) => {
+  await admin(async (ctx) => {
+    const db = ctx.firestore();
+    const base = (
+      await getDoc(doc(db, `${season}/results/baseline/players/player-a`))
+    ).data()!;
+    // Season exclusion is explicit; the same recorded historical main remains
+    // present on its night/week rather than being filtered by current roster state.
+    await setDoc(
+      doc(db, `${season}/results/baseline/players/player-a`),
+      { ranking: null },
+      { merge: true },
+    );
+    const rows = [
+      { id: "zero", name: "Zero", played: 0, bench: 0, rank: 1, ratio: null },
+      {
+        id: "upper",
+        name: "Zulu",
+        played: 100,
+        bench: 20,
+        rank: 2,
+        ratio: 0.2,
+      },
+      {
+        id: "lower",
+        name: "alpha",
+        played: 50,
+        bench: 20,
+        rank: 3,
+        ratio: 0.4,
+      },
+    ];
+    for (const row of rows) {
+      await setDoc(doc(db, `${season}/results/baseline/players/${row.id}`), {
+        ...base,
+        ...row,
+        preBench: row.bench,
+        postBench: 0,
+        ranking: {
+          rank: row.rank,
+          played: row.played,
+          bench: row.bench,
+          ratio: row.ratio,
+        },
+      });
+    }
+    await setDoc(doc(db, `${season}/results/baseline/weeks/2026-10-13`), {
+      players: [
+        {
+          game_week: "2026-10-13",
+          main: "Baseline Player",
+          played_min: 60,
+          bench_min: 30,
+          bench_pre_min: 10,
+          bench_post_min: 20,
+        },
+      ],
+    });
+  });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/");
+  await expect(page.locator(".result-name strong")).toHaveText([
+    "Zero",
+    "Zulu",
+    "alpha",
+  ]);
+  await expect(page.locator("td.rank")).toHaveText(["01", "02", "03"]);
+  const zero = page.getByRole("button", { name: "Details for Zero" });
+  await zero.focus();
+  await page.keyboard.press("Enter");
+  await expect(
+    page.getByRole("region", { name: "Availability breakdown for Zero" }),
+  ).toContainText("Bench:played ratio Not defined (no played time)");
+  await page.getByRole("button", { name: "Details for Zulu" }).click();
+  await expect(
+    page.getByRole("region", { name: "Availability breakdown for Zulu" }),
+  ).toContainText("Bench:played ratio 0.20");
+  const period = page.getByRole("combobox", { name: "Result period" });
+  await period.selectOption(nights.baseline);
+  await expect(page.locator(".result-name strong")).toHaveText([
+    "Baseline Player",
+  ]);
+  await page
+    .getByRole("button", { name: "Details for Baseline Player" })
+    .click();
+  await expect(
+    page.getByText("Bench:played ratio", { exact: false }),
+  ).toHaveCount(0);
+  await period.selectOption("week:2026-10-13");
+  await expect(page.locator(".result-name strong")).toHaveText([
+    "Baseline Player",
+  ]);
+  await page
+    .getByRole("button", { name: "Details for Baseline Player" })
+    .click();
+  await expect(
+    page.getByText("Bench:played ratio", { exact: false }),
+  ).toHaveCount(0);
+  await period.selectOption("season");
+  await expect(page.locator(".result-name strong")).toHaveText([
+    "Zero",
+    "Zulu",
+    "alpha",
+  ]);
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth,
+    ),
+  ).toBe(true);
+});

@@ -230,3 +230,26 @@ when navigation is canceled or a save is still pending. Result navigation and
 sharing create no input writes or run requests. UI-3 still tracks attendance and
 possible time, weekly P/B/O, richer safe availability/source explanations, private
 night diagnostics and final parity acceptance.
+
+
+Season player rows optionally include the established materialized ranking:
+`ranking: {rank, played, bench, ratio}`. Explicit `null` excludes the main from
+season rankings; absence means an older publication has no recorded ranking
+metadata. The frontend follows recorded season ranks, including zero-time ranked
+mains, rather than inferring eligibility from the live roster or attendance.
+Equal bench totals retain the established binary name order and sequential ranks.
+Night and week views retain their own recorded coverage and existing visibility.
+
+Season details show the recorded Bench:played ratio to two decimals. A recorded
+null ratio says Not defined (no played time), distinct from a real zero ratio.
+Older results and night/week output without recorded ratios omit this field.
+Played share and attendance retain their separate labels and meanings. The worker
+projection uses existing materialized ranking documents; parity checks verify
+ranking minutes equal the existing season player sums across representative cases.
+
+Ranking acceptance covers actual calculation/materialization for active, former,
+future-join, zero-played, tied and no-Mythic cases; component/browser checks cover
+recorded eligibility/order, undefined ratios, historical night/week visibility,
+keyboard details and narrow layout. New ranking metadata requires a future normal
+successful worker run after the reviewed worker source is deployed. This change
+does not trigger a live run or deploy anything.

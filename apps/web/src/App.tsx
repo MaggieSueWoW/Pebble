@@ -49,6 +49,7 @@ import {
 } from "./model";
 
 import { resultLink, useResultNavigation } from "./useResultNavigation";
+import { orderResultRows } from "./resultRanking";
 import { ResultRow } from "./ResultRow";
 import { useReportEditor } from "./useReportEditor";
 import { ReportsPanel } from "./ReportsPanel";
@@ -698,25 +699,19 @@ export default function App({ connection }: { connection?: LiveConnection }) {
     (w) => `week:${w.week}` === visibleResultNight,
   );
   const latestNight = results.nights.find((n) => n.night === night);
-  const resultRows = (
+  const resultRows = orderResultRows(
     visibleResultNight === "season"
       ? results.players
       : (selectedWeek?.players ??
-        results.nights.find((n) => n.night === visibleResultNight)?.players ??
-        [])
-  )
-    .filter((r) => selectedWeek || r.played + r.bench > 0)
-    .sort(
-      (a, b) =>
-        a.bench - b.bench ||
-        (
-          a.name ??
-          players.find((p) => p.id === a.id)?.name ??
-          a.id
-        ).localeCompare(
-          b.name ?? players.find((p) => p.id === b.id)?.name ?? b.id,
-        ),
-    );
+          results.nights.find((n) => n.night === visibleResultNight)?.players ??
+          []),
+    visibleResultNight === "season"
+      ? "season"
+      : selectedWeek
+        ? "week"
+        : "night",
+    (row) => row.name ?? players.find((p) => p.id === row.id)?.name ?? row.id,
+  );
   const resultSelectionReady =
     !connection?.resultsPending && !connection?.resultsError;
   useEffect(() => {
@@ -1540,6 +1535,16 @@ export default function App({ connection }: { connection?: LiveConnection }) {
                             player={player}
                             row={row}
                             index={i}
+                            rank={
+                              visibleResultNight === "season"
+                                ? row.ranking?.rank
+                                : undefined
+                            }
+                            benchRatio={
+                              visibleResultNight === "season"
+                                ? row.ranking?.ratio
+                                : undefined
+                            }
                             expanded={expandedPlayer === row.id}
                             onExpand={() =>
                               setExpandedPlayer(

@@ -1,4 +1,5 @@
 import { useId } from "react";
+import { rankingRatioLabel } from "./resultRanking";
 import { ArrowRight, ChevronDown, ChevronRight, Settings2 } from "lucide-react";
 import {
   minutes,
@@ -14,6 +15,8 @@ export function ResultRow({
   expanded,
   onExpand,
   onEdit,
+  rank,
+  benchRatio,
 }: {
   player: Player;
   row: PlayerResult | WeeklyPlayerResult;
@@ -21,13 +24,17 @@ export function ResultRow({
   expanded: boolean;
   onExpand: () => void;
   onEdit?: () => void;
+  rank?: number;
+  benchRatio?: number | null;
 }) {
   const total = row.played + row.bench;
   const detailId = useId();
   return (
     <>
       <tr>
-        <td className="muted rank">{String(index + 1).padStart(2, "0")}</td>
+        <td className="muted rank">
+          {String(rank ?? index + 1).padStart(2, "0")}
+        </td>
         <td>
           <button
             className="result-name"
@@ -114,6 +121,12 @@ export function ResultRow({
                     ? "Officer adjustment applied"
                     : "Automatically inferred"}
                 </strong>
+              </span>
+            )}
+            {benchRatio !== undefined && (
+              <span>
+                Bench:played ratio{" "}
+                <strong>{rankingRatioLabel(benchRatio)}</strong>
               </span>
             )}
             {onEdit && (

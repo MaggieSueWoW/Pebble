@@ -320,6 +320,18 @@ def calculate_snapshot(
     for player in totals:
         if player["name"] in attendance:
             player["attendance"] = attendance[player["name"]]
+    rankings = {
+        row["main"]: {
+            "rank": row["rank"],
+            "played": row["played_min"],
+            "bench": row["bench_min"],
+            "ratio": row["bench_to_played_ratio"],
+        }
+        for row in db.bench_rankings.find({}, {"_id": 0})
+    }
+    for player in totals:
+        # Ranking eligibility/order belongs to the established calculation, not the UI.
+        player["ranking"] = rankings.get(player["name"])
     nights = []
     warnings = []
     for night, q in sorted(qa.items(), reverse=True):

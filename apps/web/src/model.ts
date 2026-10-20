@@ -49,6 +49,13 @@ export function playerDetails(player: {
 }
 
 export type PlayerResult = {
+  /** Season-only established ranking; null means explicitly excluded. */
+  ranking?: {
+    rank: number;
+    played: number;
+    bench: number;
+    ratio: number | null;
+  } | null;
   name?: string;
   className?: string;
   role?: string;
