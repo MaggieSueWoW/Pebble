@@ -316,6 +316,7 @@ def isolated(tmp_path):
     harness.proxies = proxies
     harness.wcl = wcl
     harness.season = season
+    harness.config = cfg
     try:
         with MongoClient(mongo_uri, serverSelectionTimeoutMS=2000) as mongo:
             mongo.admin.command("ping")
@@ -452,3 +453,17 @@ def test_permanent_wcl_failure_is_actionable_and_sanitized(isolated):
     assert "WCL accessibility" in ref.get().to_dict()["error"]
     assert isolated.wcl.requests == 1
     assert "PRIVATE" not in isolated.log_text()
+
+
+def test_redis_credentials_fail_with_cache_diagnostic_without_wcl_or_retry(isolated):
+    isolated.config["redis"]["url"] = isolated.config["redis"]["url"].replace(
+        "redis://", "redis://:fake-test-password@", 1
+    )
+    isolated.start()
+    ref = isolated.queue("cache-access-denied")
+    wait_for(lambda: isolated.status("cache-access-denied") == "failed")
+    assert "Redis access denied" in ref.get().to_dict()["error"]
+    assert "WCL" not in ref.get().to_dict()["error"]
+    assert "fake-test-password" not in isolated.log_text()
+    assert "Worker dependency unavailable" not in isolated.log_text()
+    assert isolated.wcl.requests == 0

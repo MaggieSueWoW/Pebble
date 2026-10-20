@@ -221,6 +221,10 @@ def calculate_snapshot(
             except Exception as exc:
                 if retryable(exc):
                     raise
+                if isinstance(exc, (AuthenticationError, AuthorizationError)):
+                    raise InputError(
+                        "Redis access denied. Check worker cache credentials, then run again."
+                    ) from None
                 raise InputError(
                     f"Could not fetch report {code}. Check its code and WCL accessibility, then run again."
                 ) from exc
@@ -430,17 +434,21 @@ class Worker:
             .limit(1)
         )
 
-    def claim(self, ref):
+    def claim(self, ref, stop: threading.Event | None = None):
         """Transactionally claim a queued request after checking officer access."""
 
         @firestore.transactional
         def claim(tx):
             run = ref.get(transaction=tx, **RPC_OPTIONS).to_dict()
-            if run.get("status") != "queued":
+            if run.get("status") != "queued" or (stop is not None and stop.is_set()):
                 return False
             officer = self.client.document(
                 f"officers/{run.get('requestedBy', '')}"
             ).get(transaction=tx, **RPC_OPTIONS)
+            # A stop may arrive while either transaction read is in flight.
+            # Leave the request queued instead of accepting new work to drain.
+            if stop is not None and stop.is_set():
+                return False
             if not officer.exists or not officer.to_dict().get("enabled"):
                 tx.update(
                     ref,
@@ -477,7 +485,7 @@ class Worker:
 
         try:
             with run_deadline(self.config.run_timeout_seconds):
-                if not self.claim(ref):
+                if not self.claim(ref, stop=stop):
                     return True
                 self.current_run = ref.id
                 self.compute(ref)

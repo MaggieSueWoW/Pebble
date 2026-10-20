@@ -7,7 +7,8 @@ in this work requires restarting the legacy Sheets bot or its dependencies.
 ## Run and publication contract
 
 The main thread alone drains requests serially; Firestore callbacks only wake it.
-Before claiming each queued request, the worker rechecks officer access. It records
+Before claiming each queued request, the worker rechecks officer access. A shutdown
+received during the claim reads leaves that request queued. It records
 the input snapshot, versions, digest and engine version, then updates progress
 at stage boundaries. It stages output under the run ID and commits the complete
 result, public pointer and successful status in one transaction.
@@ -25,7 +26,8 @@ resolves interrupted claims before draining again, and resumes from the queue's
 initial snapshot. SDK stream reconnection also delivers events missed while offline.
 An interrupted calculation is marked failed with a rerun instruction; it is not
 automatically recomputed. Permanent source/input errors fail the request with a
-sanitized actionable message. Fatal loop errors stop the heartbeat and exit nonzero.
+sanitized actionable message. Cache credential failures identify Redis rather than
+misreporting a WCL access problem. Fatal loop errors stop the heartbeat and exit nonzero.
 
 Exceptions are logged by class/run ID, not raw exception text or tracebacks.
 Schema errors, private input values, service-response bodies and credential-bearing

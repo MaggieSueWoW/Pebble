@@ -99,8 +99,8 @@ def test_service_failure_at_each_boundary_preserves_complete_pointer(
         elif boundary == "claim-ack":
             claim = worker.claim
 
-            def lost_ack(ref):
-                claim(ref)
+            def lost_ack(ref, **kwargs):
+                claim(ref, **kwargs)
                 raise ServiceUnavailable("PRIVATE DATA")
 
             patch.setattr(worker, "claim", lost_ack)
@@ -332,6 +332,36 @@ def test_sigterm_during_queue_read_does_not_claim_new_work(config, monkeypatch):
     monkeypatch.setattr(worker, "claim", Mock())
     assert not worker.process_next(stop=stop)
     worker.claim.assert_not_called()
+
+
+@pytest.mark.parametrize("boundary", ["request", "officer"])
+def test_sigterm_during_claim_reads_leaves_request_queued(
+    prepared, monkeypatch, boundary
+):
+    worker, season, pointer = prepared
+    ref = queue(season, "stop-during-claim")
+    stop = threading.Event()
+    original_get = DocumentReference.get
+
+    def get(document, *args, **kwargs):
+        value = original_get(document, *args, **kwargs)
+        if kwargs.get("transaction") is not None and (
+            document.path == ref.path
+            if boundary == "request"
+            else document.path == "officers/test-officer"
+        ):
+            stop.set()
+        return value
+
+    with monkeypatch.context() as patch:
+        patch.setattr(DocumentReference, "get", get)
+        assert worker.process_next(stop=stop)
+    assert ref.get().to_dict()["status"] == "queued"
+    assert "startedAt" not in ref.get().to_dict()
+    assert pointer.get().to_dict()["latestRunId"] == "baseline"
+    assert worker.current_run is None
+    assert worker.process_next()
+    assert ref.get().to_dict()["status"] == "succeeded"
 
 
 @pytest.mark.parametrize(
