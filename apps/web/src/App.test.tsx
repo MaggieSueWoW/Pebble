@@ -5,6 +5,7 @@ import {
   fireEvent,
   render,
   screen,
+  waitFor,
 } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import App from "./App";
@@ -46,6 +47,8 @@ function connection(players: Player[] = []): LiveConnection {
     versions: {},
     unprocessed: false,
     error: "",
+    accessError: "",
+    retryAccess: vi.fn(),
     busy: false,
     hasResults: false,
     submitting: false,
@@ -310,4 +313,57 @@ it("keeps a pending save on its date until acknowledgement and afterwards", asyn
   await act(async () => finish({ "availabilityOverrides/2026-10-14_a": 1 }));
   expect(raidDate().value).toBe("2026-10-14");
   expect(c.saveInputs).toHaveBeenCalledTimes(1);
+});
+
+it.each([
+  ["auth/popup-blocked", /browser blocked Google sign-in/],
+  ["auth/popup-closed-by-user", /sign-in was cancelled/],
+  ["auth/unauthorized-domain", /authorize this hostname/],
+  ["auth/network-request-failed", /Check your connection/],
+])(
+  "recovers from %s without displaying an SDK payload",
+  async (code, message) => {
+    const c = connection();
+    c.officer = false;
+    c.signIn = vi
+      .fn()
+      .mockRejectedValue(
+        Object.assign(new Error("PRIVATE account-token payload"), { code }),
+      );
+    render(<App connection={c} />);
+    fireEvent.click(screen.getByRole("button", { name: "Officer sign-in" }));
+    await waitFor(() => expect(screen.getByText(message)).toBeTruthy());
+    expect(screen.queryByText(/PRIVATE account-token/)).toBeNull();
+    expect(
+      (
+        screen.getByRole("button", {
+          name: "Officer sign-in",
+        }) as HTMLButtonElement
+      ).disabled,
+    ).toBe(false);
+  },
+);
+it("offers wrong-account switching and handles sign-out failure without losing the current session", async () => {
+  const c = connection();
+  c.officer = false;
+  c.user = {
+    uid: "example-member",
+    displayName: "Example member",
+  } as NonNullable<LiveConnection["user"]>;
+  c.signOut = vi.fn().mockRejectedValue(new Error("PRIVATE sign-out payload"));
+  render(<App connection={c} />);
+  fireEvent.click(
+    screen.getByRole("button", { name: "Switch Google account" }),
+  );
+  await waitFor(() => expect(c.signIn).toHaveBeenCalledOnce());
+  fireEvent.click(screen.getByRole("button", { name: "Sign out" }));
+  await waitFor(() =>
+    expect(
+      screen.getByText(/Couldn’t complete the account action/),
+    ).toBeTruthy(),
+  );
+  expect(screen.getByText(/Firebase UID:/).textContent).toContain(
+    "example-member",
+  );
+  expect(screen.queryByText(/PRIVATE sign-out/)).toBeNull();
 });

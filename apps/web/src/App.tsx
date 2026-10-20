@@ -1,3 +1,4 @@
+import { authMessage } from "./authMessages";
 import type { LiveConnection } from "./useFirestore";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
@@ -182,6 +183,21 @@ export default function App({ connection }: { connection?: LiveConnection }) {
   const saved = connection?.saved ?? demoSaved;
   const { inputs, results, history } = saved;
   const canManage = !connection || connection.officer;
+  const [authPending, setAuthPending] = useState(false);
+  const authActionPending = useRef(false);
+  async function accountAction(action: () => Promise<void>) {
+    if (authActionPending.current) return;
+    authActionPending.current = true;
+    setAuthPending(true);
+    try {
+      await action();
+    } catch (error) {
+      notify(authMessage(error), true);
+    } finally {
+      authActionPending.current = false;
+      setAuthPending(false);
+    }
+  }
   const players = connection?.players ?? samplePlayers;
   const todayParts = Object.fromEntries(
     new Intl.DateTimeFormat("en-US", {
@@ -578,9 +594,10 @@ export default function App({ connection }: { connection?: LiveConnection }) {
   ) : (
     <button
       className="button primary"
-      onClick={() => connection?.signIn().catch((e) => notify(e.message, true))}
+      disabled={authPending}
+      onClick={() => connection && void accountAction(connection.signIn)}
     >
-      Officer sign-in
+      {authPending ? "Signing in…" : "Officer sign-in"}
     </button>
   );
   const visibleResultNight = results.nights.some((n) => n.night === resultNight)
@@ -750,13 +767,27 @@ export default function App({ connection }: { connection?: LiveConnection }) {
             {connection?.user && (
               <button
                 className="text-button"
+                disabled={authPending}
                 onClick={() =>
                   guard(() => {
-                    void connection.signOut();
+                    void accountAction(connection.signOut);
                   })
                 }
               >
                 Sign out
+              </button>
+            )}
+            {connection?.user && (
+              <button
+                className="text-button"
+                disabled={authPending}
+                onClick={() =>
+                  guard(() => {
+                    void accountAction(connection.signIn);
+                  })
+                }
+              >
+                Switch Google account
               </button>
             )}
           </div>
@@ -794,12 +825,22 @@ export default function App({ connection }: { connection?: LiveConnection }) {
           {connection?.error && (
             <Notice tone="amber">{connection.error}</Notice>
           )}
-          {connection?.user && !connection.officer && (
-            <Notice>
-              This account does not have officer access. Firebase UID:{" "}
-              {connection.user.uid}
+          {connection?.accessError && (
+            <Notice tone="amber">
+              <span role="alert">{connection.accessError}</span>{" "}
+              <button className="text-button" onClick={connection.retryAccess}>
+                Retry officer access
+              </button>
             </Notice>
           )}
+          {connection?.user &&
+            !connection.officer &&
+            !connection.accessError && (
+              <Notice>
+                This account does not have officer access. Firebase UID:{" "}
+                {connection.user.uid}
+              </Notice>
+            )}
           {connection?.resultsError && (
             <Notice tone="amber">
               <span role="alert">{connection.resultsError}</span>{" "}
