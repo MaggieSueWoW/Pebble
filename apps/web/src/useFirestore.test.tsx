@@ -175,6 +175,17 @@ beforeEach(() => {
   mock.getDocs.mockReset();
   mock.setDoc.mockReset();
   mock.transaction.mockReset();
+  mock.transaction.mockImplementation(async (_db, callback) => {
+    const writes: Promise<unknown>[] = [];
+    const result = await callback({
+      get: mock.getDoc,
+      set: (ref: unknown, data: unknown) => {
+        writes.push(Promise.resolve(mock.setDoc(ref, data)));
+      },
+    });
+    await Promise.all(writes);
+    return result;
+  });
   vi.spyOn(window, "scrollTo").mockImplementation(() => {});
   HTMLDialogElement.prototype.close = vi.fn();
   HTMLDialogElement.prototype.showModal = vi.fn();
@@ -533,7 +544,18 @@ describe("run submission", () => {
     login();
     grant();
     loadPrivate();
-    send("seasons/test/runs");
+    send(
+      "seasons/test/runs",
+      {},
+      {
+        prior: {
+          status: "failed",
+          requestedAt: stamp(),
+          completedAt: stamp(),
+          error: "Prior failure",
+        },
+      },
+    );
     await publicResults();
     const lookup = deferred<Snapshot>();
     mock.getDoc.mockReturnValueOnce(lookup.promise);
@@ -545,9 +567,19 @@ describe("run submission", () => {
         }) as HTMLButtonElement
       ).disabled,
     ).toBe(true);
-    expect(screen.getByRole("status", { name: "" }).textContent).toContain(
-      "Waiting for the server to confirm",
-    );
+    expect(
+      screen.getByRole("status", { name: "Run status" }).textContent,
+    ).toContain("Waiting for the server to confirm");
+    expect(
+      screen
+        .getByRole("status", { name: "Run status" })
+        .classList.contains("is-running"),
+    ).toBe(true);
+    expect(
+      screen
+        .getByRole("status", { name: "Run status" })
+        .classList.contains("has-error"),
+    ).toBe(false);
     await act(async () => {
       lookup.resolve(missing());
     });
@@ -912,16 +944,16 @@ describe("public result loading", () => {
         },
       },
     );
-    expect(screen.getByRole("status", { name: "" }).textContent).toContain(
-      "Loading latest results",
-    );
+    expect(
+      screen.getByRole("status", { name: "Run status" }).textContent,
+    ).toContain("Loading latest results");
     expect(screen.queryByText("Results updated")).toBeNull();
     const pending = deferred<Snapshot>();
     mock.getDoc.mockReturnValueOnce(pending.promise);
     send("publicSeasons/test", { latestRunId: "new" });
-    expect(screen.getByRole("status", { name: "" }).textContent).toContain(
-      "Loading latest results",
-    );
+    expect(
+      screen.getByRole("status", { name: "Run status" }).textContent,
+    ).toContain("Loading latest results");
     await act(async () => {
       pending.resolve(completed());
     });
@@ -929,9 +961,9 @@ describe("public result loading", () => {
     send("seasons/test/runs/new", {
       inputVersions: { "reports/aB3dE6gH9jK2mN5p": 2 },
     });
-    expect(screen.getByRole("status", { name: "" }).textContent).toContain(
-      "Changes ready for the next run",
-    );
+    expect(
+      screen.getByRole("status", { name: "Run status" }).textContent,
+    ).toContain("Changes ready for the next run");
     expect(screen.queryByText("Loading latest results…")).toBeNull();
   });
 

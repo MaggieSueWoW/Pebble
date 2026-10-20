@@ -58,8 +58,9 @@ This starts a separate Vite server on port 5174 and Auth/Firestore emulators on
 9199/8180 using `firebase.browser.json`. It always uses the
 `demo-pebble-reports` project and synthetic officers/reports, overriding local
 Firebase configuration. It clears only that isolated emulator's Firestore data;
-keep these ports free. No worker is started, and tests assert that no runs were
-queued. Failure traces stay in ignored `test-results/`.
+keep these ports free. No worker is started. Editor tests assert zero run requests;
+run-submission tests create only their expected synthetic requests in this demo
+project. Failure traces stay in ignored `test-results/`.
 
 Coverage includes report validation/deduplication, add/re-enable, selection
 save/cancel, delayed and denied saves, concurrent version conflicts, draft
@@ -76,3 +77,11 @@ and night/tab/page navigation. It also checks Pacific daylight-saving validation
 wall-time presentation in a non-Pacific browser timezone, narrow-screen keyboard
 operation and standalone sample mode. Timing cases verify reports, availability,
 other nights and the empty run queue stay unchanged.
+
+
+Run-submission coverage includes held/repeated clicks, denied writes, a committed
+request whose acknowledgement is replaced with an error, retry without duplicate
+creation, offline heartbeat messaging, progress stages, terminal failure and
+tracking beyond the recent-history limit. Test fixtures advance the emulator queue
+and heartbeat; they never start or contact a worker. Previous completed results
+and unrelated input versions are checked throughout these cases.
