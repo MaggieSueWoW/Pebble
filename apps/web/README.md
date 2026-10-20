@@ -207,3 +207,26 @@ and save. Saves use the document version, preserve stale drafts on conflicts and
 leave results unchanged until Run Pebble. Public and sample views do not expose
 this editor. Unit and isolated browser tests cover defaults, validation, guarded
 navigation, targeted saves, conflict recovery and narrow layouts.
+
+
+Result links identify a view within the deployment's configured season:
+
+- `?view=results&period=season` — season totals.
+- `?view=results&period=2026-10-14` — a recorded raid night.
+- `?view=results&period=week%3A2026-10-13` — a recorded game week.
+- Add `&player=player-id` to expand that published player's details.
+
+The existing selector and detail controls update browser history; refresh and
+Back/Forward restore the selection. Linked selections wait through pending reads
+and read failures. After completed results are ready, missing periods fall back
+to season totals and missing players to the period's full table, with an explicit
+message. Links follow the latest completed publication rather than pinning a run.
+
+Copy result link copies only the public view/period/player selection. Connected
+links exclude sample mode, configuration and auth parameters; explicit sample
+mode produces a sample link. The existing draft dialog and pending-save guard
+also protect browser Back/Forward, keeping both the editor and address unchanged
+when navigation is canceled or a save is still pending. Result navigation and
+sharing create no input writes or run requests. UI-3 still tracks attendance and
+possible time, weekly P/B/O, richer safe availability/source explanations, private
+night diagnostics and final parity acceptance.

@@ -83,6 +83,7 @@ function overrides() {
   fireEvent.click(screen.getByRole("button", { name: "Overrides" }));
 }
 beforeEach(() => {
+  window.history.replaceState(null, "", "/");
   vi.spyOn(window, "scrollTo").mockImplementation(() => {});
   HTMLDialogElement.prototype.close = vi.fn();
   HTMLDialogElement.prototype.showModal = vi.fn();
@@ -749,4 +750,81 @@ it("shows stored weekly rows, keeps zero time and omits per-night availability a
   c.saved.results = { ...c.saved.results, weeks: [] };
   rerender(<App connection={{ ...c }} />);
   expect((period as HTMLSelectElement).value).toBe("season");
+});
+
+it("retains a linked result selection through pending reads and failures until matching results arrive", () => {
+  history.replaceState(null, "", "/?view=results&period=2026-10-15&player=a");
+  const c = connection([alpha]);
+  c.resultsPending = true;
+  const { rerender } = render(<App connection={c} />);
+  expect(location.search).toContain("period=2026-10-15");
+  rerender(
+    <App
+      connection={{
+        ...c,
+        resultsPending: false,
+        resultsError: "Read unavailable",
+      }}
+    />,
+  );
+  expect(location.search).toContain("player=a");
+  const row = {
+    id: "a",
+    name: alpha.name,
+    played: 60,
+    bench: 30,
+    prePlayed: 10,
+    postPlayed: 50,
+    preBench: 10,
+    postBench: 20,
+    overridden: false,
+    nights: 1,
+  };
+  c.saved.results = {
+    ...c.saved.results,
+    nights: [
+      {
+        night: "2026-10-15",
+        duration: 90,
+        reports: 1,
+        timing: { start: "", breakStart: "", breakEnd: "", end: "", notes: "" },
+        players: [row],
+      },
+    ],
+    players: [row],
+  };
+  rerender(
+    <App connection={{ ...c, hasResults: true, resultsPending: false }} />,
+  );
+  expect(
+    (
+      screen.getByRole("combobox", {
+        name: "Result period",
+      }) as HTMLSelectElement
+    ).value,
+  ).toBe("2026-10-15");
+  expect(
+    screen.getByRole("region", {
+      name: `Availability breakdown for ${alpha.name}`,
+    }),
+  ).toBeTruthy();
+  expect(screen.queryByText(/This result period is not available/)).toBeNull();
+});
+
+it("explains missing linked periods and players after result readiness", () => {
+  history.replaceState(
+    null,
+    "",
+    "/?view=results&period=2026-01-01&player=missing",
+  );
+  const c = connection();
+  const { unmount } = render(<App connection={c} />);
+  expect(screen.getByText(/This result period is not available/)).toBeTruthy();
+  expect(new URLSearchParams(location.search).get("period")).toBe("season");
+  expect(new URLSearchParams(location.search).has("player")).toBe(false);
+  unmount();
+  history.replaceState(null, "", "/?view=results&period=season&player=missing");
+  render(<App connection={c} />);
+  expect(screen.getByText(/This player is not available/)).toBeTruthy();
+  expect(new URLSearchParams(location.search).has("player")).toBe(false);
 });

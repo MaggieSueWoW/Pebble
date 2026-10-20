@@ -184,6 +184,7 @@ function deferred<T>() {
   return { promise, resolve, reject };
 }
 beforeEach(() => {
+  window.history.replaceState(null, "", "/");
   vi.clearAllMocks();
   mock.getDoc.mockReset();
   mock.getDocs.mockReset();
