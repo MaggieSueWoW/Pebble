@@ -78,6 +78,12 @@ missing class/role labels, and retention of a removed player's draft until expli
 cancel or roster return. The editor waits for pending saves before choosing a
 replacement. An empty officer roster stays separate from historical result players.
 
+Overrides initially selects the newest known report/result night, or today's date
+in Pacific time if none is known. An untouched default follows arriving metadata;
+choosing a date or starting an edit keeps that date selected. Custom dates remain
+available in the picker. Date coverage checks late metadata, ordered options,
+explicit/custom choices, draft-discard guards and held saves on the original night.
+
 
 Timing coverage adds save/cancel/reset, blank and detected values, ordering and
 paired break validation, delayed/denied commits, version conflicts, newer edits,
