@@ -45,6 +45,7 @@ export type LiveConnection = {
   queueReady: boolean;
   queueError: string;
   retryQueue: () => void;
+  resultSources: { code: string; title: string }[];
   resultsPending: boolean;
   resultsError: string;
   retryResults: () => void;
@@ -107,9 +108,11 @@ export function useFirestore(): {
   const [now, setNow] = useState(Date.now());
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  const [consumed, setConsumed] = useState<{ run: string; versions: Versions }>(
-    { run: "", versions: {} },
-  );
+  const [consumed, setConsumed] = useState<{
+    run: string;
+    versions: Versions;
+    sources: { code: string; title: string }[];
+  }>({ run: "", versions: {}, sources: [] });
   const submission = useRef<{
     id: string;
     promise: Promise<void> | null;
@@ -140,7 +143,7 @@ export function useFirestore(): {
     setLoaded([]);
     setRuns([]);
     setQueue({ ready: false, error: "", runs: [] });
-    setConsumed({ run: "", versions: {} });
+    setConsumed({ run: "", versions: {}, sources: [] });
     setHeartbeat(0);
     submission.current = null;
     setSubmitting(false);
@@ -416,7 +419,7 @@ export function useFirestore(): {
     };
   }, [officer, accessGeneration, submittedRun?.id, fail, accessFailed]);
   useEffect(() => {
-    setConsumed({ run: "", versions: {} });
+    setConsumed({ run: "", versions: {}, sources: [] });
     if (!officer || !resultRun || !authorized.current) return;
     const own = session.current;
     let alive = true;
@@ -425,11 +428,20 @@ export function useFirestore(): {
     const stop = onSnapshot(
       doc(db!, "seasons", seasonId, "runs", resultRun),
       (snapshot) => {
-        if (current())
+        if (current()) {
+          const summaries: Record<string, DocumentData> =
+            snapshot.data()?.reportSummaries ?? {};
           setConsumed({
             run: resultRun,
             versions: snapshot.data()?.inputVersions ?? {},
+            sources: Object.entries(summaries)
+              .map(([code, summary]) => ({
+                code,
+                title: summary.title?.trim() || code,
+              }))
+              .sort((a, b) => a.code.localeCompare(b.code)),
           });
+        }
       },
       (e) => {
         if (!current()) return;
@@ -731,6 +743,8 @@ export function useFirestore(): {
       queueReady: queue.ready,
       queueError: queue.error,
       retryQueue: () => setQueueAttempt((old) => old + 1),
+      resultSources:
+        officer && consumed.run === resultRun ? consumed.sources : [],
       resultsPending: publicResults.loading || unseenSuccess,
       resultsError: publicResults.error,
       retryResults: publicResults.retry,

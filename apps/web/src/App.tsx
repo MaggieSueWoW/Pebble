@@ -14,6 +14,7 @@ import {
   CircleAlert,
   Clock3,
   FileText,
+  ExternalLink,
   FlaskConical,
   Info,
   LoaderCircle,
@@ -1234,6 +1235,28 @@ export default function App({ connection }: { connection?: LiveConnection }) {
                         <li key={index}>{warning}</li>
                       ))}
                     </ul>
+                    {connection?.officer &&
+                      connection.resultSources.length > 0 && (
+                        <section aria-labelledby="warning-sources-title">
+                          <h3 id="warning-sources-title">
+                            Source reports for this run
+                          </h3>
+                          <ul>
+                            {connection.resultSources.map((source) => (
+                              <li key={source.code}>
+                                <a
+                                  href={`https://www.warcraftlogs.com/reports/${source.code}`}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                >
+                                  {source.title}{" "}
+                                  <ExternalLink size={12} aria-hidden="true" />
+                                </a>
+                              </li>
+                            ))}
+                          </ul>
+                        </section>
+                      )}
                   </div>
                 </section>
               )}

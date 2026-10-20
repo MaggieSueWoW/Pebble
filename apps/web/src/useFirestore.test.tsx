@@ -975,6 +975,68 @@ describe("run submission", () => {
 });
 
 describe("public result loading", () => {
+  it("keeps source reports tied to the displayed run and clears them on replacement/access loss", async () => {
+    const { result } = renderHook(useFirestore);
+    login();
+    grant();
+    await publicResults();
+    const old = latest("seasons/test/runs/ready");
+    send("seasons/test/runs/ready", {
+      reportSummaries: {
+        AAAAAAAAAAAAAAAA: { title: "Original source" },
+        BBBBBBBBBBBBBBBB: { title: "  " },
+      },
+    });
+    expect(result.current.connection.resultSources).toEqual([
+      { code: "AAAAAAAAAAAAAAAA", title: "Original source" },
+      { code: "BBBBBBBBBBBBBBBB", title: "BBBBBBBBBBBBBBBB" },
+    ]);
+    send(
+      "seasons/test/runs",
+      {},
+      {
+        newer: {
+          reportSummaries: {
+            CCCCCCCCCCCCCCCC: { title: "Unpublished source" },
+          },
+        },
+      },
+    );
+    expect(result.current.connection.resultSources[0].title).toBe(
+      "Original source",
+    );
+    const players = deferred<Snapshot>();
+    mock.getDoc.mockResolvedValueOnce(completed());
+    mock.getDocs.mockReturnValueOnce(players.promise);
+    send("publicSeasons/test", { latestRunId: "new" });
+    await act(async () => {});
+    expect(result.current.connection.resultSources[0].title).toBe(
+      "Original source",
+    );
+    await act(async () => players.resolve(snap()));
+    expect(result.current.connection.resultSources).toEqual([]);
+    act(() =>
+      old.next(
+        snap({
+          reportSummaries: { AAAAAAAAAAAAAAAA: { title: "Stale source" } },
+        }),
+      ),
+    );
+    expect(result.current.connection.resultSources).toEqual([]);
+    send("seasons/test/runs/new", {
+      reportSummaries: { CCCCCCCCCCCCCCCC: { title: "New source" } },
+    });
+    expect(result.current.connection.resultSources).toEqual([
+      { code: "CCCCCCCCCCCCCCCC", title: "New source" },
+    ]);
+    revoke();
+    expect(result.current.connection.resultSources).toEqual([]);
+    expect(result.current.connection.saved.results.signature).toBe("new");
+    grant();
+    send("seasons/test/runs/new");
+    expect(result.current.connection.resultSources).toEqual([]);
+  });
+
   it("keeps warnings with the completed view through failed reads, retry and clearing", async () => {
     const { result } = renderHook(useFirestore);
     mock.getDoc.mockResolvedValueOnce(
