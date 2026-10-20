@@ -37,6 +37,8 @@ function connection(players: Player[] = []): LiveConnection {
       results: { ...saved.results, players: [], nights: [] },
     },
     players,
+    roster: [],
+    savePlayer: vi.fn(),
     nights: [],
     user: null,
     officer: true,
