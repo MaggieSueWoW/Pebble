@@ -146,8 +146,9 @@ test("public recorded explanations and officer-only diagnostics survive selectio
     .getByRole("combobox", { name: "Result period" })
     .selectOption(night);
   await expect(diagnostics).toBeVisible();
+  await page.setViewportSize({ width: 1280, height: 900 });
   await page
-    .getByRole("button", { name: "Sign out to switch accounts" })
+    .getByRole("button", { name: "Sign out", exact: true })
     .click();
   await expect(diagnostics).toHaveCount(0);
   await expect(
