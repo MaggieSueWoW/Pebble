@@ -55,6 +55,8 @@ import { useAvailabilityEditor } from "./useAvailabilityEditor";
 import { TimingEditor } from "./TimingEditor";
 import { OverrideTabs } from "./OverrideTabs";
 import { useTimingEditor } from "./useTimingEditor";
+import { CharacterMappingsPanel } from "./CharacterMappingsPanel";
+import { useCharacterEditor } from "./useCharacterEditor";
 import { RosterPanel } from "./RosterPanel";
 import { useRosterEditor } from "./useRosterEditor";
 import { blankTiming } from "./timing";
@@ -386,7 +388,20 @@ export default function App({ connection }: { connection?: LiveConnection }) {
     Boolean(connection?.busy),
     Boolean(connection?.officer),
   );
+  const characterEditor = useCharacterEditor(
+    connection?.characters ?? [],
+    connection?.roster ?? [],
+    async (id, value, expected) => {
+      if (!connection)
+        throw new Error("Character mappings require an officer connection.");
+      return connection.saveCharacter(id, value, expected);
+    },
+    Boolean(connection?.busy),
+    Boolean(connection?.officer),
+  );
   const unsaved =
+    characterEditor.dirty ||
+    characterEditor.saving ||
     rosterEditor.dirty ||
     rosterEditor.saving ||
     reportEditor.dirty ||
@@ -538,9 +553,11 @@ export default function App({ connection }: { connection?: LiveConnection }) {
     availabilityEditor.cancel();
     timingEditor.cancel();
     rosterEditor.cancel();
+    characterEditor.cancel();
   }
   function guard(action: () => void) {
     if (
+      characterEditor.saving ||
       rosterEditor.saving ||
       reportEditor.saving ||
       availabilityEditor.saving ||
@@ -1125,15 +1142,27 @@ export default function App({ connection }: { connection?: LiveConnection }) {
             </>
           )}
           {page === "roster" && connection?.officer && (
-            <RosterPanel
-              roster={connection.roster}
-              editor={rosterEditor}
-              select={(id) => {
-                if (id !== rosterEditor.id)
-                  guard(() => rosterEditor.select(id));
-              }}
-              add={() => guard(rosterEditor.add)}
-            />
+            <>
+              <RosterPanel
+                roster={connection.roster}
+                editor={rosterEditor}
+                select={(id) => {
+                  if (id !== rosterEditor.id)
+                    guard(() => rosterEditor.select(id));
+                }}
+                add={() => guard(rosterEditor.add)}
+              />
+              <CharacterMappingsPanel
+                characters={connection.characters}
+                roster={connection.roster}
+                editor={characterEditor}
+                select={(id) => {
+                  if (id !== characterEditor.id)
+                    guard(() => characterEditor.select(id));
+                }}
+                add={() => guard(characterEditor.add)}
+              />
+            </>
           )}
           {page === "overrides" && (
             <>

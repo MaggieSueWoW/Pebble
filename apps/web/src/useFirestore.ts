@@ -25,11 +25,24 @@ import { usePublicResults } from "./usePublicResults";
 
 import { validatePlayer, type RosterEntry, type RosterValue } from "./roster";
 
+import {
+  normalizeCharacter,
+  validateCharacter,
+  type CharacterEntry,
+  type CharacterValue,
+} from "./characters";
+
 export type Versions = Record<string, number>;
 export type LiveConnection = {
   saved: Saved;
   players: Player[];
   roster: RosterEntry[];
+  characters: CharacterEntry[];
+  saveCharacter: (
+    id: string,
+    value: CharacterValue,
+    expected: number,
+  ) => Promise<number>;
   savePlayer: (
     id: string,
     value: RosterValue,
@@ -545,6 +558,23 @@ export function useFirestore(): {
       version: d.version ?? 0,
     }))
     .sort((a, b) => a.name.localeCompare(b.name));
+  const characterEntries: CharacterEntry[] = Object.entries(
+    documents.characters ?? {},
+  )
+    .map(([id, data]) => ({
+      id,
+      name: data.name,
+      realm: data.realm,
+      region: data.region,
+      playerId: data.playerId,
+      version: data.version,
+    }))
+    .sort(
+      (a, b) =>
+        a.name.localeCompare(b.name) ||
+        a.realm.localeCompare(b.realm) ||
+        a.region.localeCompare(b.region),
+    );
   const publicPlayers = results.players as (Results["players"][number] &
     Player)[];
   const allPlayers = officer
@@ -671,6 +701,50 @@ export function useFirestore(): {
       if (accessSession === session.current) setBusy(false);
     }
   }
+  async function saveCharacter(
+    id: string,
+    raw: CharacterValue,
+    expected: number,
+  ) {
+    assertAccess();
+    const value = normalizeCharacter(raw);
+    if (!/^[A-Za-z0-9_-]{1,100}$/.test(id))
+      throw new Error("Invalid character mapping ID.");
+    const invalid = validateCharacter(
+      value,
+      characterEntries,
+      rosterEntries,
+      id,
+    );
+    if (invalid) throw new Error(invalid);
+    setBusy(true);
+    setError("");
+    try {
+      return await runTransaction(db!, async (transaction) => {
+        assertAccess();
+        const ref = doc(db!, "seasons", seasonId, "characters", id);
+        const snapshot = await transaction.get(ref);
+        assertAccess();
+        const actual = snapshot.data()?.version ?? 0;
+        if (actual !== expected)
+          throw new Error(
+            "Another officer changed this mapping. Cancel your edits to reload, then try again.",
+          );
+        transaction.set(ref, {
+          ...value,
+          version: actual + 1,
+          updatedBy: user!.uid,
+          updatedAt: serverTimestamp(),
+        });
+        return actual + 1;
+      });
+    } catch (e) {
+      if (accessSession === session.current) fail(e as Error);
+      throw e;
+    } finally {
+      if (accessSession === session.current) setBusy(false);
+    }
+  }
   async function requestRun() {
     assertAccess();
     const prior = submission.current;
@@ -772,6 +846,8 @@ export function useFirestore(): {
       saved,
       players: allPlayers,
       roster: rosterEntries,
+      characters: characterEntries,
+      saveCharacter,
       savePlayer,
       nights: results.nights.map((n) => n.night),
       user,
