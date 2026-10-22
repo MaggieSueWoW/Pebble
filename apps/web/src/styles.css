@@ -2981,8 +2981,13 @@ tbody tr:last-child td {
 .delete-alt-confirm p {
   margin: 0 0 8px;
 }
-.delete-alt-confirm .text-button {
-  margin-right: 14px;
+.delete-alt-confirm .button {
+  margin-right: 8px;
+  margin-bottom: 4px;
+}
+.delete-alt-confirm .button.danger:hover:not(:disabled) {
+  background: #9b3543;
+  border-color: #ed9e9e;
 }
 .merged-roster-details .roster-alts-panel .roster-fields {
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 70px;

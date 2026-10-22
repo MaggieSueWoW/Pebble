@@ -174,7 +174,7 @@ export function CharacterMappingsPanel({
                   <p>Delete {alt.name} from this main?</p>
                   {deleteError && <p role="alert">{deleteError}</p>}
                   <button
-                    className="text-button"
+                    className="button danger compact"
                     disabled={
                       deleting ||
                       editor.blocked ||
@@ -201,7 +201,7 @@ export function CharacterMappingsPanel({
                     {deleting ? "Deleting…" : "Confirm delete alt"}
                   </button>
                   <button
-                    className="text-button"
+                    className="button secondary compact"
                     disabled={deleting}
                     onClick={() => setConfirmId(null)}
                   >
