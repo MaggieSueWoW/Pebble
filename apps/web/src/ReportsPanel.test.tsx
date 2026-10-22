@@ -60,3 +60,41 @@ it("uses code/title and timestamp fallbacks while metadata updates preserve sele
   expect(container.querySelector("time")).toBeNull();
   expect(save).not.toHaveBeenCalled();
 });
+
+it("sorts raid nights oldest first, reverses on click and keeps unfetched reports last", () => {
+  const reports = [
+    { ...report, code: "CCCCCCCCCCCCCCCC", night: "2026-10-21" },
+    { ...report, code: "BBBBBBBBBBBBBBBB", night: "", fetched: false },
+    { ...report, code: "DDDDDDDDDDDDDDDD", night: "2026-10-14" },
+    {
+      ...report,
+      code: "AAAAAAAAAAAAAAAA",
+      night: "2026-10-14",
+      enabled: false,
+    },
+  ];
+  render(<Panel reports={reports} />);
+  const order = () =>
+    screen
+      .getAllByRole("switch")
+      .map((button) => button.getAttribute("aria-label"));
+  const header = screen.getByRole("columnheader", { name: "Raid night (PT)" });
+  expect(header.getAttribute("aria-sort")).toBe("ascending");
+  expect(order()).toEqual([
+    "Include AAAAAAAAAAAAAAAA",
+    "Include DDDDDDDDDDDDDDDD",
+    "Include CCCCCCCCCCCCCCCC",
+    "Include BBBBBBBBBBBBBBBB",
+  ]);
+  fireEvent.click(screen.getByRole("button", { name: "Raid night (PT)" }));
+  expect(header.getAttribute("aria-sort")).toBe("descending");
+  expect(order()).toEqual([
+    "Include CCCCCCCCCCCCCCCC",
+    "Include AAAAAAAAAAAAAAAA",
+    "Include DDDDDDDDDDDDDDDD",
+    "Include BBBBBBBBBBBBBBBB",
+  ]);
+  fireEvent.click(screen.getByRole("button", { name: "Raid night (PT)" }));
+  expect(header.getAttribute("aria-sort")).toBe("ascending");
+  expect(save).not.toHaveBeenCalled();
+});

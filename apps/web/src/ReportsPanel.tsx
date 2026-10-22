@@ -8,7 +8,8 @@ import {
 } from "lucide-react";
 import { demoCode, formatDate, type Report } from "./model";
 import type { ReportEditor } from "./useReportEditor";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
+import { SortButton } from "./SortButton";
 function Badge({ children, tone }: { children: ReactNode; tone: string }) {
   return <span className={`badge ${tone}`}>{children}</span>;
 }
@@ -21,6 +22,19 @@ export function ReportsPanel({
   editor: ReportEditor;
   demo: boolean;
 }) {
+  const [direction, setDirection] = useState<"ascending" | "descending">(
+    "ascending",
+  );
+  const sortedReports = [...reports].sort((a, b) => {
+    const left = a.fetched ? a.night : "";
+    const right = b.fetched ? b.night : "";
+    if (!left || !right)
+      return left ? -1 : right ? 1 : a.code.localeCompare(b.code);
+    return (
+      (direction === "ascending" ? 1 : -1) * left.localeCompare(right) ||
+      a.code.localeCompare(b.code)
+    );
+  });
   const {
     text: reportText,
     setText: setReportText,
@@ -149,7 +163,17 @@ export function ReportsPanel({
             <thead>
               <tr>
                 <th>Report</th>
-                <th>Raid night (PT)</th>
+                <th scope="col" aria-sort={direction}>
+                  <SortButton
+                    label="Raid night (PT)"
+                    direction={direction}
+                    onClick={() =>
+                      setDirection((current) =>
+                        current === "ascending" ? "descending" : "ascending",
+                      )
+                    }
+                  />
+                </th>
                 <th>Status</th>
                 <th className="align-right">Include</th>
               </tr>
@@ -163,7 +187,7 @@ export function ReportsPanel({
                   </td>
                 </tr>
               )}
-              {reports.map((r) => {
+              {sortedReports.map((r) => {
                 const enabled = includeEdits[r.code] ?? r.enabled;
                 const checkedAt =
                   r.checkedAt && Number.isFinite(Date.parse(r.checkedAt))

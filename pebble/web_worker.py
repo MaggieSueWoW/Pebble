@@ -209,6 +209,7 @@ def calculate_snapshot(
         cache_prefix=config.redis.key_prefix,
     )
     summaries = {}
+    report_participants = {}
     try:
         for code in enabled:
             try:
@@ -249,6 +250,19 @@ def calculate_snapshot(
                 raise InputError(
                     "Report region is missing. Refresh the report cache before resolving character mappings."
                 ) from None
+            # Capture provenance before overlapping fights merge participants.
+            actor_names = {
+                actor["id"]: actor["name"]
+                for actor in (actors_bundle.get("masterData") or {}).get("actors", [])
+                if str(actor.get("type", "")).casefold() == "player"
+            }
+            report_participants[code] = {
+                actor_names[actor_id]
+                for fight in actors_bundle.get("fights", [])
+                if int(fight.get("encounterID") or 0) > 0
+                for actor_id in fight.get("friendlyPlayers") or []
+                if actor_id in actor_names
+            }
             persist_report_fights(db, code, actors_bundle, start, night)
             summaries[code] = {
                 "title": doc["title"],
@@ -378,11 +392,20 @@ def calculate_snapshot(
             }
         )
         if q["not_on_roster_mains"]:
+            warning_index = len(warnings)
+            for code, summary in summaries.items():
+                if summary["night"] == night and report_participants[code].intersection(
+                    q["not_on_roster_mains"]
+                ):
+                    summary.setdefault("warningIndexes", []).append(warning_index)
             warnings.append(
                 f"{night}: unknown characters: {', '.join(q['not_on_roster_mains'])}"
             )
     observed = {r["night_id"] for r in db.reports.find({})}
     for night in sorted(observed - set(qa)):
+        for summary in summaries.values():
+            if summary["night"] == night:
+                summary.setdefault("warningIndexes", []).append(len(warnings))
         warnings.append(
             f"{night}: no Mythic encounters; no bench totals for this night"
         )

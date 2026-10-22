@@ -566,7 +566,16 @@ it.each([true, false])(
     c.hasResults = true;
     c.saved.results.warnings = ["Recorded warning"];
     c.resultSources = [
-      { code: "AAAAAAAAAAAAAAAA", title: "Example source report" },
+      {
+        code: "AAAAAAAAAAAAAAAA",
+        title: "Example source report",
+        warningIndexes: [0],
+      },
+      {
+        code: "BBBBBBBBBBBBBBBB",
+        title: "Unrelated report",
+        warningIndexes: [1],
+      },
     ];
     const { rerender } = render(<App connection={c} />);
     if (officer)
@@ -583,15 +592,16 @@ it.each([true, false])(
       );
       expect(source.getAttribute("target")).toBe("_blank");
       expect(
-        screen.getByRole("region", { name: "Source reports for this run" }),
+        screen.getByRole("list", { name: "Source reports for this warning" }),
       ).toBeTruthy();
     } else
       expect(
         screen.queryByRole("link", { name: "Example source report" }),
       ).toBeNull();
+    expect(screen.queryByRole("link", { name: "Unrelated report" })).toBeNull();
     rerender(<App connection={{ ...c, resultSources: [] }} />);
     expect(
-      screen.queryByRole("region", { name: "Source reports for this run" }),
+      screen.queryByRole("list", { name: "Source reports for this warning" }),
     ).toBeNull();
     expect(screen.getByText("Recorded warning")).toBeTruthy();
   },

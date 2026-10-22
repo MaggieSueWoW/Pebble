@@ -90,7 +90,7 @@ export type LiveConnection = {
   queueReady: boolean;
   queueError: string;
   retryQueue: () => void;
-  resultSources: { code: string; title: string }[];
+  resultSources: { code: string; title: string; warningIndexes?: number[] }[];
   resultDiagnostics: Record<string, RecordedNightDiagnostics>;
   resultsPending: boolean;
   resultsError: string;
@@ -157,7 +157,7 @@ export function useFirestore(): {
   const [consumed, setConsumed] = useState<{
     run: string;
     versions: Versions;
-    sources: { code: string; title: string }[];
+    sources: { code: string; title: string; warningIndexes?: number[] }[];
     diagnostics: Record<string, RecordedNightDiagnostics>;
   }>({ run: "", versions: {}, sources: [], diagnostics: {} });
   const submission = useRef<{
@@ -486,6 +486,9 @@ export function useFirestore(): {
               .map(([code, summary]) => ({
                 code,
                 title: summary.title?.trim() || code,
+                ...(summary.warningIndexes
+                  ? { warningIndexes: summary.warningIndexes as number[] }
+                  : {}),
               }))
               .sort((a, b) => a.code.localeCompare(b.code)),
           });

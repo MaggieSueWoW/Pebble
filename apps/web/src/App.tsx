@@ -1607,31 +1607,37 @@ export default function App({ connection }: { connection?: LiveConnection }) {
                     <p>From the displayed completed run.</p>
                     <ul>
                       {results.warnings?.map((warning, index) => (
-                        <li key={index}>{warning}</li>
+                        <li key={index}>
+                          {warning}
+                          {connection?.officer &&
+                            connection.resultSources.some((source) =>
+                              source.warningIndexes?.includes(index),
+                            ) && (
+                              <ul aria-label="Source reports for this warning">
+                                {connection.resultSources
+                                  .filter((source) =>
+                                    source.warningIndexes?.includes(index),
+                                  )
+                                  .map((source) => (
+                                    <li key={source.code}>
+                                      <a
+                                        href={`https://www.warcraftlogs.com/reports/${source.code}`}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                      >
+                                        {source.title}{" "}
+                                        <ExternalLink
+                                          size={12}
+                                          aria-hidden="true"
+                                        />
+                                      </a>
+                                    </li>
+                                  ))}
+                              </ul>
+                            )}
+                        </li>
                       ))}
                     </ul>
-                    {connection?.officer &&
-                      connection.resultSources.length > 0 && (
-                        <section aria-labelledby="warning-sources-title">
-                          <h3 id="warning-sources-title">
-                            Source reports for this run
-                          </h3>
-                          <ul>
-                            {connection.resultSources.map((source) => (
-                              <li key={source.code}>
-                                <a
-                                  href={`https://www.warcraftlogs.com/reports/${source.code}`}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                >
-                                  {source.title}{" "}
-                                  <ExternalLink size={12} aria-hidden="true" />
-                                </a>
-                              </li>
-                            ))}
-                          </ul>
-                        </section>
-                      )}
                   </div>
                 </section>
               )}

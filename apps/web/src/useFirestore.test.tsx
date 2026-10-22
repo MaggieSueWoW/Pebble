@@ -1009,12 +1009,16 @@ describe("public result loading", () => {
     const old = latest("seasons/test/runs/ready");
     send("seasons/test/runs/ready", {
       reportSummaries: {
-        AAAAAAAAAAAAAAAA: { title: "Original source" },
+        AAAAAAAAAAAAAAAA: { title: "Original source", warningIndexes: [0, 2] },
         BBBBBBBBBBBBBBBB: { title: "  " },
       },
     });
     expect(result.current.connection.resultSources).toEqual([
-      { code: "AAAAAAAAAAAAAAAA", title: "Original source" },
+      {
+        code: "AAAAAAAAAAAAAAAA",
+        title: "Original source",
+        warningIndexes: [0, 2],
+      },
       { code: "BBBBBBBBBBBBBBBB", title: "BBBBBBBBBBBBBBBB" },
     ]);
     send(

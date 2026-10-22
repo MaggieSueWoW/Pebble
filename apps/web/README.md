@@ -61,6 +61,11 @@ All five data columns are sortable; zero and unavailable recorded values remain
 distinct. Applied overrides highlight the affected halves. Raid timing uses a
 compact detected/override table.
 
+Reports sort by raid night, oldest first by default. Click the Raid night header
+to reverse the order; reports awaiting metadata stay last. Result warnings link
+to the reports that caused each warning for officers. Source links require a run
+with the updated worker; report IDs remain in private run metadata.
+
 Roster lists Player, Joined, Left and comma-separated Alts. Each data column sorts;
 Alts uses the alphabetically ordered visible names. Empty dates and alt lists sort
 last in either direction. Expanded details combine main editing, alt editing,

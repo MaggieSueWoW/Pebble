@@ -874,3 +874,58 @@ def test_public_season_ranking_matches_established_materialization(
         assert [p["ranking"]["rank"] for p in actual] == list(range(1, len(actual) + 1))
     if scenario == "no_mythic":
         assert all(p["ranking"] is None for p in output["players"])
+
+
+@pytest.mark.parametrize("overlapping", [False, True])
+def test_warning_sources_identify_actual_reports_and_clear_when_disabled(
+    config, wcl, monkeypatch, overlapping
+):
+    from copy import deepcopy
+
+    from pebble.web_worker import WCLClient
+
+    fetch = WCLClient.fetch_report_bundle
+
+    def bundle(client, code):
+        value = deepcopy(fetch(client, CODES[0]))
+        if code == CODES[1]:
+            value["masterData"]["actors"][0]["name"] = "Missingplayer"
+            if not overlapping:
+                for fight in value["fights"]:
+                    fight["startTime"] += 1000
+                    fight["endTime"] += 1000
+        return value
+
+    monkeypatch.setattr(WCLClient, "fetch_report_bundle", bundle)
+    raw = snapshot()
+    db = mongomock.MongoClient().working
+    first = calculate_snapshot(config, db, raw)
+    assert len(first["warnings"]) == 1
+    assert "Missingplayer" in first["warnings"][0]
+    assert first["reportSummaries"][CODES[1]]["warningIndexes"] == [0]
+    assert not first["reportSummaries"][CODES[0]].get("warningIndexes")
+    raw["reports"][CODES[1]]["enabled"] = False
+    second = calculate_snapshot(config, db, raw)
+    assert second["warnings"] == []
+    assert CODES[1] not in second["reportSummaries"]
+    assert not second["reportSummaries"][CODES[0]].get("warningIndexes")
+
+
+def test_no_mythic_warning_links_all_reports_on_affected_night(
+    config, wcl, monkeypatch
+):
+    from pebble.web_worker import WCLClient
+
+    fetch = WCLClient.fetch_report_bundle
+
+    def bundle(client, code):
+        value = fetch(client, CODES[0])
+        for fight in value["fights"]:
+            fight["difficulty"] = 4
+        return value
+
+    monkeypatch.setattr(WCLClient, "fetch_report_bundle", bundle)
+    output = calculate_snapshot(config, mongomock.MongoClient().working, snapshot())
+    assert len(output["warnings"]) == 1
+    assert "no Mythic encounters" in output["warnings"][0]
+    assert all(s["warningIndexes"] == [0] for s in output["reportSummaries"].values())
