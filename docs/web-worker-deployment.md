@@ -9,7 +9,9 @@ keys unchanged. This moves the web worker; it does not retire the Sheets bot.
 Use `docker-compose.web.yaml` exclusively, project `pebble-web`, container
 `pebble-web-worker`, and commit-tagged `pebble-web:<full-commit>` images. Never
 run the legacy Compose file, `down`, `--remove-orphans`, or dependency updates.
-The build context allows only Python source, metadata and README; configs,
+The helper explicitly selects `Dockerfile.web`; its Dockerfile-specific ignore
+file allows only Python source, metadata and README. The root `Dockerfile` remains
+the legacy Sheets build used by unchanged `docker-compose.yaml`. Web configs,
 credentials, frontend, tests and virtualenvs are excluded. Docker builds on the
 selected remote context, so no Mac/ARM image transfer is needed.
 
