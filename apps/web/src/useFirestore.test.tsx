@@ -507,7 +507,7 @@ describe("officer access lifecycle", () => {
     expect(result.current.connection.error).toBe("");
   });
 
-  it("returns saved versions and writes only the supplied availability override", async () => {
+  it("returns saved versions and advances the main with the supplied availability override", async () => {
     const { result } = renderHook(useFirestore);
     login();
     grant();
@@ -540,11 +540,13 @@ describe("officer access lifecycle", () => {
       );
     });
     expect(acknowledged["availabilityOverrides/2026-10-15_secret"]).toBe(3);
-    expect(set).toHaveBeenCalledTimes(1);
+    expect(set).toHaveBeenCalledTimes(2);
     expect(set.mock.calls[0][0].path).toBe(
       "seasons/test/availabilityOverrides/2026-10-15_secret",
     );
     expect(set.mock.calls[0][1].version).toBe(3);
+    expect(set.mock.calls[1][0].path).toBe("seasons/test/players/secret");
+    expect(set.mock.calls[1][1].version).toBe(3);
     expect(result.current.connection.busy).toBe(false);
     const noChanges = await result.current.connection.saveInputs({
       reports: [],
@@ -1690,7 +1692,10 @@ it("normalizes and saves one character mapping, rejects stale versions and missi
   const set = vi.fn();
   mock.transaction.mockImplementation(async (_db, callback) =>
     callback({
-      get: async (ref: { path: string }) => ({ ...snap({ version: 3 }), ref }),
+      get: async (ref: { path: string }) => ({
+        ...snap({ version: 3, playerId: "main" }),
+        ref,
+      }),
       set,
     }),
   );
@@ -1699,9 +1704,11 @@ it("normalizes and saves one character mapping, rejects stale versions and missi
       await result.current.connection.saveCharacter("stable", value, 3),
     ).toBe(4),
   );
-  expect(set).toHaveBeenCalledTimes(1);
-  expect(set.mock.calls[0][0].path).toBe("seasons/test/characters/stable");
-  expect(set.mock.calls[0][1]).toMatchObject({
+  expect(set).toHaveBeenCalledTimes(2);
+  expect(set.mock.calls[0][0].path).toBe("seasons/test/players/main");
+  expect(set.mock.calls[0][1].version).toBe(4);
+  expect(set.mock.calls[1][0].path).toBe("seasons/test/characters/stable");
+  expect(set.mock.calls[1][1]).toMatchObject({
     name: "Étoile",
     realm: "Example Realm",
     region: "us",
@@ -1744,3 +1751,200 @@ it("normalizes and saves one character mapping, rejects stale versions and missi
     result.current.connection.saveCharacter("stable", value, 3),
   ).rejects.toThrow("Officer access changed");
 });
+
+it("advances both mains for an alt move and only once when its main is unchanged", async () => {
+  const { result } = renderHook(useFirestore);
+  login();
+  grant();
+  loadPrivate();
+  send(
+    "seasons/test/players",
+    {},
+    {
+      old: { name: "Previous", version: 3 },
+      next: { name: "Next", version: 5 },
+    },
+  );
+  const records: Record<string, Data> = {
+    "seasons/test/characters/alt": {
+      name: "Alt",
+      realm: "",
+      region: "us",
+      playerId: "old",
+      version: 2,
+    },
+    "seasons/test/players/old": {
+      name: "Previous",
+      notes: "Retained",
+      version: 3,
+    },
+    "seasons/test/players/next": {
+      name: "Next",
+      notes: "Also retained",
+      version: 5,
+    },
+  };
+  const set = vi.fn();
+  const get = vi.fn(async (ref: { path: string }) => ({
+    ...snap(records[ref.path]),
+    ref,
+  }));
+  mock.transaction.mockImplementation(async (_db, callback) =>
+    callback({ get, set }),
+  );
+  await act(async () => {
+    await result.current.connection.saveCharacter(
+      "alt",
+      { name: "Alt", realm: "", region: "us", playerId: "next" },
+      2,
+    );
+  });
+  expect(set.mock.calls.map((call) => call[0].path).sort()).toEqual(
+    Object.keys(records).sort(),
+  );
+  expect(
+    set.mock.calls.find((call) => call[0].path.endsWith("players/old"))?.[1],
+  ).toMatchObject({ name: "Previous", notes: "Retained", version: 4 });
+  expect(
+    set.mock.calls.find((call) => call[0].path.endsWith("players/next"))?.[1],
+  ).toMatchObject({ name: "Next", notes: "Also retained", version: 6 });
+  set.mockClear();
+  get.mockClear();
+  await act(async () => {
+    await result.current.connection.saveCharacter(
+      "alt",
+      { name: "Alt", realm: "Updated", region: "us", playerId: "old" },
+      2,
+    );
+  });
+  expect(set).toHaveBeenCalledTimes(2);
+  expect(
+    get.mock.calls.filter((call) => call[0].path.includes("/players/")),
+  ).toHaveLength(1);
+});
+
+it("does not write an alt after its target main disappears", async () => {
+  const { result } = renderHook(useFirestore);
+  login();
+  grant();
+  loadPrivate();
+  send("seasons/test/players", {}, { main: { name: "Example", version: 1 } });
+  const set = vi.fn();
+  mock.transaction.mockImplementation(async (_db, callback) =>
+    callback({
+      get: async (ref: { path: string }) => ({
+        ...snap(),
+        exists: () => false,
+        ref,
+      }),
+      set,
+    }),
+  );
+  await act(async () => {
+    await expect(
+      result.current.connection.saveCharacter(
+        "new",
+        { name: "Alt", realm: "", region: "us", playerId: "main" },
+        0,
+      ),
+    ).rejects.toThrow("no longer in the roster");
+  });
+  expect(set).not.toHaveBeenCalled();
+});
+
+it("advances the main atomically when independently deleting an alt", async () => {
+  const { result } = renderHook(useFirestore);
+  login();
+  grant();
+  loadPrivate();
+  const set = vi.fn(),
+    remove = vi.fn();
+  mock.transaction.mockImplementation(async (_db, callback) =>
+    callback({
+      get: async (ref: { path: string }) => ({
+        ...snap(
+          ref.path.includes("/characters/")
+            ? { playerId: "main", version: 2 }
+            : { name: "Main", notes: "Retained", version: 7 },
+        ),
+        ref,
+      }),
+      set,
+      delete: remove,
+    }),
+  );
+  await act(async () => {
+    await result.current.connection.deleteCharacter("alt", 2);
+  });
+  expect(set).toHaveBeenCalledTimes(1);
+  expect(set.mock.calls[0][0].path).toBe("seasons/test/players/main");
+  expect(set.mock.calls[0][1]).toMatchObject({
+    name: "Main",
+    notes: "Retained",
+    version: 8,
+  });
+  expect(remove.mock.calls[0][0].path).toBe("seasons/test/characters/alt");
+});
+
+it("advances a main once for multiple availability writes in one transaction", async () => {
+  const { result } = renderHook(useFirestore);
+  login();
+  grant();
+  loadPrivate();
+  const set = vi.fn();
+  const get = vi.fn(async (ref: { path: string }) => ({
+    ...snap(ref.path.includes("/players/") ? { name: "Main", version: 4 } : {}),
+    ref,
+  }));
+  mock.transaction.mockImplementation(async (_db, callback) =>
+    callback({ get, set }),
+  );
+  await act(async () => {
+    await result.current.connection.saveInputs(
+      {
+        reports: [],
+        timings: {},
+        adjustments: Object.fromEntries(
+          ["2026-10-14/main", "2026-10-15/main"].map((key) => [
+            key,
+            {
+              pre: { mode: "available" },
+              post: { mode: "automatic" },
+              notes: "",
+            },
+          ]),
+        ),
+      },
+      {},
+    );
+  });
+  expect(set).toHaveBeenCalledTimes(3);
+  expect(
+    get.mock.calls.filter((call) => call[0].path.includes("/players/")),
+  ).toHaveLength(1);
+  expect(
+    set.mock.calls.find((call) => call[0].path.includes("/players/"))?.[1],
+  ).toMatchObject({ name: "Main", version: 5 });
+});
+
+it.each([1, 2])(
+  "distinguishes permission denial from a concurrent deletion conflict at main version %s",
+  async (version) => {
+    const { result } = renderHook(useFirestore);
+    login();
+    grant();
+    loadPrivate();
+    const denied = Object.assign(new Error("Save denied"), {
+      code: "permission-denied",
+    });
+    mock.transaction.mockRejectedValue(denied);
+    mock.getDoc.mockResolvedValue(snap({ version }));
+    await act(async () => {
+      await expect(
+        result.current.connection.deletePlayer("main", { "players/main": 1 }),
+      ).rejects.toThrow(
+        version === 1 ? "Save denied" : "This main or its linked data changed",
+      );
+    });
+  },
+);

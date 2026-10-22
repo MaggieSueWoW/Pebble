@@ -92,13 +92,18 @@ test.afterEach(async ({}, testInfo) => {
     expect(
       (await getDocs(collection(ctx.firestore(), `${season}/runs`))).empty,
     ).toBe(true);
-    for (const id of ["main", "archived"])
+    const expected = testInfo.title.startsWith("creates normalized")
+      ? [3, 2]
+      : testInfo.title.startsWith("retains mapping")
+        ? [2, 1]
+        : testInfo.title.startsWith("manages alts")
+          ? [2, 1]
+          : [3, 1];
+    for (const [index, id] of ["main", "archived"].entries())
       expect(
         (await getDoc(doc(ctx.firestore(), `${season}/players/${id}`))).data()
           ?.version,
-      ).toBe(
-        testInfo.title.startsWith("swaps an alt") && id === "main" ? 3 : 1,
-      );
+      ).toBe(expected[index]);
   });
 });
 test("creates normalized mappings, rejects duplicate identity and allows a distinct region and wildcard realm", async ({

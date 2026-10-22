@@ -82,6 +82,68 @@ def test_import_validates_entire_effective_season_and_commits_atomically(db):
     assert c.document(f"seasons/{s}/players/p1").get().to_dict()["name"] == "Example"
 
 
+@pytest.mark.parametrize(
+    "families",
+    [
+        ("characters",),
+        ("availabilityOverrides",),
+        ("characters", "availabilityOverrides"),
+    ],
+)
+def test_linked_import_advances_existing_main_once_and_noop_keeps_version(db, families):
+    c, season = db
+    import_domain(c, season, {"players": {"p1": player(), "p2": player("Other")}})
+    ref = c.document(f"seasons/{season}/players/p1")
+    original = ref.get().to_dict()
+    records = {
+        "characters": {
+            "alt": {"name": "Alt", "realm": "", "region": "us", "playerId": "p1"}
+        },
+        "availabilityOverrides": {
+            "2026-10-15_p1": {
+                "nightId": "2026-10-15",
+                "playerId": "p1",
+                "pre": {"mode": "automatic"},
+                "post": {"mode": "available"},
+            }
+        },
+    }
+    values = {family: records[family] for family in families}
+    assert import_domain(c, season, values) == {family: 1 for family in families}
+    saved = ref.get().to_dict()
+    assert saved["version"] == 2
+    assert saved["updatedBy"] == "local-admin"
+    assert {k: v for k, v in saved.items() if k not in ("version", "updatedAt")} == {
+        k: v for k, v in original.items() if k not in ("version", "updatedAt")
+    }
+    assert c.document(f"seasons/{season}/players/p2").get().to_dict()["version"] == 1
+    assert import_domain(c, season, values) == {family: 0 for family in families}
+    assert ref.get().to_dict() == saved
+
+
+def test_linked_import_counts_main_version_writes_in_atomic_limit(db, monkeypatch):
+    c, season = db
+    import_domain(c, season, {"players": {"p1": player()}})
+    monkeypatch.setattr("pebble.web_data.MAX_IMPORT_WRITES", 1)
+    with pytest.raises(ValueError, match="400 writes"):
+        import_domain(
+            c,
+            season,
+            {
+                "characters": {
+                    "alt": {
+                        "name": "Alt",
+                        "realm": "",
+                        "region": "us",
+                        "playerId": "p1",
+                    }
+                }
+            },
+        )
+    assert not c.document(f"seasons/{season}/characters/alt").get().exists
+    assert c.document(f"seasons/{season}/players/p1").get().to_dict()["version"] == 1
+
+
 def test_import_rejects_metadata_unknown_collections_and_write_limit(db):
     c, s = db
     for values in (

@@ -20,6 +20,7 @@ def import_domain(client, season_id: str, values: dict):
 
     Existing inputs win, so this is not a synchronization or overwrite command.
     Reads and writes share a transaction, including referenced existing players.
+    New linked records advance their existing main's version to serialize with deletion.
     Oversized imports fail before writes; split only at valid reference boundaries.
     """
     if not ID.fullmatch(season_id):
@@ -69,9 +70,24 @@ def import_domain(client, season_id: str, values: dict):
         validate_snapshot(effective)
         for value in existing["settings"].values():
             CalculationInput.model_validate(value)
-        if sum(map(len, pending.values())) > MAX_IMPORT_WRITES:
+        linked_mains = {
+            record["playerId"]
+            for family in ("characters", "availabilityOverrides")
+            for record in pending.get(family, {}).values()
+            if record["playerId"] in existing["players"]
+        }
+        if sum(map(len, pending.values())) + len(linked_mains) > MAX_IMPORT_WRITES:
             raise ValueError(
                 "Import exceeds 400 writes; split into reference-complete groups"
+            )
+        for player_id in linked_mains:
+            tx.update(
+                season.collection("players").document(player_id),
+                {
+                    "version": existing["players"][player_id]["version"] + 1,
+                    "updatedBy": "local-admin",
+                    "updatedAt": firestore.SERVER_TIMESTAMP,
+                },
             )
         for name, docs in pending.items():
             for key, record in docs.items():

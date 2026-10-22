@@ -43,7 +43,14 @@ main. Worker input validation can then reject the orphaned mapping.
 
 A fix needs coordination between linked writers and deletion, with deterministic
 concurrent-client coverage for both linked families and alt reassignment. This
-is tracked in #47 rather than hidden inside presentation cleanup.
+was tracked in #47 rather than hidden inside presentation cleanup. The follow-up
+fix now coordinates browser linked writes, rules and administrative imports via
+the main's existing version; see [the write protocol](data-consistency.md#concurrent-main-deletion-and-linked-writes).
+Regression coverage now includes 14 linked-change-first races (seven operations
+at two transaction boundaries) and four deletion-first races. The full 80-case
+browser run plus those four additional cases passed, alongside 184 component,
+22 rules and 17 Python input/import tests. It requires a coordinated
+source/rules/importer release and has not been deployed.
 
 ### Roster deletion requires its matching rules release
 

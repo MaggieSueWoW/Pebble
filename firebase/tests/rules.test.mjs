@@ -8,6 +8,18 @@ const [emulatorHost, emulatorPort] = (process.env.FIRESTORE_EMULATOR_HOST || '12
 const season = 'seasons/midnight-s2';
 const code = 'aB3dE6gH9jK2mN5p';
 const meta = (uid = 'officer', version = 1) => ({ version, updatedBy: uid, updatedAt: serverTimestamp() });
+// Model browser linked writes: the main version is part of the same commit.
+async function linkedWrite(db, ref, operation, data, playerIds = ['p1']) {
+  const batch = writeBatch(db);
+  for (const id of new Set(playerIds)) {
+    const main = doc(db, `${season}/players/${id}`);
+    const snapshot = await getDoc(main);
+    batch.update(main, meta('officer', snapshot.data().version + 1));
+  }
+  if (operation === 'delete') batch.delete(ref);
+  else batch[operation](ref, data);
+  return batch.commit();
+}
 before(async () => { env = await initializeTestEnvironment({ projectId: process.env.PEBBLE_RULES_TEST_PROJECT || 'demo-pebble', firestore: { host: emulatorHost, port: Number(emulatorPort), rules: await readFile(new URL('../firestore.rules', import.meta.url), 'utf8') } }); });
 after(async () => env?.cleanup());
 beforeEach(async () => {
@@ -63,11 +75,11 @@ test('availability has typed bounded minutes and a valid player identity', async
   const db = env.authenticatedContext('officer').firestore();
   const base = { nightId: '2026-10-15', playerId: 'p1', pre: { mode: 'automatic' }, post: { mode: 'partial', minutes: 45 }, ...meta() };
   const ref = doc(db, `${season}/availabilityOverrides/2026-10-15_p1`);
-  await assertSucceeds(setDoc(ref, base));
-  await assertFails(updateDoc(ref, { post: { mode: 'partial', minutes: 0 }, ...meta('officer', 2) }));
-  await assertFails(updateDoc(ref, { pre: { mode: 'automatic', minutes: 5 }, ...meta('officer', 2) }));
-  await assertFails(setDoc(doc(db, `${season}/availabilityOverrides/wrong-id`), base));
-  await assertFails(setDoc(doc(db, `${season}/availabilityOverrides/2026-10-15_missing`), { ...base, playerId: 'missing' }));
+  await assertSucceeds(linkedWrite(db, ref, 'set', base));
+  await assertFails(linkedWrite(db, ref, 'update', { post: { mode: 'partial', minutes: 0 }, ...meta('officer', 2) }));
+  await assertFails(linkedWrite(db, ref, 'update', { pre: { mode: 'automatic', minutes: 5 }, ...meta('officer', 2) }));
+  await assertFails(linkedWrite(db, doc(db, `${season}/availabilityOverrides/wrong-id`), 'set', base));
+  await assertFails(linkedWrite(db, doc(db, `${season}/availabilityOverrides/2026-10-15_missing`), 'set', { ...base, playerId: 'missing' }));
   assert.equal((await getDoc(ref)).data().post.minutes, 45);
 });
 test('timing requires a pair of explicit break boundaries', async () => {
@@ -119,12 +131,14 @@ for (const [family, [id, domain]] of Object.entries(families)) {
   test(`${family}: full write contract, forged metadata, stale versions and revocation`, async () => {
     const db = env.authenticatedContext('officer').firestore();
     const ref = doc(db, `${season}/${family}/${id}`);
-    await assertSucceeds(setDoc(ref, { ...domain, ...meta() }));
+    const linked = ['characters', 'availabilityOverrides'].includes(family);
+    const write = (operation, data) => linked ? linkedWrite(db, ref, operation, data) : operation === 'delete' ? deleteDoc(ref) : operation === 'set' ? setDoc(ref, data) : updateDoc(ref, data);
+    await assertSucceeds(write('set', { ...domain, ...meta() }));
     for (const change of [meta('officer', 1), meta('officer', 3), { ...meta('other', 2) }, { ...meta('officer', 2), updatedAt: new Date(0) }, { ...meta('officer', 2), version: 2.5 }, { ...meta('officer', 2), derived: 'forged' }]) {
-      await assertFails(updateDoc(ref, change));
+      await assertFails(write('update', change));
     }
-    await assertSucceeds(updateDoc(ref, meta('officer', 2)));
-    if (family === 'players' || family === 'characters') await assertSucceeds(deleteDoc(ref));
+    await assertSucceeds(write('update', meta('officer', 2)));
+    if (family === 'players' || family === 'characters') await assertSucceeds(write('delete'));
     else await assertFails(deleteDoc(ref));
     for (const reader of [env.unauthenticatedContext().firestore(), env.authenticatedContext('member').firestore()]) {
       await assertFails(getDocFromServer(doc(reader, `${season}/${family}/${id}`)));
@@ -146,7 +160,7 @@ test('roster and character shape, enums, references and calendar-shaped ordering
   }
   const [cid, character] = families.characters;
   for (const invalid of [{ region: 'US' }, { playerId: 'missing' }, { playerId: '' }, { playerId: 'p1/subpath' }, { name: '' }, { realm: 'x'.repeat(101) }]) {
-    await assertFails(setDoc(doc(db, `${season}/characters/${cid}`), { ...character, ...invalid, ...meta() }));
+    await assertFails(linkedWrite(db, doc(db, `${season}/characters/${cid}`), 'set', { ...character, ...invalid, ...meta() }));
   }
   await assertFails(setDoc(doc(db, `${season}/players/invalid.id`), { ...player, ...meta() }));
 });
@@ -230,6 +244,46 @@ test('officers can remove one alt without removing its main', async () => {
   await env.withSecurityRulesDisabled(ctx => setDoc(doc(ctx.firestore(), `${season}/characters/alt`), {name:'Alt', realm:'', region:'us', playerId:'p1', version:1}));
   for (const reader of [env.unauthenticatedContext().firestore(), env.authenticatedContext('member').firestore()]) await assertFails(deleteDoc(doc(reader, `${season}/characters/alt`)));
   const db = env.authenticatedContext('officer').firestore();
-  await assertSucceeds(deleteDoc(doc(db, `${season}/characters/alt`)));
+  await assertFails(deleteDoc(doc(db, `${season}/characters/alt`)));
+  await assertSucceeds(linkedWrite(db, doc(db, `${season}/characters/alt`), 'delete'));
   assert.equal((await getDoc(doc(db, `${season}/players/p1`))).exists(), true);
+});
+
+
+test('linked writes require an atomic main version advance, including both sides of reassignment', async () => {
+  const db = env.authenticatedContext('officer').firestore();
+  const ref = doc(db, `${season}/characters/alt`);
+  const character = {name:'Alt', realm:'', region:'us', playerId:'p1', ...meta()};
+  const availability = doc(db, `${season}/availabilityOverrides/2026-10-15_p1`);
+  const adjustment = {nightId:'2026-10-15', playerId:'p1', pre:{mode:'automatic'}, post:{mode:'available'}, ...meta()};
+  await assertFails(setDoc(ref, character));
+  await assertFails(setDoc(availability, adjustment));
+  await assertSucceeds(linkedWrite(db, ref, 'set', character));
+  await assertSucceeds(linkedWrite(db, availability, 'set', adjustment));
+  await assertFails(updateDoc(ref, {realm:'Changed', ...meta('officer', 2)}));
+  await assertFails(updateDoc(availability, {notes:'Changed', ...meta('officer', 2)}));
+  await assertFails(deleteDoc(ref));
+  await assertSucceeds(linkedWrite(db, doc(db, `${season}/players/p2`), 'set', {...families.players[1], ...meta()}, []));
+  await assertFails(linkedWrite(db, ref, 'update', {playerId:'p2', ...meta('officer', 2)}, ['p2']));
+  await assertFails(linkedWrite(db, ref, 'update', {playerId:'p2', ...meta('officer', 2)}, ['p1']));
+  await assertSucceeds(linkedWrite(db, ref, 'update', {playerId:'p2', ...meta('officer', 2)}, ['p1', 'p2']));
+  assert.equal((await getDoc(doc(db, `${season}/players/p1`))).data().version, 4);
+  assert.equal((await getDoc(doc(db, `${season}/players/p2`))).data().version, 2);
+});
+
+test('a main cannot disappear in the same commit that adds or reassigns a surviving link', async () => {
+  const db = env.authenticatedContext('officer').firestore();
+  for (const [family, id, value] of [
+    ['characters', 'alt', {name:'Alt', realm:'', region:'us', playerId:'p1'}],
+    ['availabilityOverrides', '2026-10-15_p1', {nightId:'2026-10-15', playerId:'p1', pre:{mode:'automatic'}, post:{mode:'available'}}],
+  ]) {
+    const batch = writeBatch(db);
+    batch.delete(doc(db, `${season}/players/p1`));
+    batch.set(doc(db, `${season}/${family}/${id}`), {...value, ...meta()});
+    await assertFails(batch.commit());
+    assert.equal((await getDoc(doc(db, `${season}/players/p1`))).exists(), true);
+  }
+  await assertSucceeds(deleteDoc(doc(db, `${season}/players/p1`)));
+  await assertFails(setDoc(doc(db, `${season}/characters/late`), {name:'Late', realm:'', region:'us', playerId:'p1', ...meta()}));
+  await assertFails(setDoc(doc(db, `${season}/availabilityOverrides/2026-10-15_p1`), {nightId:'2026-10-15', playerId:'p1', pre:{mode:'automatic'}, post:{mode:'available'}, ...meta()}));
 });

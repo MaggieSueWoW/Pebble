@@ -41,12 +41,48 @@ missing report region with configured aliases fails with an actionable message
 rather than guessing US. Refresh only the affected web cache entry if an old
 bundle lacks region; never flush legacy Redis keys.
 
+## Concurrent main deletion and linked writes
+
+A main's existing `version` also protects its set of character mappings and
+availability overrides. Browser creation, editing and independent deletion of an
+alt advance its main's version in the same transaction. Moving an alt advances
+both the old and new main once. Availability writes advance the affected main
+once per transaction, even when several nights change. Main/alt swaps already
+advance the main as part of the atomic rename. Main fields are preserved.
+
+Rules require these atomic advances and require the destination main to still
+exist after the commit. An older client cannot create or alter a link without
+participating. Cascade deletion remains allowed when the main is deleted in the
+same transaction; normal independent availability deletion remains disallowed.
+
+Deletion enumerates linked records, then transactionally checks the main and
+every linked record against the versions the officer reviewed. A linked write
+committed after enumeration advances the main, so deletion rejects the stale
+version. A write after the deletion transaction's reads forces transaction
+failure/retry, which then rejects that same stale version. If deletion commits
+first, the linked writer's read and rules checks prevent resurrecting the main or
+creating an orphan. The officer must reload/review the current links and confirm
+deletion again; no concurrent change is silently absorbed into the old cascade.
+
+Administrative imports follow the same protocol for newly created links to
+existing mains. Each affected main is advanced once, no-op imports do not advance
+it, and these parent updates count toward the 400-write import limit. A main
+created in the same import keeps its initial version. Uncoordinated privileged
+SDK or console writes bypass rules and are outside this supported write protocol.
+
+Release the frontend, Firestore rules and administrative importer together.
+Older browser clients are intentionally rejected by the new linked-write rules;
+refresh them after release. No new collection, field or data migration is needed.
+An existing main draft can now conflict with a concurrent alt/availability change;
+its fields remain available for review/cancel just as for other version conflicts.
+
 ## Input and rule boundaries
 
 The optional administrator JSON command validates schemas, calendar/domain
 constraints and references against the entire effective target season before
 any writes. Missing input documents are created in one Firestore transaction;
-existing inputs win. This is not a synchronization or overwrite command and is
+existing domain fields win (linked imports can advance parent metadata as above).
+This is not a synchronization or overwrite command and is
 not required for normal S2 setup or reprocessing. It does not read Sheets or
 write calculation settings. Configure calculation settings in the UI.
 

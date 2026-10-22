@@ -120,15 +120,13 @@ test("saved roster, mapping and settings feed one explicit run and remain stale 
       .click();
     await page.getByLabel("Post extension minutes", { exact: true }).fill("0");
     await expect(run).toBeDisabled();
-    await page
-      .getByRole("button", { name: "Save", exact: true })
-      .click();
+    await page.getByRole("button", { name: "Save", exact: true }).click();
     await expect(
       page.getByRole("status", { name: "Calculation settings changes" }),
     ).toContainText("Calculation settings saved");
     const versions = {
       [`reports/${report}`]: 1,
-      [`players/${mainId}`]: 2,
+      [`players/${mainId}`]: 3,
       [`characters/${mappingId}`]: 1,
       "settings/calculation": 1,
     };
@@ -143,7 +141,7 @@ test("saved roster, mapping and settings feed one explicit run and remain stale 
         name: "Renamed",
         className: "Druid",
         role: "Unknown",
-        version: 2,
+        version: 3,
       });
       expect(
         (await getDocs(collection(db, `${season}/characters`))).docs[0].data(),

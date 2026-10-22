@@ -27,6 +27,13 @@ service cloud.firestore {
         && ((a.mode in ['automatic', 'available', 'unavailable'] && a.keys().hasOnly(['mode']))
           || (a.mode in ['partial','unavailableFor'] && a.keys().hasOnly(['mode', 'minutes']) && a.minutes is int && a.minutes >= 1 && a.minutes <= 720));
     }
+    // Every linked write must advance its main in the same atomic commit.
+    // Deletion reads that version, so a newly added/moved link invalidates it.
+    function playerAdvanced(season, id) {
+      let path = /databases/$(database)/documents/seasons/$(season)/players/$(id);
+      return exists(path) && existsAfter(path)
+        && getAfter(path).data.version == get(path).data.version + 1;
+    }
     function complete(season, run) {
       return get(/databases/$(database)/documents/seasons/$(season)/results/$(run)).data.complete == true;
     }
@@ -54,14 +61,18 @@ service cloud.firestore {
       }
       match /characters/{id} {
         allow read: if officer();
-        allow delete: if officer() && validId(season) && validId(id);
+        allow delete: if officer() && validId(season) && validId(id)
+          && (!existsAfter(/databases/$(database)/documents/seasons/$(season)/players/$(resource.data.playerId))
+            || playerAdvanced(season, resource.data.playerId));
         allow create, update: if officer() && validId(season) && versioned()
           && validId(id) && fields(request.resource.data, ['name','realm','region','playerId'], [])
           && text(request.resource.data.name, 32) && request.resource.data.name.size() > 0
           && text(request.resource.data.realm, 100)
           && request.resource.data.region in ['us','eu','kr','tw','cn']
           && validId(request.resource.data.playerId)
-          && exists(/databases/$(database)/documents/seasons/$(season)/players/$(request.resource.data.playerId));
+          && playerAdvanced(season, request.resource.data.playerId)
+          && (resource == null || resource.data.playerId == request.resource.data.playerId
+            || playerAdvanced(season, resource.data.playerId));
       }
       match /nightOverrides/{night} {
         allow read: if officer();
@@ -87,7 +98,7 @@ service cloud.firestore {
           && day(request.resource.data.nightId) && validId(request.resource.data.playerId)
           && id == request.resource.data.nightId + '_' + request.resource.data.playerId
           && (resource == null || (request.resource.data.nightId == resource.data.nightId && request.resource.data.playerId == resource.data.playerId))
-          && exists(/databases/$(database)/documents/seasons/$(season)/players/$(request.resource.data.playerId))
+          && playerAdvanced(season, request.resource.data.playerId)
           && availability(request.resource.data.pre) && availability(request.resource.data.post) && notes(request.resource.data);
       }
       match /settings/calculation {

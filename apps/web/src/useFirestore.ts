@@ -3,6 +3,7 @@ import { onAuthStateChanged, type User } from "firebase/auth";
 import {
   collection,
   doc,
+  getDocFromServer,
   getDocsFromServer,
   limit,
   onSnapshot,
@@ -13,6 +14,7 @@ import {
   where,
   type DocumentData,
 } from "firebase/firestore";
+import { readLinkedPlayers, advanceLinkedPlayers } from "./linkedPlayers";
 import { planMainSwap } from "./mainSwap";
 import { auth, db, logOut, seasonId, seasonLabel, signIn } from "./firebase";
 import {
@@ -666,6 +668,17 @@ export function useFirestore(): {
             ),
           );
           assertAccess();
+          const linkedPlayers = await readLinkedPlayers(
+            transaction,
+            db!,
+            seasonId,
+            changes
+              .filter((change) =>
+                change.path.startsWith("availabilityOverrides/"),
+              )
+              .map((change) => change.value.playerId as string),
+          );
+          assertAccess();
           const acknowledged: Versions = { ...versions };
           changes.forEach((c, i) => {
             const actual = snapshots[i].data()?.version ?? 0;
@@ -681,6 +694,7 @@ export function useFirestore(): {
               updatedAt: serverTimestamp(),
             });
           });
+          advanceLinkedPlayers(transaction, linkedPlayers, user!.uid);
           return acknowledged;
         });
       } catch (e) {
@@ -730,6 +744,8 @@ export function useFirestore(): {
     assertAccess();
     if (!/^[A-Za-z0-9_-]{1,100}$/.test(id))
       throw new Error("Invalid player ID.");
+    const conflict =
+      "This main or its linked data changed. Review the latest details before deleting.";
     setBusy(true);
     setError("");
     try {
@@ -758,9 +774,9 @@ export function useFirestore(): {
         paths.some((path) => !(path in expected)) ||
         dependencies.some((entry) => entry.version !== expected[entry.path])
       )
-        throw new Error(
-          "This main or its linked data changed. Review the latest details before deleting.",
-        );
+        throw new Error(conflict);
+      // Every linked writer advances players/{id} atomically. Its expected version
+      // therefore protects the enumerated dependency set, including new links.
       await runTransaction(db!, async (transaction) => {
         assertAccess();
         const refs = paths.map((path) =>
@@ -777,14 +793,37 @@ export function useFirestore(): {
               snapshot.data()?.version !== expected[paths[index]],
           )
         )
-          throw new Error(
-            "This main or its linked data changed. Review the latest details before deleting.",
-          );
+          throw new Error(conflict);
         refs.forEach((ref) => transaction.delete(ref));
       });
     } catch (cause) {
-      if (accessSession === session.current) fail(cause as Error);
-      throw cause;
+      let failure = cause;
+      if (
+        accessSession === session.current &&
+        typeof cause === "object" &&
+        cause !== null &&
+        "code" in cause &&
+        cause.code === "permission-denied"
+      ) {
+        // A concurrently removed/reassigned alt can fail delete rules before
+        // Firestore reports the main's stale read. Keep the same review/retry UX.
+        try {
+          assertAccess();
+          const main = await getDocFromServer(
+            doc(db!, "seasons", seasonId, "players", id),
+          );
+          assertAccess();
+          if (
+            !main.exists() ||
+            main.data()?.version !== expected[`players/${id}`]
+          )
+            failure = new Error(conflict);
+        } catch {
+          // Genuine permission denial/revocation retains its original error.
+        }
+      }
+      if (accessSession === session.current) fail(failure as Error);
+      throw failure;
     } finally {
       if (accessSession === session.current) setBusy(false);
     }
@@ -804,6 +843,14 @@ export function useFirestore(): {
           throw new Error(
             "Another officer changed this alt. Review the latest details before deleting.",
           );
+        const linkedPlayers = await readLinkedPlayers(
+          transaction,
+          db!,
+          seasonId,
+          [snapshot.data()!.playerId],
+        );
+        assertAccess();
+        advanceLinkedPlayers(transaction, linkedPlayers, user!.uid);
         transaction.delete(ref);
       });
     } catch (cause) {
@@ -911,6 +958,17 @@ export function useFirestore(): {
           throw new Error(
             "Another officer changed this mapping. Cancel your edits to reload, then try again.",
           );
+        const linkedPlayers = await readLinkedPlayers(
+          transaction,
+          db!,
+          seasonId,
+          [
+            value.playerId,
+            ...(snapshot.exists() ? [snapshot.data()!.playerId as string] : []),
+          ],
+        );
+        assertAccess();
+        advanceLinkedPlayers(transaction, linkedPlayers, user!.uid);
         transaction.set(ref, {
           ...value,
           version: actual + 1,
