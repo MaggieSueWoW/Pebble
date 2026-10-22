@@ -877,7 +877,34 @@ export default function App({ connection }: { connection?: LiveConnection }) {
               </button>
             ))}
         </nav>
-        {canManage && <div className="sidebar-run">{runButton}</div>}
+        {(canManage || active) && (
+          <div className="sidebar-run">
+            {runButton}
+            {active && (
+              <div className="run-steps" aria-label="Processing stages">
+                {steps.map((step, i) => (
+                  <span
+                    key={step}
+                    className={
+                      i < active.stage
+                        ? "done"
+                        : i === active.stage
+                          ? "current"
+                          : ""
+                    }
+                  >
+                    {i < active.stage ? (
+                      <Check size={12} />
+                    ) : (
+                      <span className="step-dot" />
+                    )}
+                    {step}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
         <div className="sidebar-footer">
           {canManage && (
             <span className={`connection ${online ? "" : "offline"}`}>
@@ -1156,29 +1183,6 @@ export default function App({ connection }: { connection?: LiveConnection }) {
               Browser storage is unavailable. The demo works, but changes won’t
               survive a reload.
             </Notice>
-          )}
-          {active && (
-            <div className="run-steps" aria-label="Processing stages">
-              {steps.map((step, i) => (
-                <span
-                  key={step}
-                  className={
-                    i < active.stage
-                      ? "done"
-                      : i === active.stage
-                        ? "current"
-                        : ""
-                  }
-                >
-                  {i < active.stage ? (
-                    <Check size={12} />
-                  ) : (
-                    <span className="step-dot" />
-                  )}
-                  {step}
-                </span>
-              ))}
-            </div>
           )}
           {page === "reports" && (
             <>
