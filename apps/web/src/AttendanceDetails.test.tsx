@@ -1,5 +1,11 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen, within } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from "@testing-library/react";
 import { afterEach, expect, it } from "vitest";
 import { AttendanceDetails } from "./AttendanceDetails";
 import type { AttendanceProjection } from "./model";
@@ -26,6 +32,12 @@ it("shows published helper minutes and rate without deriving from aggregate play
 });
 it("orders weekly records, expands P/B/O accessibly and identifies empty statuses", () => {
   render(<AttendanceDetails attendance={value} />);
+  const disclosure = screen
+    .getByText("Weekly attendance", { selector: "summary" })
+    .closest("details")!;
+  expect(disclosure.open).toBe(false);
+  fireEvent.click(disclosure.querySelector("summary")!);
+  expect(disclosure.open).toBe(true);
   const rows = within(
     screen.getByRole("table", { name: "Weekly attendance" }),
   ).getAllByRole("row");

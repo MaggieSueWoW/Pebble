@@ -142,13 +142,19 @@ test("presents published season attendance separately, orders P/B/O weeks and do
   await page.keyboard.press("Enter");
   const details = page.getByRole("region", { name: "Attendance", exact: true });
   await expect(details.getByText("50%", { exact: true })).toBeVisible();
+  await expect(details.locator("details[open]")).toHaveCount(0);
+  await details.getByText("Attendance explanation", { exact: true }).click();
+  await details
+    .locator("summary")
+    .filter({ hasText: "Weekly attendance" })
+    .click();
   await expect(
     details.getByText("Possible minutes", { exact: true }),
   ).toBeVisible();
   await expect(details.getByText("160 min", { exact: true })).toBeVisible();
   await expect(details.getByText("60 min", { exact: true })).toBeVisible();
   await expect(details.getByText("20 min", { exact: true })).toBeVisible();
-  await expect(page.getByText("75% played", { exact: true })).toHaveCount(3);
+  await expect(page.getByText("75%", { exact: true })).toHaveCount(3);
   const weeks = details
     .getByRole("table", { name: "Weekly attendance" })
     .getByRole("row");
@@ -219,6 +225,11 @@ test("makes fully absent published attendance reachable outside the fairness ran
     exact: true,
   });
   await expect(details.getByText("0%", { exact: true })).toBeVisible();
+  await details.getByText("Attendance explanation", { exact: true }).click();
+  await details
+    .locator("summary")
+    .filter({ hasText: "Weekly attendance" })
+    .click();
   await expect(details.getByText("160 min", { exact: true })).toBeVisible();
   await expect(details.getByLabel("out", { exact: true })).toHaveText("O");
   await expect(page).toHaveURL(/player=absent/);

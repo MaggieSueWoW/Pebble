@@ -40,6 +40,3 @@ export function orderResultRows<T extends Row>(
       return a.bench - b.bench || compareNames(name(a), name(b));
     });
 }
-
-export const rankingRatioLabel = (ratio: number | null): string =>
-  ratio === null ? "Not defined (no played time)" : ratio.toFixed(2);

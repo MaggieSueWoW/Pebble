@@ -1391,21 +1391,24 @@ export default function App({ connection }: { connection?: LiveConnection }) {
               )}
               <section className="card results-card">
                 <div className="results-toolbar">
-                  <select
-                    aria-label="Result period"
-                    value={visibleResultNight}
-                    onChange={(e) => {
-                      setResultLinkNotice(null);
-                      setResultNight(e.target.value);
-                    }}
-                  >
-                    <option value="season">Season to date</option>
-                    {results.nights.map((n) => (
-                      <option value={n.night} key={n.night}>
-                        {formatDate(n.night, true)}
-                      </option>
-                    ))}
-                  </select>
+                  <div className="result-period-select">
+                    <select
+                      aria-label="Result period"
+                      value={visibleResultNight}
+                      onChange={(e) => {
+                        setResultLinkNotice(null);
+                        setResultNight(e.target.value);
+                      }}
+                    >
+                      <option value="season">Season to date</option>
+                      {results.nights.map((n) => (
+                        <option value={n.night} key={n.night}>
+                          {formatDate(n.night, true)}
+                        </option>
+                      ))}
+                    </select>
+                    <ChevronDown size={16} aria-hidden="true" />
+                  </div>
                   <span className="result-night-count">
                     {results.nights.length} raid{" "}
                     {results.nights.length === 1 ? "night" : "nights"} this
@@ -1458,7 +1461,7 @@ export default function App({ connection }: { connection?: LiveConnection }) {
                           Bench <ArrowDown size={12} />
                         </th>
                         <th>Played</th>
-                        <th>Time breakdown</th>
+                        <th>Time Played</th>
                         <th />
                       </tr>
                     </thead>
@@ -1485,11 +1488,6 @@ export default function App({ connection }: { connection?: LiveConnection }) {
                             rank={
                               visibleResultNight === "season"
                                 ? row.ranking?.rank
-                                : undefined
-                            }
-                            benchRatio={
-                              visibleResultNight === "season"
-                                ? row.ranking?.ratio
                                 : undefined
                             }
                             expanded={expandedPlayer === row.id}
@@ -1624,16 +1622,19 @@ export default function App({ connection }: { connection?: LiveConnection }) {
               </div>
             </details>
           )}
-          <footer className="page-footer">
-            <span>
-              <span className="footer-pebble" /> Small tool. Fairer raid nights.
-            </span>
-            <span>
-              {connection
-                ? `${connection.label} · Pacific time`
-                : "Local prototype · sample data only · no Firestore"}
-            </span>
-          </footer>
+          {page !== "results" && (
+            <footer className="page-footer">
+              <span>
+                <span className="footer-pebble" /> Small tool. Fairer raid
+                nights.
+              </span>
+              <span>
+                {connection
+                  ? `${connection.label} · Pacific time`
+                  : "Local prototype · sample data only · no Firestore"}
+              </span>
+            </footer>
+          )}
         </div>
       </main>
       {toast && (

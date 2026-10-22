@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
-import { orderResultRows, rankingRatioLabel } from "./resultRanking";
+import { orderResultRows } from "./resultRanking";
 import { ResultRow } from "./ResultRow";
 import type { PlayerResult } from "./model";
 
@@ -73,10 +73,7 @@ it("orders tied recorded bench values by binary names rather than locale or rati
   ).toEqual(["Low", "High"]);
 });
 
-it("labels undefined ratios separately from a recorded zero ratio", () => {
-  expect(rankingRatioLabel(null)).toBe("Not defined (no played time)");
-  expect(rankingRatioLabel(0)).toBe("0.00");
-  expect(rankingRatioLabel(0.125)).toBe("0.13");
+it("preserves recorded rank for a zero-time row without displaying a ratio", () => {
   render(
     <table>
       <tbody>
@@ -93,7 +90,6 @@ it("labels undefined ratios separately from a recorded zero ratio", () => {
           row={row("example", 0, 0)}
           index={0}
           rank={3}
-          benchRatio={null}
           expanded
           onExpand={vi.fn()}
         />
@@ -101,5 +97,5 @@ it("labels undefined ratios separately from a recorded zero ratio", () => {
     </table>,
   );
   expect(screen.getByText("03")).toBeTruthy();
-  expect(screen.getByText("Not defined (no played time)")).toBeTruthy();
+  expect(screen.queryByText("Bench:played ratio")).toBeNull();
 });

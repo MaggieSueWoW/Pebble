@@ -110,6 +110,7 @@ test("public recorded explanations and officer-only diagnostics survive selectio
   const explanation = page.getByRole("region", {
     name: "Recorded availability explanation",
   });
+  await page.getByText("Availability explanation", { exact: true }).click();
   await expect(explanation).toContainText("Partial availability");
   await expect(explanation).toContainText("Recorded unavailable");
   await expect(
@@ -147,9 +148,7 @@ test("public recorded explanations and officer-only diagnostics survive selectio
     .selectOption(night);
   await expect(diagnostics).toBeVisible();
   await page.setViewportSize({ width: 1280, height: 900 });
-  await page
-    .getByRole("button", { name: "Sign out", exact: true })
-    .click();
+  await page.getByRole("button", { name: "Sign out", exact: true }).click();
   await expect(diagnostics).toHaveCount(0);
   await expect(
     page.getByRole("button", { name: "Details for Example Player" }),

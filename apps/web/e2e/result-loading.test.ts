@@ -1220,10 +1220,13 @@ for (const signedIn of [false, true]) {
     });
     await details.focus();
     await page.keyboard.press("Enter");
-    await expect(breakdown).toContainText("Before break played 13 min");
-    await expect(breakdown).toContainText("After break played 47 min");
-    await expect(breakdown).toContainText("Before break bench 10 min");
-    await expect(breakdown).toContainText("After break bench 20 min");
+    await expect(
+      breakdown.getByRole("table", { name: "Time by break" }).getByRole("row"),
+    ).toHaveText([
+      "PeriodBenchPlayed",
+      "Before break10 min13 min",
+      "After break20 min47 min",
+    ]);
     await expect(
       breakdown.getByRole("button", { name: "Edit availability" }),
     ).toHaveCount(signedIn ? 1 : 0);
@@ -1233,8 +1236,16 @@ for (const signedIn of [false, true]) {
     await expect(breakdown).toHaveCount(0);
     await details.focus();
     await page.keyboard.press("Enter");
-    await expect(breakdown).toContainText("Before break played 0 min");
-    await expect(breakdown).toContainText("After break played 60 min");
+    await expect(
+      breakdown.getByRole("table", { name: "Time by break" }).getByRole("row"),
+    ).toHaveText([
+      "PeriodBenchPlayed",
+      "Before break10 min0 min",
+      "After break20 min60 min",
+    ]);
+    await breakdown
+      .getByText("Availability explanation", { exact: true })
+      .click();
     await expect(breakdown).toContainText("Officer adjustment applied");
     await expect(breakdown).not.toContainText("undefined");
     expect(
@@ -1466,11 +1477,11 @@ test("recorded season rankings preserve eligibility, zero rows, tie order and un
   await page.keyboard.press("Enter");
   await expect(
     page.getByRole("region", { name: "Availability breakdown for Zero" }),
-  ).toContainText("Bench:played ratio Not defined (no played time)");
+  ).not.toContainText("Bench:played ratio");
   await page.getByRole("button", { name: "Details for Zulu" }).click();
   await expect(
     page.getByRole("region", { name: "Availability breakdown for Zulu" }),
-  ).toContainText("Bench:played ratio 0.20");
+  ).not.toContainText("Bench:played ratio");
   const period = page.getByRole("combobox", { name: "Result period" });
   await period.selectOption(nights.baseline);
   await expect(page.locator(".result-name strong")).toHaveText([

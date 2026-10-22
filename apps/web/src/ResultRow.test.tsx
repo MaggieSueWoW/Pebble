@@ -1,5 +1,11 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen, within } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import { ResultRow } from "./ResultRow";
 import type { Player, PlayerResult, WeeklyPlayerResult } from "./model";
@@ -46,17 +52,26 @@ afterEach(cleanup);
 
 it("displays recorded pre/post played and bench values including zero without inference", () => {
   const breakdown = show({ ...base, prePlayed: 0, postPlayed: 90 });
-  expect(breakdown.textContent).toContain("Before break played 0 min");
-  expect(breakdown.textContent).toContain("After break played 90 min");
-  expect(breakdown.textContent).toContain("Before break bench 10 min");
-  expect(breakdown.textContent).toContain("After break bench 20 min");
+  const rows = within(breakdown).getAllByRole("row");
+  expect(rows.map((row) => row.textContent)).toEqual([
+    "PeriodBenchPlayed",
+    "Before break10 min0 min",
+    "After break20 min90 min",
+  ]);
+  const disclosure = within(breakdown)
+    .getByText("Availability explanation")
+    .closest("details")!;
+  expect(disclosure.open).toBe(false);
+  fireEvent.click(within(disclosure).getByText("Availability explanation"));
+  expect(disclosure.open).toBe(true);
   expect(breakdown.textContent).toContain("Automatically inferred");
 });
 
 it("keeps missing recorded halves unavailable rather than splitting totals", () => {
   const breakdown = show({ ...base, prePlayed: 12, overridden: true }, vi.fn());
-  expect(breakdown.textContent).toContain("Before break played 12 min");
-  expect(breakdown.textContent).toContain("After break played Not recorded");
+  const rows = within(breakdown).getAllByRole("row");
+  expect(rows[1].textContent).toBe("Before break10 min12 min");
+  expect(rows[2].textContent).toBe("After break20 minNot recorded");
   expect(breakdown.textContent).not.toContain("78 min");
   expect(breakdown.textContent).toContain("Officer adjustment applied");
   expect(
@@ -83,7 +98,9 @@ it("omits unavailable weekly played halves and adjustment provenance", () => {
   expect(breakdown.textContent).not.toContain("Not recorded");
   expect(breakdown.textContent).not.toContain("Automatically inferred");
   expect(breakdown.textContent).not.toContain("Officer adjustment applied");
-  expect(breakdown.textContent).toContain("Before break bench 20 min");
+  expect(within(breakdown).getAllByRole("row")[1].textContent).toBe(
+    "Before break20 min",
+  );
 });
 
 it("shows attendance only when requested for a season row, preserving nightly and weekly scope", () => {
@@ -106,7 +123,12 @@ it("shows attendance only when requested for a season row, preserving nightly an
     </table>,
   );
   expect(screen.getByRole("region", { name: "Attendance" })).toBeTruthy();
-  expect(screen.getByText("75%", { exact: true })).toBeTruthy();
+  expect(
+    within(screen.getByRole("region", { name: "Attendance" })).getByText(
+      "75%",
+      { exact: true },
+    ),
+  ).toBeTruthy();
   rerender(
     <table>
       <tbody>
@@ -121,5 +143,5 @@ it("shows attendance only when requested for a season row, preserving nightly an
     </table>,
   );
   expect(screen.queryByRole("region", { name: "Attendance" })).toBeNull();
-  expect(screen.getByText(/Before break bench/)).toBeTruthy();
+  expect(screen.getByRole("rowheader", { name: "Before break" })).toBeTruthy();
 });

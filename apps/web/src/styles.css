@@ -1314,6 +1314,7 @@ tbody tr:last-child td {
 }
 .results-card {
   margin-top: 20px;
+  width: 100%;
 }
 .results-toolbar {
   display: flex;
@@ -1325,17 +1326,45 @@ tbody tr:last-child td {
 .result-night-count,
 .result-updated {
   color: #a2acba;
-  font-size: 11px;
+  font-size: 13px;
 }
 .results-toolbar .text-button {
   margin-left: auto;
+  font-size: 13px;
+}
+.result-period-select {
+  position: relative;
+  min-width: 210px;
+}
+.result-period-select > svg {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+  color: #a2acba;
 }
 .results-toolbar select {
-  font-size: 11px;
-  min-width: 170px;
+  appearance: none;
+  font-size: 13px;
+  padding: 10px 38px 10px 12px;
+  width: 100%;
 }
-.results-card table {
-  min-width: 670px;
+.results-card .table-scroll > table {
+  width: 100%;
+  min-width: 0;
+}
+.results-card .table-scroll > table > thead > tr > th,
+.results-card .table-scroll > table > tbody > .result-player-row > td {
+  padding-left: 16px;
+  padding-right: 16px;
+  white-space: nowrap;
+}
+.results-card .table-scroll > table > thead > tr > th {
+  font-size: 12px;
+}
+.results-card .table-scroll > table > tbody > tr:not(.result-detail) > td {
+  font-size: 13px;
 }
 .results-card th:nth-child(3) > svg {
   vertical-align: middle;
@@ -1348,6 +1377,13 @@ tbody tr:last-child td {
 .bench-value {
   color: #d4e8be;
 }
+.result-player-row {
+  cursor: pointer;
+}
+.result-player-row:hover > td,
+.result-player-row:focus-within > td {
+  background: #1c2330;
+}
 .result-name {
   display: flex;
   align-items: center;
@@ -1359,9 +1395,9 @@ tbody tr:last-child td {
 }
 .result-name strong {
   font-weight: 550;
-  font-size: 11px;
+  font-size: 13px;
 }
-.results-card tbody > tr:not(.result-detail) > td {
+.results-card .table-scroll > table > tbody > tr:not(.result-detail) > td {
   padding-top: 1px;
   padding-bottom: 1px;
 }
@@ -1380,7 +1416,7 @@ tbody tr:last-child td {
   gap: 12px;
 }
 .result-breakdown > .small {
-  font-size: 9px;
+  font-size: 13px;
   white-space: nowrap;
 }
 .time-bar {
@@ -1401,33 +1437,89 @@ tbody tr:last-child td {
 }
 .results-card .rank {
   font-family: ui-monospace, monospace;
-  font-size: 10px;
+  font-size: 12px;
 }
-.result-detail td {
+.result-detail > td {
   background: #1c2330;
   padding-top: 15px;
   padding-bottom: 15px;
 }
-.result-detail td > div {
+.result-detail > td > div {
   display: flex;
-  gap: 24px;
+  gap: 20px 32px;
   flex-wrap: wrap;
-  align-items: center;
+  align-items: flex-start;
+}
+.player-time-details {
+  flex: 0 1 320px;
+  min-width: 230px;
+}
+.results-card .break-summary {
+  min-width: 0;
+  width: 100%;
+}
+.break-summary th,
+.break-summary td {
+  padding: 7px 10px;
+  font-size: 13px;
+  white-space: nowrap;
+  background: transparent;
+}
+.break-summary thead th {
+  border-top: 0;
+}
+.break-summary tbody th {
+  font-weight: 400;
+  color: #a9b6c8;
+}
+.break-summary td {
+  font-variant-numeric: tabular-nums;
+  color: #d6e0ee;
+}
+.detail-disclosure {
+  margin-top: 12px;
+  font-size: 13px;
+}
+.detail-disclosure summary {
+  cursor: pointer;
+  color: #a9b6c8;
+}
+.detail-disclosure[open] summary {
+  margin-bottom: 12px;
+}
+.detail-disclosure p {
+  margin: 8px 0;
+  line-height: 1.5;
+}
+.attendance-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px 32px;
+  margin: 0;
+}
+.attendance-summary dt {
+  color: #a9b6c8;
+  font-size: 13px;
+}
+.attendance-summary dd {
+  font-size: 18px;
+  color: #d6e0ee;
+  margin: 5px 0 0;
 }
 .result-detail span {
   color: #8d9db2;
-  font-size: 10px;
+  font-size: 13px;
 }
 .result-detail strong {
   color: #d6e0ee;
   display: block;
   font-weight: 500;
-  font-size: 11px;
+  font-size: 13px;
   margin-top: 5px;
 }
 .result-detail .text-button {
   margin-left: auto;
-  font-size: 10px;
+  font-size: 13px;
 }
 .empty-state {
   padding: 40px;
@@ -1760,7 +1852,7 @@ tbody tr:last-child td {
   .results-card td > .icon-button {
     height: 24px;
   }
-  .results-card tbody > tr:not(.result-detail) > td {
+  .results-card .table-scroll > table > tbody > tr:not(.result-detail) > td {
     padding-top: 5px;
     padding-bottom: 5px;
   }
@@ -2120,10 +2212,10 @@ tbody tr:last-child td {
   .timing-card .text-button {
     font-size: 10px;
   }
-  .results-toolbar select {
+  .result-period-select {
     width: 100%;
   }
-  .result-detail td > div {
+  .result-detail > td > div {
     gap: 17px;
   }
   .result-detail .text-button {
@@ -2197,17 +2289,15 @@ tbody tr:last-child td {
 }
 
 .attendance-details {
-  flex-basis: 100%;
+  flex: 1 1 280px;
   min-width: 0;
-  border-top: 1px solid #344052;
-  padding-top: 16px;
 }
 .attendance-details h3 {
   margin: 0 0 12px;
   font-size: 14px;
 }
 .attendance-details p {
-  font-size: 12px;
+  font-size: 13px;
   color: #a9b6c8;
   line-height: 1.5;
 }
@@ -2218,7 +2308,7 @@ tbody tr:last-child td {
   margin: 0;
 }
 .attendance-totals dt {
-  font-size: 11px;
+  font-size: 13px;
   color: #a9b6c8;
 }
 .attendance-totals dd {
@@ -2233,13 +2323,13 @@ tbody tr:last-child td {
 }
 .attendance-weeks caption {
   text-align: left;
-  font-size: 12px;
+  font-size: 13px;
   margin-bottom: 8px;
 }
 .attendance-weeks th,
 .attendance-weeks td {
   padding: 8px;
-  font-size: 11px;
+  font-size: 13px;
   text-align: left;
   border-bottom: 1px solid #344052;
   white-space: normal;
@@ -2265,5 +2355,11 @@ tbody tr:last-child td {
 .additional-attendance summary {
   cursor: pointer;
   margin-bottom: 12px;
+  font-size: 13px;
+}
+
+.result-detail .availability-explanation dt,
+.result-detail .availability-explanation dd,
+.result-detail .availability-explanation p {
   font-size: 13px;
 }

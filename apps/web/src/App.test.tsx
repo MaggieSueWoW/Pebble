@@ -621,6 +621,11 @@ it("links both result disclosure controls to stable hidden detail content", () =
   fireEvent.click(name);
   expect(document.getElementById(id)?.closest("tr")?.hidden).toBe(true);
   expect(detail.getAttribute("aria-expanded")).toBe("false");
+  const row = detail.closest("tr")!;
+  fireEvent.click(row.querySelector(".bench-value")!);
+  expect(detail.getAttribute("aria-expanded")).toBe("true");
+  fireEvent.click(row.querySelector(".time-bar")!);
+  expect(detail.getAttribute("aria-expanded")).toBe("false");
 });
 
 it.each(["results", "queue"] as const)(

@@ -1,7 +1,6 @@
 import { AvailabilityExplanation } from "./AvailabilityExplanation";
 import { useId } from "react";
 import { AttendanceDetails } from "./AttendanceDetails";
-import { rankingRatioLabel } from "./resultRanking";
 import { ArrowRight, ChevronDown, ChevronRight, Settings2 } from "lucide-react";
 import {
   minutes,
@@ -19,7 +18,6 @@ export function ResultRow({
   onEdit,
   showAttendance = false,
   rank,
-  benchRatio,
 }: {
   player: Player;
   row: PlayerResult | WeeklyPlayerResult;
@@ -29,20 +27,18 @@ export function ResultRow({
   onEdit?: () => void;
   showAttendance?: boolean;
   rank?: number;
-  benchRatio?: number | null;
 }) {
   const total = row.played + row.bench;
   const detailId = useId();
   return (
     <>
-      <tr>
+      <tr className="result-player-row" onClick={onExpand}>
         <td className="muted rank">
           {String(rank ?? index + 1).padStart(2, "0")}
         </td>
         <td>
           <button
             className="result-name"
-            onClick={onExpand}
             aria-expanded={expanded}
             aria-controls={detailId}
           >
@@ -64,9 +60,8 @@ export function ResultRow({
             </div>
             <span className="small muted">
               {total
-                ? `${Math.round((row.played / total) * 100)}% played`
+                ? `${Math.round((row.played / total) * 100)}%`
                 : "No recorded time"}
-              {"overridden" in row && row.overridden ? " · adjusted" : ""}
             </span>
           </div>
         </td>
@@ -74,7 +69,6 @@ export function ResultRow({
           <button
             className="icon-button"
             aria-label={`Details for ${player.name}`}
-            onClick={onExpand}
             aria-expanded={expanded}
             aria-controls={detailId}
           >
@@ -89,55 +83,56 @@ export function ResultRow({
             role="region"
             aria-label={`Availability breakdown for ${player.name}`}
           >
-            {"overridden" in row && (
-              <>
-                <span>
-                  Before break played{" "}
-                  <strong>
-                    {row.prePlayed == null
-                      ? "Not recorded"
-                      : `${row.prePlayed} min`}
-                  </strong>
-                </span>
-                <span>
-                  After break played{" "}
-                  <strong>
-                    {row.postPlayed == null
-                      ? "Not recorded"
-                      : `${row.postPlayed} min`}
-                  </strong>
-                </span>
-              </>
-            )}
-            <span>
-              Before break bench <strong>{row.preBench} min</strong>
-            </span>
-            <span>
-              After break bench <strong>{row.postBench} min</strong>
-            </span>
-            {"overridden" in row && (
-              <span>
-                Availability{" "}
-                <strong>
-                  {row.overridden
-                    ? "Officer adjustment applied"
-                    : "Automatically inferred"}
-                </strong>
-              </span>
-            )}
-            {"availability" in row && row.availability && (
-              <AvailabilityExplanation availability={row.availability} />
-            )}
+            <div className="player-time-details">
+              <table className="break-summary" aria-label="Time by break">
+                <thead>
+                  <tr>
+                    <th scope="col">Period</th>
+                    <th scope="col">Bench</th>
+                    {"overridden" in row && <th scope="col">Played</th>}
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <th scope="row">Before break</th>
+                    <td>{row.preBench} min</td>
+                    {"overridden" in row && (
+                      <td>
+                        {row.prePlayed == null
+                          ? "Not recorded"
+                          : `${row.prePlayed} min`}
+                      </td>
+                    )}
+                  </tr>
+                  <tr>
+                    <th scope="row">After break</th>
+                    <td>{row.postBench} min</td>
+                    {"overridden" in row && (
+                      <td>
+                        {row.postPlayed == null
+                          ? "Not recorded"
+                          : `${row.postPlayed} min`}
+                      </td>
+                    )}
+                  </tr>
+                </tbody>
+              </table>
+              {"overridden" in row && (
+                <details className="detail-disclosure">
+                  <summary>Availability explanation</summary>
+                  <p>
+                    {row.overridden
+                      ? "Officer adjustment applied"
+                      : "Automatically inferred"}
+                  </p>
+                  <AvailabilityExplanation availability={row.availability} />
+                </details>
+              )}
+            </div>
             {showAttendance && (
               <AttendanceDetails
                 attendance={"attendance" in row ? row.attendance : undefined}
               />
-            )}
-            {benchRatio !== undefined && (
-              <span>
-                Bench:played ratio{" "}
-                <strong>{rankingRatioLabel(benchRatio)}</strong>
-              </span>
             )}
             {onEdit && (
               <button className="text-button" onClick={onEdit}>
