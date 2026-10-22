@@ -1096,17 +1096,6 @@ tbody tr:last-child td {
   border-color: #364052;
   min-width: 220px;
 }
-.custom-date {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  font-size: 10px;
-}
-.custom-date input {
-  padding: 8px 10px;
-  font-size: 11px;
-  max-width: 145px;
-}
 .tabs {
   display: flex;
   gap: 25px;
@@ -1883,11 +1872,6 @@ tbody tr:last-child td {
   .override-toolbar {
     align-items: flex-start;
   }
-  .custom-date {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 5px;
-  }
   .night-select {
     flex-wrap: wrap;
     gap: 8px;
@@ -2208,7 +2192,7 @@ tbody tr:last-child td {
     gap: 7px;
     font-size: 10px;
   }
-  .night-select > span {
+  .night-select > span:not(.select-control) {
     display: none;
   }
   .night-select select {
@@ -2216,14 +2200,6 @@ tbody tr:last-child td {
     max-width: 190px;
     padding: 10px 8px;
     font-size: 11px;
-  }
-  .custom-date {
-    font-size: 8px;
-  }
-  .custom-date input {
-    font-size: 10px;
-    max-width: 135px;
-    padding: 6px 8px;
   }
   .tabs {
     gap: 25px;
@@ -2436,4 +2412,238 @@ tbody tr:last-child td {
 .result-detail .availability-explanation dd,
 .result-detail .availability-explanation p {
   font-size: 13px;
+}
+
+/* Overrides uses the same readable type scale as the report and result tables. */
+.overrides-page .night-select,
+.overrides-page .tabs button,
+.overrides-page .search-field input,
+.overrides-page .player-description > strong,
+.overrides-page .player-availability > span:last-child,
+.overrides-page .field label,
+.overrides-page .field input,
+.overrides-page .field select,
+.overrides-page .field textarea,
+.overrides-page .editor-intro,
+.overrides-page .reset-link,
+.overrides-page .notice,
+.overrides-page .field-error,
+.overrides-page .button,
+.overrides-page .text-button {
+  font-size: 13px;
+}
+.overrides-page .player-description > span,
+.overrides-page .editor-heading p,
+.overrides-page .badge,
+.overrides-page .table-heading p,
+.overrides-page .small,
+.overrides-page .optional {
+  font-size: 12px;
+}
+.select-control {
+  position: relative;
+  display: block;
+}
+.select-control > svg {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+  color: #a2acba;
+}
+.overrides-page .select-control select {
+  appearance: none;
+  padding-right: 38px;
+  width: 100%;
+  margin-top: 0;
+  font-size: 13px;
+}
+.overrides-page .field .select-control {
+  margin-top: 8px;
+}
+
+.overrides-page .player-item {
+  padding: 1px 16px;
+  min-height: 23px;
+  line-height: 20px;
+}
+.overrides-page .player-availability {
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+}
+.overrides-page .player-description > strong {
+  white-space: nowrap;
+}
+
+/* Keep the audit columns aligned while the player list scrolls on small screens. */
+.overrides-page .player-list {
+  overflow-x: auto;
+}
+.override-player-columns,
+.overrides-page .override-player-row {
+  display: grid;
+  grid-template-columns: minmax(110px, 1fr) 65px repeat(4, 48px) 14px;
+  gap: 8px;
+  min-width: 465px;
+  align-items: center;
+}
+.override-player-columns {
+  padding: 8px 16px 8px 18px;
+  font-size: 12px;
+  color: #a0acbc;
+}
+.override-player-columns > span:nth-child(2) {
+  grid-column: 3 / 5;
+}
+.override-player-columns > span:nth-child(3) {
+  grid-column: 5 / 7;
+}
+.override-player-columns > span:not(:first-child) {
+  text-align: center;
+}
+.override-player-columns small {
+  display: block;
+  margin-top: 3px;
+  font-size: 11px;
+  word-spacing: 7px;
+}
+.override-player-row .badge {
+  grid-column: 2;
+  grid-row: 1;
+  justify-self: center;
+  font-size: 10px;
+  line-height: 14px;
+  padding: 0 5px;
+  border-radius: 3px;
+}
+.override-player-row .override-minute {
+  text-align: right;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  padding: 0 5px;
+  line-height: 20px;
+  border-radius: 3px;
+}
+.override-player-row .player-description {
+  grid-column: 1;
+  grid-row: 1;
+}
+.override-player-row .override-minute {
+  grid-row: 1;
+}
+.override-player-row .override-minute.override-affected {
+  color: #d6b9ff;
+  background: #b58cff18;
+}
+.override-player-row > svg {
+  grid-column: 7;
+  grid-row: 1;
+}
+
+.override-toolbar {
+  flex-wrap: wrap;
+}
+.override-toolbar .result-updated {
+  margin-left: auto;
+}
+
+@media (max-width: 650px) {
+  .overrides-page .player-item {
+    padding-top: 5px;
+    padding-bottom: 5px;
+    min-height: 35px;
+  }
+}
+
+.overrides-page .timing-card {
+  max-width: 900px;
+  padding: 20px;
+}
+.timing-heading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.timing-heading h2 {
+  margin: 0;
+}
+.timing-help {
+  color: var(--muted);
+  font-size: 13px;
+  margin: 8px 0 18px;
+}
+.timing-table {
+  width: 100%;
+  margin-bottom: 18px;
+}
+.timing-table th,
+.timing-table td {
+  padding: 8px 12px;
+  text-align: left;
+  font-size: 13px;
+}
+.timing-table thead th {
+  color: var(--muted);
+  font-size: 12px;
+}
+.timing-table tbody th {
+  background: transparent;
+  color: inherit;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.timing-table .timing-detected {
+  color: #a2acba;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.timing-table .field {
+  margin: 0;
+}
+.timing-table input {
+  width: 100%;
+  min-width: 240px;
+  margin: 0;
+  padding: 8px 10px;
+  color-scheme: dark;
+}
+.overrides-page .timing-card textarea {
+  min-height: 56px;
+  max-width: 100%;
+}
+.overrides-page .timing-card .card-action-row {
+  padding-top: 14px;
+  margin-top: 14px;
+}
+@media (max-width: 650px) {
+  .timing-table,
+  .timing-table tbody {
+    display: block;
+  }
+  .timing-table thead {
+    display: none;
+  }
+  .timing-table tr {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    padding: 8px 0;
+    border-top: 1px solid var(--border);
+  }
+  .timing-table th,
+  .timing-table td {
+    padding: 4px 0;
+    border: 0;
+  }
+  .timing-table td.field {
+    grid-column: 1 / -1;
+  }
+  .timing-table input {
+    min-width: 0;
+  }
+}
+
+.timing-table tbody tr:last-child th {
+  border-bottom: 0;
 }

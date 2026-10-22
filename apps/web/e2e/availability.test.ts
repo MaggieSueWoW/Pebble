@@ -49,10 +49,12 @@ async function open(page: Page) {
   await expect(
     page.getByRole("heading", { name: "Who was available?" }),
   ).toBeVisible();
-  await expect(page.getByLabel("Choose another raid date")).toHaveValue(
-    /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/,
-  );
-  await page.getByLabel("Choose another raid date").fill(first);
+  await expect(
+    page.getByRole("combobox", { name: "Raid night", exact: true }),
+  ).toHaveValue(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/);
+  await page
+    .getByRole("combobox", { name: "Raid night", exact: true })
+    .selectOption(first);
   await expect(
     page.getByRole("heading", { name: "Example Alpha", exact: true }),
   ).toBeVisible();
@@ -156,6 +158,22 @@ test.beforeEach(async () => {
         ...meta(6),
       },
     );
+    await setDoc(doc(db, `${season}/results/fixture`), {
+      complete: true,
+      reportCount: 1,
+      completedAt: Timestamp.now(),
+    });
+    for (const night of [first, second]) {
+      await setDoc(doc(db, `${season}/results/fixture/nights/${night}`), {
+        night,
+        duration: 180,
+        players: [],
+        reports: 1,
+      });
+    }
+    await setDoc(doc(db, "publicSeasons/test-reports"), {
+      latestRunId: "fixture",
+    });
     await setDoc(doc(db, "bot/status"), { lastHeartbeatAt: Timestamp.now() });
   });
 });
@@ -263,7 +281,9 @@ test("preserves newer field edits through a held save and guards navigation and 
     .getByRole("combobox", { name: "After break", exact: true })
     .selectOption("unavailable");
   await page.getByRole("button", { name: /Example Beta/ }).click();
-  await page.getByLabel("Choose another raid date").fill(second);
+  await page
+    .getByRole("combobox", { name: "Raid night", exact: true })
+    .selectOption(second);
   await page.getByRole("tab", { name: "Raid timing" }).click();
   await page
     .getByRole("navigation")
@@ -272,7 +292,9 @@ test("preserves newer field edits through a held save and guards navigation and 
   await expect(
     page.getByRole("heading", { name: "Example Alpha", exact: true }),
   ).toBeVisible();
-  await expect(page.getByLabel("Choose another raid date")).toHaveValue(first);
+  await expect(
+    page.getByRole("combobox", { name: "Raid night", exact: true }),
+  ).toHaveValue(first);
   await expect(page.getByRole("dialog")).not.toBeVisible();
   await expect(
     page.getByRole("button", { name: "Run Pebble", exact: true }),
@@ -382,7 +404,10 @@ test("protects player/night/tab/page drafts and supports keyboard navigation on 
   await expect(before).toHaveValue("available");
   for (const leave of [
     () => page.getByRole("button", { name: /Example Beta/ }).click(),
-    () => page.getByLabel("Choose another raid date").fill(second),
+    () =>
+      page
+        .getByRole("combobox", { name: "Raid night", exact: true })
+        .selectOption(second),
     () => page.getByRole("tab", { name: "Raid timing" }).click(),
     () =>
       page
@@ -405,7 +430,9 @@ test("protects player/night/tab/page drafts and supports keyboard navigation on 
   ).toBeVisible();
   await expect(notes(page)).toHaveValue("Other player");
   await page.getByRole("button", { name: /Example Alpha/ }).click();
-  await page.getByLabel("Choose another raid date").fill(second);
+  await page
+    .getByRole("combobox", { name: "Raid night", exact: true })
+    .selectOption(second);
   await expect(notes(page)).toHaveValue("Other night");
   expect(
     await page.evaluate(
@@ -446,7 +473,7 @@ test("handles roster arrival, clean removal, search and unknown metadata", async
   await expect(
     editor.getByRole("heading", { name: "Example Alpha", exact: true }),
   ).toBeVisible();
-  await expect(editor.locator(".editor-heading p")).toHaveText("Mage");
+  await expect(editor.locator(".editor-heading p")).toHaveCount(0);
   await expect(
     page.getByRole("button", { name: /Example Alpha/ }),
   ).not.toContainText("Unknown");
@@ -466,7 +493,7 @@ test("handles roster arrival, clean removal, search and unknown metadata", async
   ).toBeVisible();
   await page.getByRole("button", { name: /Example Beta/ }).focus();
   await page.keyboard.press("Enter");
-  await expect(editor.locator(".editor-heading p")).toHaveText("Healer");
+  await expect(editor.locator(".editor-heading p")).toHaveCount(0);
   await search.fill("no match");
   await expect(
     page.getByText("No matching players. Try another search."),

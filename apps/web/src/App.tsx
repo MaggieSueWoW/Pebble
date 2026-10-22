@@ -36,7 +36,6 @@ import {
   formatDate,
   formatTime,
   freshState,
-  playerDetails,
   nightOptions as sampleNights,
   players as samplePlayers,
   signature,
@@ -190,37 +189,32 @@ export default function App({ connection }: { connection?: LiveConnection }) {
     }
   }
   const players = connection?.players ?? samplePlayers;
-  const todayParts = Object.fromEntries(
-    new Intl.DateTimeFormat("en-US", {
-      timeZone: "America/Los_Angeles",
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-    })
-      .formatToParts(new Date())
-      .map(({ type, value }) => [type, value]),
-  );
-  const today = `${todayParts.year}-${todayParts.month}-${todayParts.day}`;
   const nightOptions = connection
     ? [
         ...new Set(
           [
             ...connection.nights,
-            ...inputs.reports.map((report) => report.night),
+            ...inputs.reports
+              .filter((report) => report.fetched)
+              .map((report) => report.night),
           ].filter(Boolean),
         ),
       ]
         .sort()
         .reverse()
     : sampleNights;
-  const defaultNight = nightOptions[0] ?? today;
-  const firstPlayer = players[0]?.id ?? "";
+  const defaultNight = nightOptions[0] ?? "";
+  const firstPlayer =
+    [...players].sort((a, b) =>
+      a.name.localeCompare(b.name, "en", { sensitivity: "base" }),
+    )[0]?.id ?? "";
   const navigation = useResultNavigation(
     canManage ? "reports" : "results",
     () => unsaved,
     (action) => guard(action),
   );
   const page = navigation.page;
+  const showPageIntro = page === "settings" || page === "roster";
   const setPage = (page: Page) => navigation.navigate({ page });
   const [night, setNight] = useState(defaultNight);
   const nightChosen = useRef(false);
@@ -314,6 +308,8 @@ export default function App({ connection }: { connection?: LiveConnection }) {
     span,
     async (key, adjustment, expected) => {
       const slash = key.indexOf("/");
+      if (!nightOptions.includes(key.slice(0, slash)))
+        throw new Error("Choose a raid night identified from logs.");
       const path = `availabilityOverrides/${key.slice(0, slash)}_${key.slice(slash + 1)}`;
       if (connection) {
         const acknowledged = await connection.saveInputs(
@@ -331,7 +327,7 @@ export default function App({ connection }: { connection?: LiveConnection }) {
       }));
       return expected + 1;
     },
-    Boolean(connection?.busy),
+    Boolean(connection?.busy) || !nightOptions.includes(night),
     players.some((player) => player.id === selected),
   );
   const selectedPlayer = players.find((player) => player.id === selected);
@@ -358,6 +354,8 @@ export default function App({ connection }: { connection?: LiveConnection }) {
     connection?.versions[`nightOverrides/${night}`] ?? 0,
     detectedTiming,
     async (key, timing, expected) => {
+      if (!nightOptions.includes(key))
+        throw new Error("Choose a raid night identified from logs.");
       if (connection) {
         const versions = await connection.saveInputs(
           { reports: [], adjustments: {}, timings: { [key]: timing } },
@@ -374,7 +372,7 @@ export default function App({ connection }: { connection?: LiveConnection }) {
       }));
       return expected + 1;
     },
-    Boolean(connection?.busy),
+    Boolean(connection?.busy) || !nightOptions.includes(night),
     !connection,
   );
   const rosterEditor = useRosterEditor(
@@ -425,14 +423,19 @@ export default function App({ connection }: { connection?: LiveConnection }) {
   useEffect(() => {
     // Follow arriving metadata only until the operator chooses or edits a date.
     if (unsaved) nightChosen.current = true;
-    if (!nightChosen.current) setNight(defaultNight);
-  }, [defaultNight, unsaved]);
+    if (!unsaved && (!nightChosen.current || !nightOptions.includes(night)))
+      setNight(defaultNight);
+  }, [defaultNight, nightOptions.join(","), night, unsaved]);
   const unprocessed = connection
     ? connection.unprocessed
     : results.signature !== signature(inputs);
-  const visiblePlayers = players.filter((p) =>
-    `${p.name} ${p.className}`.toLowerCase().includes(search.toLowerCase()),
-  );
+  const visiblePlayers = players
+    .filter((p) =>
+      `${p.name} ${p.className}`.toLowerCase().includes(search.toLowerCase()),
+    )
+    .sort((a, b) =>
+      a.name.localeCompare(b.name, "en", { sensitivity: "base" }),
+    );
 
   function retryWithFocus(retry: () => void) {
     retry();
@@ -587,6 +590,7 @@ export default function App({ connection }: { connection?: LiveConnection }) {
     if (next !== page) guard(() => setPage(next));
   }
   function chooseNight(next: string) {
+    if (!nightOptions.includes(next)) return;
     if (next === night) {
       nightChosen.current = true;
       return;
@@ -898,7 +902,9 @@ export default function App({ connection }: { connection?: LiveConnection }) {
         </div>
       </aside>
       <main>
-        <div className="content">
+        <div
+          className={`content ${page === "overrides" ? "overrides-page" : ""}`}
+        >
           {connection?.error && (
             <Notice tone="amber">{connection.error}</Notice>
           )}
@@ -960,31 +966,29 @@ export default function App({ connection }: { connection?: LiveConnection }) {
             )}
           <div className="page-heading">
             <div>
-              {page !== "results" && page !== "reports" && (
+              {showPageIntro && (
                 <div className="eyebrow accent">A LITTLE LESS RAID ADMIN</div>
               )}
               <h1 id="page-title" tabIndex={-1}>
                 {page === "reports"
                   ? "Reports"
                   : page === "overrides"
-                    ? "Fine-tune the night"
+                    ? "Overrides"
                     : page === "settings"
                       ? "Calculation settings"
                       : page === "roster"
                         ? "Your raid roster"
                         : "Results"}
               </h1>
-              {page !== "results" && page !== "reports" && (
+              {showPageIntro && (
                 <p>
-                  {page === "overrides"
-                    ? "A few adjustments, then back to the raid."
-                    : page === "settings"
-                      ? "Set the calculation parameters, then recompute when ready."
-                      : "Keep membership current, then recompute when ready."}
+                  {page === "settings"
+                    ? "Set the calculation parameters, then recompute when ready."
+                    : "Keep membership current, then recompute when ready."}
                 </p>
               )}
             </div>
-            {page !== "results" && page !== "reports" && (
+            {showPageIntro && (
               <button
                 className="button secondary"
                 onClick={() => go("results")}
@@ -993,7 +997,7 @@ export default function App({ connection }: { connection?: LiveConnection }) {
               </button>
             )}
           </div>
-          {page !== "results" && (
+          {page !== "results" && page !== "overrides" && (
             <div
               className={`${page === "reports" ? "reports-status" : "run-strip"} ${active || connection?.submitting || waitingForResults ? "is-running" : ""} ${(lastFailed || resultLoadFailed) && !active && !connection?.submitting ? "has-error" : ""}`}
             >
@@ -1146,39 +1150,76 @@ export default function App({ connection }: { connection?: LiveConnection }) {
               />
             </>
           )}
-          {page === "overrides" && (
+          {page === "overrides" && !nightOptions.length && (
+            <Notice>
+              No raid nights identified yet. Add reports and run Pebble to
+              identify nights before adding overrides.
+            </Notice>
+          )}
+          {page === "overrides" && nightOptions.length > 0 && (
             <>
               <div className="override-toolbar">
                 <label className="night-select">
                   <Clock3 size={16} />
                   <span>Raid night</span>
-                  <select
-                    aria-label="Raid night"
-                    value={night}
-                    onChange={(e) => chooseNight(e.target.value)}
-                  >
-                    {[...new Set([...nightOptions, night])]
-                      .sort()
-                      .reverse()
-                      .map((n) => (
+                  <span className="select-control">
+                    <select
+                      aria-label="Raid night"
+                      value={night}
+                      onChange={(e) => chooseNight(e.target.value)}
+                    >
+                      {nightOptions.map((n) => (
                         <option key={n} value={n}>
                           {formatDate(n, true)}
                         </option>
                       ))}
-                  </select>
+                    </select>
+                    <ChevronDown size={16} aria-hidden="true" />
+                  </span>
                 </label>
-                <label className="custom-date small muted">
-                  Other date
-                  <input
-                    aria-label="Choose another raid date"
-                    type="date"
-                    value={night}
-                    onInput={(e) =>
-                      e.currentTarget.value &&
-                      chooseNight(e.currentTarget.value)
-                    }
-                  />
-                </label>
+                <span
+                  className="result-updated"
+                  role="status"
+                  aria-label="Run status"
+                  aria-atomic="true"
+                >
+                  {active
+                    ? `${active.status === "queued" && !online ? "Queued · waiting for your local bot" : `${steps[active.stage]}…`} · `
+                    : connection?.submitting
+                      ? "Submitting run… · "
+                      : connection?.officer && !connection.queueReady
+                        ? `${connection.queueError ? "Run queue is unavailable" : "Checking run queue…"} · `
+                        : connection?.resultsError
+                          ? "Latest results are unavailable · "
+                          : connection?.resultsPending
+                            ? "Loading latest results… · "
+                            : lastFailed
+                              ? "Last run didn’t finish · "
+                              : unsaved
+                                ? "You have unsaved edits · "
+                                : unprocessed
+                                  ? "Changes ready for the next run · "
+                                  : ""}
+                  {!connection || connection.hasResults ? (
+                    <>
+                      Updated{" "}
+                      <time dateTime={results.completedAt}>
+                        {formatTime(results.completedAt)} PT ·{" "}
+                        {formatRunDate(results.completedAt)}
+                      </time>
+                    </>
+                  ) : (
+                    "No completed runs yet"
+                  )}
+                </span>
+                {connection?.officer && connection.queueError && (
+                  <button
+                    className="text-button"
+                    onClick={() => retryWithFocus(connection.retryQueue)}
+                  >
+                    Retry run queue
+                  </button>
+                )}
               </div>
               <OverrideTabs
                 value={overrideTab}
@@ -1208,6 +1249,18 @@ export default function App({ connection }: { connection?: LiveConnection }) {
                       />
                     </label>
                     <div className="player-list">
+                      <div
+                        className="override-player-columns"
+                        aria-hidden="true"
+                      >
+                        <span>Player</span>
+                        <span>
+                          Bench<small>Before · After</small>
+                        </span>
+                        <span>
+                          Played<small>Before · After</small>
+                        </span>
+                      </div>
                       {visiblePlayers.map((player) => {
                         const a =
                           inputs.adjustments[adjustmentKey(night, player.id)];
@@ -1218,42 +1271,67 @@ export default function App({ connection }: { connection?: LiveConnection }) {
                         const row = latestNight?.players.find(
                           (r) => r.id === player.id,
                         );
+                        const preOverride =
+                          (row?.availability?.pre.mode ??
+                            a?.pre.mode ??
+                            "automatic") !== "automatic";
+                        const postOverride =
+                          (row?.availability?.post.mode ??
+                            a?.post.mode ??
+                            "automatic") !== "automatic";
                         return (
                           <button
                             key={player.id}
-                            className={`player-item ${selected === player.id ? "selected" : ""}`}
+                            className={`player-item override-player-row ${selected === player.id ? "selected" : ""}`}
                             onClick={() => choosePlayer(player.id)}
                             aria-pressed={selected === player.id}
                           >
-                            <span
-                              className="class-mark"
-                              style={{
-                                color: player.color,
-                                background: `${player.color}12`,
-                              }}
-                            >
-                              {player.name.slice(0, 1)}
-                            </span>
                             <span className="player-description">
                               <strong style={{ color: player.color }}>
                                 {player.name}
                               </strong>
-                              {playerDetails(player) && (
-                                <span>{playerDetails(player)}</span>
-                              )}
                             </span>
-                            <span className="player-availability">
-                              {overridden ? (
-                                <Badge tone="purple">Override</Badge>
-                              ) : (
-                                <span className="muted small">Automatic</span>
-                              )}
-                              <span>
-                                {row
-                                  ? `${row.bench} min bench`
-                                  : "Not calculated"}
+                            {(overridden || row?.overridden) && (
+                              <Badge tone="purple">Override</Badge>
+                            )}
+                            {(
+                              [
+                                [
+                                  "Bench before break",
+                                  row?.preBench,
+                                  preOverride,
+                                ],
+                                [
+                                  "Bench after break",
+                                  row?.postBench,
+                                  postOverride,
+                                ],
+                                [
+                                  "Played before break",
+                                  row?.prePlayed,
+                                  preOverride,
+                                ],
+                                [
+                                  "Played after break",
+                                  row?.postPlayed,
+                                  postOverride,
+                                ],
+                              ] as const
+                            ).map(([label, minutes, affected], index) => (
+                              <span
+                                key={label}
+                                style={{ gridColumn: index + 3 }}
+                                className={`override-minute ${affected ? "override-affected" : ""}`}
+                                aria-label={`${label}: ${minutes == null ? "not recorded" : `${minutes} minutes`}${affected ? ", availability override" : ""}`}
+                                title={`${label}${affected ? " · Availability override" : ""}`}
+                              >
+                                {minutes == null
+                                  ? "—"
+                                  : minutes === 0
+                                    ? "-"
+                                    : minutes}
                               </span>
-                            </span>
+                            ))}
                             <ChevronRight size={14} />
                           </button>
                         );
@@ -1267,8 +1345,8 @@ export default function App({ connection }: { connection?: LiveConnection }) {
                       )}
                     </div>
                     <div className="table-footnote">
-                      <Info size={14} /> Bench totals are from the last
-                      completed run.
+                      <Info size={14} /> Minutes from the last completed run.
+                      Highlighted values have an availability override.
                     </div>
                   </section>
                   <AvailabilityEditor
@@ -1572,7 +1650,7 @@ export default function App({ connection }: { connection?: LiveConnection }) {
               </div>
             </details>
           )}
-          {page !== "results" && page !== "reports" && (
+          {showPageIntro && (
             <footer className="page-footer">
               <span>
                 <span className="footer-pebble" /> Small tool. Fairer raid

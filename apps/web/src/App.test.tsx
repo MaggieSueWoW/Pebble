@@ -46,7 +46,7 @@ function connection(players: Player[] = []): LiveConnection {
     calculation: defaultCalculation(),
     saveCalculation: vi.fn(async (_value, version) => version + 1),
     savePlayer: vi.fn(),
-    nights: [],
+    nights: ["2026-10-15"],
     user: null,
     officer: true,
     accessGeneration: 0,
@@ -100,9 +100,18 @@ it("selects arriving players, keeps search independent and renders only known me
   const { rerender } = render(<App connection={c} />);
   overrides();
   expect(screen.getByText("No players in the roster yet.")).toBeTruthy();
-  rerender(<App connection={{ ...c, players: [alpha, beta] }} />);
+  rerender(<App connection={{ ...c, players: [beta, alpha] }} />);
+  expect(
+    [...document.querySelectorAll(".player-item strong")].map(
+      (el) => el.textContent,
+    ),
+  ).toEqual(["Example Alpha", "Example Beta"]);
   expect(editor().textContent).toContain("Example Alpha");
-  expect(editor().textContent).toContain("Mage");
+  expect(editor().textContent).not.toContain("Mage");
+  const search = screen.getByRole("textbox", { name: "Search players" });
+  fireEvent.change(search, { target: { value: "mage" } });
+  expect(screen.getByRole("button", { name: /Example Alpha/ })).toBeTruthy();
+  expect(screen.queryByRole("button", { name: /Example Beta/ })).toBeNull();
   expect(editor().querySelector(".editor-heading")?.textContent).not.toMatch(
     /Unknown| · /,
   );
@@ -111,7 +120,7 @@ it("selects arriving players, keeps search independent and renders only known me
   });
   expect(editor().textContent).toContain("Example Alpha");
   fireEvent.click(screen.getByRole("button", { name: /Example Beta/ }));
-  expect(editor().textContent).toContain("Healer");
+  expect(editor().textContent).toContain("Example Beta");
   expect(editor().querySelector(".editor-heading")?.textContent).not.toContain(
     " · ",
   );
@@ -238,8 +247,6 @@ function dates(
     },
   };
 }
-const raidDate = () =>
-  screen.getByLabelText("Choose another raid date") as HTMLInputElement;
 const raidPicker = () =>
   screen.getByRole("combobox", { name: "Raid night" }) as HTMLSelectElement;
 
@@ -251,7 +258,7 @@ it("defaults to the newest report/result date with one ordered deduplicated list
   );
   render(<App connection={c} />);
   overrides();
-  expect(raidDate().value).toBe("2026-10-16");
+  expect(raidPicker().value).toBe("2026-10-16");
   expect([...raidPicker().options].map((o) => o.value)).toEqual([
     "2026-10-16",
     "2026-10-15",
@@ -260,50 +267,48 @@ it("defaults to the newest report/result date with one ordered deduplicated list
   expect(c.saveInputs).not.toHaveBeenCalled();
 });
 
-it("starts on Pacific today, follows late metadata, then preserves an explicit custom date", () => {
-  vi.useFakeTimers();
-  vi.setSystemTime(new Date("2026-10-19T02:00:00Z"));
-  try {
-    const c = connection([alpha]);
-    const { rerender } = render(<App connection={c} />);
-    overrides();
-    expect(raidDate().value).toBe("2026-10-18");
-    rerender(<App connection={dates(c, [], ["2026-10-15"])} />);
-    expect(raidDate().value).toBe("2026-10-15");
-    rerender(<App connection={dates(c, ["2026-10-16"])} />);
-    expect(raidDate().value).toBe("2026-10-16");
-    fireEvent.input(raidDate(), { target: { value: "2026-10-12" } });
-    rerender(<App connection={dates(c, ["2026-10-17"])} />);
-    expect(raidDate().value).toBe("2026-10-12");
-    expect(raidPicker().value).toBe("2026-10-12");
-  } finally {
-    vi.useRealTimers();
-  }
+it("waits for logged nights and preserves a selected known night", () => {
+  const c = dates(connection([alpha]), []);
+  const { rerender } = render(<App connection={c} />);
+  overrides();
+  expect(screen.getByText(/No raid nights identified yet/)).toBeTruthy();
+  expect(
+    screen.queryByRole("region", { name: "Player availability editor" }),
+  ).toBeNull();
+  expect(screen.queryByLabelText("Choose another raid date")).toBeNull();
+  rerender(<App connection={dates(c, [], ["2026-10-15"])} />);
+  expect(raidPicker().value).toBe("2026-10-15");
+  rerender(<App connection={dates(c, ["2026-10-16", "2026-10-15"])} />);
+  expect(raidPicker().value).toBe("2026-10-16");
+  fireEvent.change(raidPicker(), { target: { value: "2026-10-15" } });
+  rerender(<App connection={dates(c, ["2026-10-17", "2026-10-15"])} />);
+  expect(raidPicker().value).toBe("2026-10-15");
 });
 
-it("keeps a picker choice after its metadata disappears", () => {
+it("moves a clean selection to a logged night when its metadata disappears", () => {
   const c = dates(connection([alpha]), ["2026-10-16", "2026-10-15"]);
   const { rerender } = render(<App connection={c} />);
   overrides();
   fireEvent.change(raidPicker(), { target: { value: "2026-10-15" } });
   rerender(<App connection={dates(c, ["2026-10-17"])} />);
-  expect(raidDate().value).toBe("2026-10-15");
-  expect([...raidPicker().options].map((o) => o.value)).toEqual([
-    "2026-10-17",
-    "2026-10-15",
-  ]);
+  expect(raidPicker().value).toBe("2026-10-17");
+  expect([...raidPicker().options].map((o) => o.value)).toEqual(["2026-10-17"]);
 });
 
-it("keeps the date of a draft after newer metadata and cancellation", () => {
+it("blocks a draft whose logged night disappears until cancellation", () => {
   const c = dates(connection([alpha]), ["2026-10-14"]);
   const { rerender } = render(<App connection={c} />);
   overrides();
   fireEvent.change(notes(), { target: { value: "Night-bound draft" } });
   rerender(<App connection={dates(c, ["2026-10-15"])} />);
-  expect(raidDate().value).toBe("2026-10-14");
+  expect(
+    screen
+      .getByRole("button", { name: "Save adjustment" })
+      .hasAttribute("disabled"),
+  ).toBe(true);
   expect(notes().value).toBe("Night-bound draft");
   fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
-  expect(raidDate().value).toBe("2026-10-14");
+  expect(raidPicker().value).toBe("2026-10-15");
   expect(notes().value).toBe("");
 });
 
@@ -321,9 +326,9 @@ it("keeps a pending save on its date until acknowledgement and afterwards", asyn
   fireEvent.change(notes(), { target: { value: "Save this night" } });
   fireEvent.click(screen.getByRole("button", { name: "Save adjustment" }));
   rerender(<App connection={dates(c, ["2026-10-15"])} />);
-  expect(raidDate().value).toBe("2026-10-14");
+  expect(notes().value).toBe("Save this night");
   await act(async () => finish({ "availabilityOverrides/2026-10-14_a": 1 }));
-  expect(raidDate().value).toBe("2026-10-14");
+  expect(raidPicker().value).toBe("2026-10-15");
   expect(c.saveInputs).toHaveBeenCalledTimes(1);
 });
 
@@ -864,4 +869,56 @@ it("exposes published attendance for zero-time players outside ranked rows and o
   expect(
     screen.queryByRole("region", { name: "Additional attendance" }),
   ).toBeNull();
+});
+
+it("shows nightly audit values and highlights only the recorded override half", () => {
+  const c = connection([alpha, beta]);
+  c.saved.results.nights = [
+    {
+      night: "2026-10-15",
+      duration: 180,
+      reports: 1,
+      timing: { start: "", breakStart: "", breakEnd: "", end: "", notes: "" },
+      players: [
+        {
+          id: alpha.id,
+          played: 80,
+          bench: 10,
+          preBench: 10,
+          postBench: 0,
+          prePlayed: 0,
+          postPlayed: 80,
+          overridden: true,
+          nights: 1,
+          availability: {
+            pre: { available: true, mode: "partial" },
+            post: { available: true, mode: "automatic" },
+            source: "override",
+          },
+        },
+      ],
+    },
+  ];
+  render(<App connection={c} />);
+  overrides();
+  const row = screen.getByRole("button", { name: /Example Alpha/ });
+  expect(row.textContent).not.toContain("Automatic");
+  expect(within(row).getByText("Override")).toBeTruthy();
+  const values = [...row.querySelectorAll(".override-minute")];
+  expect(values.map((value) => value.textContent)).toEqual([
+    "10",
+    "-",
+    "-",
+    "80",
+  ]);
+  expect(
+    values.map((value) => value.classList.contains("override-affected")),
+  ).toEqual([true, false, true, false]);
+  const uncalculated = screen.getByRole("button", { name: /Example Beta/ });
+  expect(uncalculated.querySelectorAll(".override-affected").length).toBe(0);
+  expect(
+    [...uncalculated.querySelectorAll(".override-minute")].map(
+      (value) => value.textContent,
+    ),
+  ).toEqual(["—", "—", "—", "—"]);
 });

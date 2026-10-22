@@ -1,4 +1,4 @@
-import { Check, CircleAlert, Clock3, RotateCcw } from "lucide-react";
+import { Check, CircleAlert, RotateCcw } from "lucide-react";
 import { formatDate, wallTime, type Timing } from "./model";
 import { timingFields } from "./timing";
 import type { TimingEditorState } from "./useTimingEditor";
@@ -34,63 +34,61 @@ export function TimingEditor({
           {error}
         </p>
       )}
-      <div className="section-title">
-        <span className="icon-tile">
-          <Clock3 size={20} />
-        </span>
-        <div>
-          <h2>A little timing correction</h2>
-          <p>
-            Leave a field empty to use the detected time. All times are Pacific.
-          </p>
-        </div>
+      <div className="timing-heading">
+        <h2>Timing overrides</h2>
+        {timingDirty && <span className="badge amber">Unsaved</span>}
       </div>
+      <p className="timing-help">
+        Pacific time. Leave overrides blank to use detected times.
+      </p>
       {!timingFields.some(({ key }) => detected[key]) && (
         <p className="muted small">
           No detected timing for this night yet. Leave fields empty for
           automatic timing on the next run, or enter Pacific times.
         </p>
       )}
-      <div className="timeline">
-        <span>
-          Raid start
-          <strong>{wallTime(detected.start)}</strong>
-        </span>
-        <div className="timeline-track">
-          <i />
-          <b />
-          <i />
-        </div>
-        <span>
-          Raid end
-          <strong>{wallTime(detected.end)}</strong>
-        </span>
-      </div>
-      <div className="timing-fields">
-        {timingFields.map((item) => (
-          <div className="field" key={item.key}>
-            <label>
-              {item.label}
-              <input
-                type="datetime-local"
-                aria-invalid={Boolean(timingError)}
-                aria-describedby={`timing-${item.key}-help${timingError ? " timing-validation" : ""}`}
-                value={timingEdit[item.key]}
-                onInput={(e) => {
-                  const value = e.currentTarget.value;
-                  setTimingEdit((old) => ({
-                    ...old,
-                    [item.key]: value,
-                  }));
-                }}
-              />
-            </label>
-            <span id={`timing-${item.key}-help`} className="muted small">
-              Detected: {formatDate(night)} · {wallTime(detected[item.key])}
-            </span>
-          </div>
-        ))}
-      </div>
+      <table className="timing-table" aria-label="Raid timing overrides">
+        <thead>
+          <tr>
+            <th scope="col">Event</th>
+            <th scope="col">Detected</th>
+            <th scope="col">Override</th>
+          </tr>
+        </thead>
+        <tbody>
+          {timingFields.map((item) => (
+            <tr key={item.key}>
+              <th scope="row">
+                <label htmlFor={`timing-${item.key}`}>{item.label}</label>
+              </th>
+              <td id={`timing-${item.key}-help`} className="timing-detected">
+                <span className="sr-only">Detected: </span>
+                {detected[item.key] ? (
+                  <>
+                    {formatDate(detected[item.key].slice(0, 10) || night)} ·{" "}
+                    {wallTime(detected[item.key])}
+                  </>
+                ) : (
+                  "—"
+                )}
+              </td>
+              <td className="field">
+                <input
+                  id={`timing-${item.key}`}
+                  type="datetime-local"
+                  aria-invalid={Boolean(timingError)}
+                  aria-describedby={`timing-${item.key}-help${timingError ? " timing-validation" : ""}`}
+                  value={timingEdit[item.key]}
+                  onInput={(e) => {
+                    const value = e.currentTarget.value;
+                    setTimingEdit((old) => ({ ...old, [item.key]: value }));
+                  }}
+                />
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
       <div className="field">
         <label>
           Notes <span className="optional">optional · private</span>
@@ -122,7 +120,7 @@ export function TimingEditor({
         <div className="button-row">
           <button
             className="button secondary"
-            disabled={!timingDirty || blocked}
+            disabled={!timingDirty || saving}
             onClick={cancel}
           >
             Cancel

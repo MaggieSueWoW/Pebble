@@ -59,7 +59,9 @@ async function open(page: Page) {
     .getByRole("navigation")
     .getByRole("button", { name: "Overrides", exact: true })
     .click();
-  await page.getByLabel("Choose another raid date").fill(night);
+  await page
+    .getByRole("combobox", { name: "Raid night", exact: true })
+    .selectOption(night);
   await page.getByRole("tab", { name: "Raid timing" }).click();
   await expect(notes(page)).toHaveValue("Timing baseline");
 }
@@ -121,6 +123,13 @@ test.beforeEach(async () => {
       players: [],
       reports: 1,
       timing: detected,
+    });
+    await setDoc(doc(db, `${season}/results/fixture/nights/${other}`), {
+      night: other,
+      duration: 180,
+      players: [],
+      reports: 1,
+      timing: blank,
     });
     await setDoc(doc(db, "publicSeasons/test-reports"), {
       latestRunId: "fixture",
@@ -233,7 +242,9 @@ test("holds saves, retains newer fields and guards night/tab/page navigation", a
   ).toBeDisabled();
   await notes(page).fill("Newer notes");
   await page.getByLabel("Mythic end", { exact: true }).fill(`${night}T22:25`);
-  await page.getByLabel("Choose another raid date").fill(other);
+  await page
+    .getByRole("combobox", { name: "Raid night", exact: true })
+    .selectOption(other);
   await page.getByRole("tab", { name: "Player availability" }).click();
   await page
     .getByRole("navigation")
@@ -242,7 +253,9 @@ test("holds saves, retains newer fields and guards night/tab/page navigation", a
   await expect(
     page.getByRole("region", { name: "Raid timing editor" }),
   ).toBeVisible();
-  await expect(page.getByLabel("Choose another raid date")).toHaveValue(night);
+  await expect(
+    page.getByRole("combobox", { name: "Raid night", exact: true }),
+  ).toHaveValue(night);
   await expect(page.getByRole("dialog")).not.toBeVisible();
   await expect(
     page.getByRole("button", { name: "Run Pebble", exact: true }),
@@ -308,7 +321,9 @@ test("handles unknown detection, Pacific DST validation, and keyboard draft prot
 }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await open(page);
-  await page.getByLabel("Choose another raid date").fill(other);
+  await page
+    .getByRole("combobox", { name: "Raid night", exact: true })
+    .selectOption(other);
   await expect(
     page.getByText(/No detected timing for this night yet/),
   ).toBeVisible();
@@ -328,7 +343,10 @@ test("handles unknown detection, Pacific DST validation, and keyboard draft prot
     page.getByRole("button", { name: "Reset to automatic" }),
   ).toBeFocused();
   for (const leave of [
-    () => page.getByLabel("Choose another raid date").fill(night),
+    () =>
+      page
+        .getByRole("combobox", { name: "Raid night", exact: true })
+        .selectOption(night),
     () => page.getByRole("tab", { name: "Player availability" }).click(),
     () =>
       page
@@ -344,7 +362,9 @@ test("handles unknown detection, Pacific DST validation, and keyboard draft prot
     await page.keyboard.press("Escape");
     await expect(notes(page)).toHaveValue("Keyboard timing draft");
   }
-  await page.getByLabel("Choose another raid date").fill(night);
+  await page
+    .getByRole("combobox", { name: "Raid night", exact: true })
+    .selectOption(night);
   await page.getByRole("button", { name: "Discard edits" }).click();
   await expect(notes(page)).toHaveValue("Timing baseline");
   expect(

@@ -534,7 +534,8 @@ async function reportNight(night: string) {
     );
   });
 }
-const raidDate = (page: Page) => page.getByLabel("Choose another raid date");
+const raidDate = (page: Page) =>
+  page.getByRole("combobox", { name: "Raid night", exact: true });
 const raidPicker = (page: Page) =>
   page.getByRole("combobox", { name: "Raid night", exact: true });
 async function overrides(page: Page) {
@@ -548,18 +549,41 @@ async function overrides(page: Page) {
 test("defaults to report-only dates, follows late metadata and retains explicit dates and drafts", async ({
   page,
 }) => {
+  async function loggedNight(night: string) {
+    const code = night.replaceAll("-", "").padEnd(16, "A");
+    await admin(async (ctx) => {
+      const db = ctx.firestore();
+      await setDoc(doc(db, `${season}/reports/${code}`), {
+        enabled: true,
+        version: 1,
+      });
+      await setDoc(
+        doc(db, `${season}/runs/baseline`),
+        {
+          reportSummaries: {
+            [code]: {
+              night,
+              title: "Example report",
+              checkedAt: Timestamp.now(),
+            },
+          },
+        },
+        { merge: true },
+      );
+    });
+  }
   await page.setViewportSize({ width: 390, height: 844 });
   await admin(async (ctx) => {
     await setDoc(doc(ctx.firestore(), "publicSeasons/test-reports"), {});
   });
-  await reportNight("2026-10-15");
+  await loggedNight("2026-10-15");
   await overrides(page);
   await expect(raidDate(page)).toHaveValue("2026-10-15");
-  await reportNight("2026-10-16");
+  await loggedNight("2026-10-16");
   await expect(raidDate(page)).toHaveValue("2026-10-16");
   const notes = page.getByRole("textbox", { name: "Availability notes" });
   await notes.fill("Keep this night draft");
-  await reportNight("2026-10-17");
+  await loggedNight("2026-10-17");
   await expect(raidPicker(page).locator("option").first()).toHaveAttribute(
     "value",
     "2026-10-17",
@@ -576,8 +600,12 @@ test("defaults to report-only dates, follows late metadata and retains explicit 
   await page.getByRole("button", { name: "Discard edits" }).click();
   await expect(raidDate(page)).toHaveValue("2026-10-17");
   await expect(notes).toHaveValue("");
-  await raidDate(page).fill("2026-10-12");
-  await reportNight("2026-10-18");
+  await loggedNight("2026-10-12");
+  await expect(
+    raidPicker(page).locator('option[value="2026-10-12"]'),
+  ).toHaveCount(1);
+  await raidPicker(page).selectOption("2026-10-12");
+  await loggedNight("2026-10-18");
   await expect(raidPicker(page).locator("option").first()).toHaveAttribute(
     "value",
     "2026-10-18",

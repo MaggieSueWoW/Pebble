@@ -1,10 +1,5 @@
-import { Check, CircleAlert, Info, RotateCcw } from "lucide-react";
-import {
-  playerDetails,
-  type Player,
-  type Availability,
-  type Mode,
-} from "./model";
+import { Check, ChevronDown, CircleAlert, Info, RotateCcw } from "lucide-react";
+import { type Player, type Availability, type Mode } from "./model";
 import type { AvailabilityEditorState } from "./useAvailabilityEditor";
 function AvailabilityField({
   label,
@@ -27,22 +22,25 @@ function AvailabilityField({
     <div className="field">
       <label>
         {label}
-        <select
-          value={value.mode}
-          onChange={(e) =>
-            onChange(
-              ["partial", "unavailableFor"].includes(e.target.value)
-                ? { mode: e.target.value as Mode, minutes: max }
-                : { mode: e.target.value as Mode },
-            )
-          }
-        >
-          <option value="automatic">Automatic</option>
-          <option value="available">Available</option>
-          <option value="unavailable">Unavailable</option>
-          <option value="partial">Partial availability</option>
-          <option value="unavailableFor">Unavailable for…</option>
-        </select>
+        <span className="select-control">
+          <select
+            value={value.mode}
+            onChange={(e) =>
+              onChange(
+                ["partial", "unavailableFor"].includes(e.target.value)
+                  ? { mode: e.target.value as Mode, minutes: max }
+                  : { mode: e.target.value as Mode },
+              )
+            }
+          >
+            <option value="automatic">Automatic</option>
+            <option value="available">Available</option>
+            <option value="unavailable">Unavailable</option>
+            <option value="partial">Partial availability…</option>
+            <option value="unavailableFor">Unavailable for…</option>
+          </select>
+          <ChevronDown size={16} aria-hidden="true" />
+        </span>
       </label>
       {["partial", "unavailableFor"].includes(value.mode) && (
         <label className="minutes-label">
@@ -138,15 +136,8 @@ export function AvailabilityEditor({
         </p>
       )}
       <div className="editor-heading">
-        <span
-          className="class-mark large"
-          style={{ color: p.color, background: `${p.color}12` }}
-        >
-          {p.name.slice(0, 1)}
-        </span>
         <div>
           <h2 style={{ color: p.color }}>{p.name}</h2>
-          {playerDetails(p) && <p>{playerDetails(p)}</p>}
         </div>
         {editDirty && <span className="badge amber">Unsaved</span>}
       </div>
@@ -200,7 +191,7 @@ export function AvailabilityEditor({
         </button>
         <button
           className="button secondary"
-          disabled={!editDirty || blocked}
+          disabled={!editDirty || editor.saving}
           onClick={cancel}
         >
           Cancel
