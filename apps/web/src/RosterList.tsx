@@ -1,5 +1,13 @@
 import { Fragment, useState, type ReactNode } from "react";
-import { ChevronDown, ChevronRight, Plus, Search } from "lucide-react";
+import {
+  ArrowDown,
+  ArrowUp,
+  ArrowUpDown,
+  ChevronDown,
+  ChevronRight,
+  Plus,
+  Search,
+} from "lucide-react";
 import type { RosterEntry } from "./roster";
 import { identityCasefold } from "./characters";
 import type { CharacterEntry } from "./characters";
@@ -26,9 +34,46 @@ export function RosterList({
   editAlt: (id: string) => void;
 }) {
   const [search, setSearch] = useState("");
+  const [sort, setSort] = useState<{
+    key: "name" | "joinDate" | "leaveDate" | "alts";
+    direction: "ascending" | "descending";
+  }>({ key: "name", direction: "ascending" });
+  const visibleAlts = new Map(
+    roster.map((player) => [
+      player.id,
+      characters
+        .filter(
+          (alt) =>
+            alt.playerId === player.id &&
+            identityCasefold(alt.name) !== identityCasefold(player.name),
+        )
+        .sort(
+          (a, b) =>
+            a.name.localeCompare(b.name, "en", { sensitivity: "base" }) ||
+            a.id.localeCompare(b.id),
+        ),
+    ]),
+  );
+  const sortValue = (player: RosterEntry) =>
+    sort.key === "alts"
+      ? visibleAlts
+          .get(player.id)!
+          .map((alt) => alt.name)
+          .join(", ")
+      : player[sort.key];
   const query = search.trim().toLocaleLowerCase();
   const players = [...roster]
-    .sort((a, b) => a.name.localeCompare(b.name, "en", { sensitivity: "base" }))
+    .sort((a, b) => {
+      const byName =
+        a.name.localeCompare(b.name, "en", { sensitivity: "base" }) ||
+        a.id.localeCompare(b.id);
+      const left = sortValue(a),
+        right = sortValue(b);
+      // Empty dates and alt lists stay last in either direction.
+      if (!left || !right) return left ? -1 : right ? 1 : byName;
+      const compared = left.localeCompare(right, "en", { sensitivity: "base" });
+      return (sort.direction === "ascending" ? compared : -compared) || byName;
+    })
     .filter(
       (player) =>
         player.id === detailPlayerId ||
@@ -65,10 +110,46 @@ export function RosterList({
         <table className="roster-table">
           <thead>
             <tr>
-              <th scope="col">Player</th>
-              <th scope="col">Joined</th>
-              <th scope="col">Left</th>
-              <th scope="col">Alts</th>
+              {(
+                [
+                  ["name", "Player"],
+                  ["joinDate", "Joined"],
+                  ["leaveDate", "Left"],
+                  ["alts", "Alts"],
+                ] as const
+              ).map(([key, label]) => (
+                <th
+                  key={key}
+                  scope="col"
+                  aria-sort={sort.key === key ? sort.direction : undefined}
+                >
+                  <button
+                    className="result-sort-button"
+                    title={`Sort by ${label}`}
+                    onClick={() =>
+                      setSort((current) => ({
+                        key,
+                        direction:
+                          current.key === key &&
+                          current.direction === "ascending"
+                            ? "descending"
+                            : "ascending",
+                      }))
+                    }
+                  >
+                    {label}
+                    {sort.key === key ? (
+                      sort.direction === "ascending" ? (
+                        <ArrowUp size={12} aria-hidden="true" />
+                      ) : (
+                        <ArrowDown size={12} aria-hidden="true" />
+                      )
+                    ) : (
+                      <ArrowUpDown size={12} aria-hidden="true" />
+                    )}
+                  </button>
+                </th>
+              ))}
               <th scope="col">
                 <span className="sr-only">Details</span>
               </th>
@@ -98,39 +179,31 @@ export function RosterList({
                   <td>{player.leaveDate || "—"}</td>
                   <td onClick={(event) => event.stopPropagation()}>
                     <div className="roster-alts">
-                      {characters
-                        .filter(
-                          (alt) =>
-                            alt.playerId === player.id &&
-                            identityCasefold(alt.name) !==
-                              identityCasefold(player.name),
-                        )
-                        .sort((a, b) => a.name.localeCompare(b.name))
-                        .map((alt, index) => (
-                          <Fragment key={alt.id}>
-                            {index > 0 && ", "}
-                            <button
-                              className="roster-alt-button"
-                              onClick={() => editAlt(alt.id)}
-                              title={`${alt.realm || "All realms"} · ${alt.region.toUpperCase()}`}
-                              aria-label={`Edit alt ${alt.name} for ${player.name}`}
-                            >
-                              {alt.name}
-                              {characters.filter(
-                                (other) =>
-                                  other.playerId === player.id &&
-                                  other.name.toLocaleLowerCase() ===
-                                    alt.name.toLocaleLowerCase(),
-                              ).length > 1 && (
-                                <small>
-                                  {" "}
-                                  · {alt.realm || "All realms"} ·{" "}
-                                  {alt.region.toUpperCase()}
-                                </small>
-                              )}
-                            </button>
-                          </Fragment>
-                        ))}
+                      {visibleAlts.get(player.id)!.map((alt, index) => (
+                        <Fragment key={alt.id}>
+                          {index > 0 && ", "}
+                          <button
+                            className="roster-alt-button"
+                            onClick={() => editAlt(alt.id)}
+                            title={`${alt.realm || "All realms"} · ${alt.region.toUpperCase()}`}
+                            aria-label={`Edit alt ${alt.name} for ${player.name}`}
+                          >
+                            {alt.name}
+                            {characters.filter(
+                              (other) =>
+                                other.playerId === player.id &&
+                                other.name.toLocaleLowerCase() ===
+                                  alt.name.toLocaleLowerCase(),
+                            ).length > 1 && (
+                              <small>
+                                {" "}
+                                · {alt.realm || "All realms"} ·{" "}
+                                {alt.region.toUpperCase()}
+                              </small>
+                            )}
+                          </button>
+                        </Fragment>
+                      ))}
                     </div>
                   </td>
                   <td>
