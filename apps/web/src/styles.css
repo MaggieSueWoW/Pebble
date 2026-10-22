@@ -2503,11 +2503,16 @@ tbody tr:last-child td {
 .override-player-columns > span:not(:first-child) {
   text-align: center;
 }
-.override-player-columns small {
-  display: block;
+.override-sort-halves {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
   margin-top: 3px;
   font-size: 11px;
-  word-spacing: 7px;
+}
+.override-sort-halves .result-sort-button {
+  justify-content: flex-end;
+  gap: 2px;
 }
 .override-player-row .badge {
   grid-column: 2;
@@ -3125,7 +3130,8 @@ tbody tr:last-child td {
 .result-sort-button svg {
   color: #6e7c91;
 }
-th[aria-sort] .result-sort-button svg {
+th[aria-sort] .result-sort-button svg,
+.result-sort-button[aria-pressed="true"] svg {
   color: var(--lime);
 }
 .result-sort-button:hover,

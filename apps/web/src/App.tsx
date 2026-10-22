@@ -220,6 +220,23 @@ export default function App({ connection }: { connection?: LiveConnection }) {
     (action) => guard(action),
   );
   const page = navigation.page;
+  const [overrideSort, setOverrideSort] = useState<{
+    key: "name" | "preBench" | "postBench" | "prePlayed" | "postPlayed";
+    direction: "ascending" | "descending";
+  }>({ key: "name", direction: "ascending" });
+  function changeOverrideSort(key: typeof overrideSort.key) {
+    setOverrideSort((current) => ({
+      key,
+      direction:
+        current.key === key
+          ? current.direction === "ascending"
+            ? "descending"
+            : "ascending"
+          : key === "prePlayed" || key === "postPlayed"
+            ? "descending"
+            : "ascending",
+    }));
+  }
   const [resultSort, setResultSort] = useState<ResultSort | null>(null);
   const activeResultSort: ResultSort = resultSort ?? {
     key: "bench",
@@ -461,13 +478,32 @@ export default function App({ connection }: { connection?: LiveConnection }) {
   const unprocessed = connection
     ? connection.unprocessed
     : results.signature !== signature(inputs);
+  const latestNight = results.nights.find((n) => n.night === night);
+  const nightlyPlayers = new Map(
+    latestNight?.players.map((row) => [row.id, row]),
+  );
   const visiblePlayers = players
     .filter((p) =>
       `${p.name} ${p.className}`.toLowerCase().includes(search.toLowerCase()),
     )
-    .sort((a, b) =>
-      a.name.localeCompare(b.name, "en", { sensitivity: "base" }),
-    );
+    .sort((a, b) => {
+      const byName =
+        a.name.localeCompare(b.name, "en", { sensitivity: "base" }) ||
+        a.id.localeCompare(b.id);
+      let compared = byName;
+      if (overrideSort.key !== "name") {
+        const left = nightlyPlayers.get(a.id)?.[overrideSort.key];
+        const right = nightlyPlayers.get(b.id)?.[overrideSort.key];
+        // Missing results stay last in either direction; recorded zero is a value.
+        if (left == null || right == null)
+          return left == null ? (right == null ? byName : 1) : -1;
+        compared = left - right;
+      }
+      return (
+        (overrideSort.direction === "ascending" ? compared : -compared) ||
+        byName
+      );
+    });
 
   function retryWithFocus(retry: () => void) {
     retry();
@@ -689,7 +725,6 @@ export default function App({ connection }: { connection?: LiveConnection }) {
   const visibleResultNight = hasResultPeriod(resultNight)
     ? resultNight
     : "season";
-  const latestNight = results.nights.find((n) => n.night === night);
   const resultRows = sortResultRows(
     orderResultRows(
       visibleResultNight === "season"
@@ -1413,17 +1448,58 @@ export default function App({ connection }: { connection?: LiveConnection }) {
                       />
                     </label>
                     <div className="player-list">
-                      <div
-                        className="override-player-columns"
-                        aria-hidden="true"
-                      >
-                        <span>Player</span>
-                        <span>
-                          Bench<small>Before · After</small>
-                        </span>
-                        <span>
-                          Played<small>Before · After</small>
-                        </span>
+                      <div className="override-player-columns">
+                        {(
+                          [
+                            ["Player", [["name", "Player"]]],
+                            [
+                              "Bench",
+                              [
+                                ["preBench", "Before"],
+                                ["postBench", "After"],
+                              ],
+                            ],
+                            [
+                              "Played",
+                              [
+                                ["prePlayed", "Before"],
+                                ["postPlayed", "After"],
+                              ],
+                            ],
+                          ] as const
+                        ).map(([group, columns]) => (
+                          <span key={group}>
+                            {group !== "Player" && group}
+                            <span
+                              className={
+                                group === "Player"
+                                  ? undefined
+                                  : "override-sort-halves"
+                              }
+                            >
+                              {columns.map(([key, label]) => (
+                                <button
+                                  key={key}
+                                  className="result-sort-button"
+                                  aria-pressed={overrideSort.key === key}
+                                  aria-label={`Sort by ${group === "Player" ? "Player" : `${group} ${label.toLowerCase()} break`}${overrideSort.key === key ? `, ${overrideSort.direction}` : ""}`}
+                                  onClick={() => changeOverrideSort(key)}
+                                >
+                                  {label}
+                                  {overrideSort.key === key ? (
+                                    overrideSort.direction === "ascending" ? (
+                                      <ArrowUp size={12} aria-hidden="true" />
+                                    ) : (
+                                      <ArrowDown size={12} aria-hidden="true" />
+                                    )
+                                  ) : (
+                                    <ArrowUpDown size={12} aria-hidden="true" />
+                                  )}
+                                </button>
+                              ))}
+                            </span>
+                          </span>
+                        ))}
                       </div>
                       {visiblePlayers.map((player) => {
                         const a =

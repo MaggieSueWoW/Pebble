@@ -1054,3 +1054,87 @@ it("toggles Results column sorting while keeping details on the selected player"
     document.querySelector('.result-name[aria-expanded="true"]')?.textContent,
   ).toBe(alpha.name);
 });
+
+it("sorts each Overrides audit column with an explicit active direction and missing values last", () => {
+  const c = connection([
+    beta,
+    { ...alpha, id: "missing", name: "Missing" },
+    alpha,
+  ]);
+  c.saved.results.nights = [
+    {
+      night: "2026-10-15",
+      duration: 180,
+      reports: 1,
+      timing: { start: "", breakStart: "", breakEnd: "", end: "", notes: "" },
+      players: [
+        {
+          id: alpha.id,
+          played: 90,
+          bench: 20,
+          preBench: 0,
+          postBench: 20,
+          prePlayed: 80,
+          postPlayed: 10,
+          nights: 1,
+          overridden: false,
+        },
+        {
+          id: beta.id,
+          played: 80,
+          bench: 40,
+          preBench: 30,
+          postBench: 10,
+          prePlayed: 20,
+          postPlayed: 60,
+          nights: 1,
+          overridden: false,
+        },
+      ],
+    },
+  ];
+  render(<App connection={c} />);
+  overrides();
+  const order = () =>
+    [...document.querySelectorAll(".override-player-row strong")].map(
+      (el) => el.textContent,
+    );
+  expect(order()).toEqual([alpha.name, beta.name, "Missing"]);
+  const initial = screen.getByRole("button", {
+    name: "Sort by Player, ascending",
+  });
+  expect(initial.getAttribute("aria-pressed")).toBe("true");
+  fireEvent.click(initial);
+  expect(order()).toEqual(["Missing", beta.name, alpha.name]);
+  expect(
+    screen
+      .getByRole("button", { name: "Sort by Player, descending" })
+      .getAttribute("aria-pressed"),
+  ).toBe("true");
+  for (const [label, first, second, direction] of [
+    ["Bench before break", alpha.name, beta.name, "ascending"],
+    ["Bench after break", beta.name, alpha.name, "ascending"],
+    ["Played before break", alpha.name, beta.name, "descending"],
+    ["Played after break", beta.name, alpha.name, "descending"],
+  ]) {
+    fireEvent.click(screen.getByRole("button", { name: `Sort by ${label}` }));
+    expect(order()).toEqual([first, second, "Missing"]);
+    const active = screen.getByRole("button", {
+      name: `Sort by ${label}, ${direction}`,
+    });
+    expect(active.getAttribute("aria-pressed")).toBe("true");
+    expect(
+      document.querySelectorAll('.result-sort-button[aria-pressed="true"]')
+        .length,
+    ).toBe(1);
+    fireEvent.click(active);
+    expect(order()).toEqual([second, first, "Missing"]);
+  }
+  // Reordering and filtering retain the selected player and editor.
+  expect(editor().textContent).toContain(alpha.name);
+  fireEvent.change(screen.getByRole("textbox", { name: "Search players" }), {
+    target: { value: "Mage" },
+  });
+  expect(order()).toEqual([alpha.name, "Missing"]);
+  expect(editor().textContent).toContain(alpha.name);
+});
