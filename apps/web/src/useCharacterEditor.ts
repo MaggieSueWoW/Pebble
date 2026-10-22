@@ -21,6 +21,7 @@ export function useCharacterEditor(
   const [chosen, setChosen] = useState<{
     id: string;
     creating: boolean;
+    playerId?: string;
   } | null>(() =>
     characters[0] ? { id: characters[0].id, creating: false } : null,
   );
@@ -30,7 +31,12 @@ export function useCharacterEditor(
     id: _id,
     version: _version,
     ...saved
-  } = character ?? { id, version: 0, ...blankCharacter() };
+  } = character ?? {
+    id,
+    version: 0,
+    ...blankCharacter(),
+    playerId: chosen?.playerId ?? "",
+  };
   const editor = useVersionedEditor({
     key: id,
     saved,
@@ -63,7 +69,8 @@ export function useCharacterEditor(
     id,
     exists: Boolean(character),
     select: (id: string) => setChosen({ id, creating: false }),
-    add: () => setChosen({ id: crypto.randomUUID(), creating: true }),
+    add: (playerId = "") =>
+      setChosen({ id: crypto.randomUUID(), creating: true, playerId }),
   };
 }
 export type CharacterEditorState = ReturnType<typeof useCharacterEditor>;

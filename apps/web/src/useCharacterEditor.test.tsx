@@ -71,3 +71,23 @@ it("keeps stable identity through reordered snapshots and creates a separate map
   rerender({ characters: [other, mapping] });
   expect(result.current.id).toBe(id);
 });
+
+it("starts a new alt with its chosen main and saves that association", async () => {
+  const save = vi.fn().mockResolvedValue(1);
+  const { result } = renderHook(() =>
+    useCharacterEditor([], roster, save, false, true),
+  );
+  act(() => result.current.add("main"));
+  expect(result.current.value.playerId).toBe("main");
+  expect(result.current.dirty).toBe(false);
+  act(() => result.current.change((old) => ({ ...old, name: "Newalt" })));
+  expect(result.current.validation).toBeNull();
+  await act(async () => {
+    await result.current.save();
+  });
+  expect(save).toHaveBeenCalledWith(
+    result.current.id,
+    expect.objectContaining({ name: "Newalt", playerId: "main" }),
+    0,
+  );
+});

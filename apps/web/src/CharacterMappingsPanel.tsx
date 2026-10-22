@@ -1,74 +1,232 @@
+import { useState } from "react";
+import { ArrowLeftRight, Plus, Trash2 } from "lucide-react";
 import {
   regions,
+  identityCasefold,
   type CharacterEntry,
   type CharacterValue,
 } from "./characters";
-import type { RosterEntry } from "./roster";
+import { SelectControl } from "./SelectControl";
 import type { CharacterEditorState } from "./useCharacterEditor";
 export function CharacterMappingsPanel({
   characters,
-  roster,
+  playerId,
   editor,
-  select,
+  editing,
+  edit,
   add,
+  remove,
+  cancelAdd,
+  swap,
+  mainName,
+  mainClass,
+  actionsBlocked,
 }: {
   characters: CharacterEntry[];
-  roster: RosterEntry[];
+  playerId: string;
   editor: CharacterEditorState;
-  select: (id: string) => void;
+  editing: boolean;
+  edit: (id: string) => void;
   add: () => void;
+  remove: (id: string, version: number) => Promise<void>;
+  cancelAdd: () => void;
+  swap: (id: string, version: number) => Promise<void>;
+  mainName: string;
+  mainClass: string;
+  actionsBlocked: boolean;
 }) {
+  const [swapId, setSwapId] = useState<string | null>(null);
+  const [confirmId, setConfirmId] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
+  const alts = characters
+    .filter(
+      (alt) =>
+        alt.playerId === playerId &&
+        identityCasefold(alt.name) !== identityCasefold(mainName),
+    )
+    .sort((a, b) => a.name.localeCompare(b.name));
   const field = (key: keyof CharacterValue, value: string) =>
     editor.change((old) => ({ ...old, [key]: value }));
   return (
-    <section className="panel roster-panel" aria-labelledby="character-title">
+    <section
+      className="panel roster-panel roster-alts-panel"
+      aria-labelledby="character-title"
+    >
       <div className="panel-header">
         <div>
-          <h2 id="character-title">Character mappings</h2>
-          <p className="muted">
-            Connect logged characters and alts to their roster main.
-          </p>
+          <h2 id="character-title">Alts</h2>
         </div>
         <button
-          className="button secondary"
+          className="text-button"
           onClick={add}
-          disabled={editor.saving || !roster.length}
+          disabled={deleting || editor.saving}
         >
-          Add mapping
+          <Plus size={14} /> Add alt
         </button>
       </div>
       <div className="roster-editor">
-        {!roster.length && (
-          <p>Add a roster main before creating character mappings.</p>
-        )}
-        <label className="field">
-          Character mapping
-          <select
-            aria-label="Character mapping"
-            value={editor.exists ? editor.id : ""}
-            disabled={editor.blocked}
-            onChange={(e) => select(e.target.value)}
-          >
-            <option value="" disabled>
-              {characters.length ? "New mapping" : "No mappings yet"}
-            </option>
-            {characters.map((character) => (
-              <option key={character.id} value={character.id}>
-                {character.name} · {character.realm || "All realms"} ·{" "}
-                {character.region.toUpperCase()}
-              </option>
-            ))}
-          </select>
-        </label>
-        {editor.id && (
+        <ul className="main-alt-list">
+          {alts.map((alt) => (
+            <li key={alt.id}>
+              <div className="main-alt-row">
+                <button
+                  className="roster-alt-button"
+                  onClick={() => edit(alt.id)}
+                >
+                  {alt.name}
+                </button>
+                <span className="muted small">
+                  {alt.realm || "All realms"} · {alt.region.toUpperCase()}
+                </span>
+                <button
+                  className="swap-main-button"
+                  aria-label={`Make ${alt.name} main`}
+                  title={`Swap ${alt.name} with ${mainName}`}
+                  disabled={
+                    deleting ||
+                    editor.dirty ||
+                    editor.blocked ||
+                    actionsBlocked ||
+                    alt.name.toLocaleLowerCase() ===
+                      mainName.toLocaleLowerCase()
+                  }
+                  onClick={() => {
+                    setSwapId(alt.id);
+                    setConfirmId(null);
+                    setDeleteError("");
+                  }}
+                >
+                  <ArrowLeftRight size={14} /> Make main
+                </button>
+                <button
+                  className="delete-alt-button"
+                  aria-label={`Delete alt ${alt.name}`}
+                  title={`Delete alt ${alt.name}`}
+                  disabled={
+                    deleting || editor.dirty || editor.blocked || actionsBlocked
+                  }
+                  onClick={() => {
+                    setConfirmId(alt.id);
+                    setSwapId(null);
+                    setDeleteError("");
+                  }}
+                >
+                  <Trash2 size={14} />
+                </button>
+              </div>
+              {swapId === alt.id && (
+                <div
+                  className="swap-main-confirm"
+                  role="group"
+                  aria-label="Confirm main swap"
+                >
+                  <p>
+                    Make <strong>{alt.name}</strong> the main and move{" "}
+                    <strong>{mainName}</strong> to alts? Class stays{" "}
+                    {mainClass || "Unknown"}; membership and history stay with
+                    this player.
+                  </p>
+
+                  {deleteError && <p role="alert">{deleteError}</p>}
+                  <button
+                    className="text-button"
+                    disabled={
+                      deleting ||
+                      editor.blocked ||
+                      editor.dirty ||
+                      actionsBlocked
+                    }
+                    onClick={async () => {
+                      setDeleting(true);
+                      setDeleteError("");
+                      try {
+                        await swap(alt.id, alt.version);
+                        setSwapId(null);
+                      } catch (cause) {
+                        setDeleteError(
+                          cause instanceof Error
+                            ? cause.message
+                            : "Could not swap the main and alt.",
+                        );
+                      } finally {
+                        setDeleting(false);
+                      }
+                    }}
+                  >
+                    {deleting ? "Swapping…" : "Swap main and alt"}
+                  </button>
+                  <button
+                    className="text-button"
+                    disabled={deleting}
+                    onClick={() => setSwapId(null)}
+                  >
+                    Keep current main
+                  </button>
+                </div>
+              )}
+              {confirmId === alt.id && (
+                <div
+                  className="delete-alt-confirm"
+                  role="group"
+                  aria-label={`Confirm deletion of ${alt.name}`}
+                >
+                  <p>Delete {alt.name} from this main?</p>
+                  {deleteError && <p role="alert">{deleteError}</p>}
+                  <button
+                    className="text-button"
+                    disabled={
+                      deleting ||
+                      editor.blocked ||
+                      editor.dirty ||
+                      actionsBlocked
+                    }
+                    onClick={async () => {
+                      setDeleting(true);
+                      setDeleteError("");
+                      try {
+                        await remove(alt.id, alt.version);
+                        setConfirmId(null);
+                      } catch (cause) {
+                        setDeleteError(
+                          cause instanceof Error
+                            ? cause.message
+                            : "Could not delete this alt.",
+                        );
+                      } finally {
+                        setDeleting(false);
+                      }
+                    }}
+                  >
+                    {deleting ? "Deleting…" : "Confirm delete alt"}
+                  </button>
+                  <button
+                    className="text-button"
+                    disabled={deleting}
+                    onClick={() => setConfirmId(null)}
+                  >
+                    Keep alt
+                  </button>
+                </div>
+              )}
+            </li>
+          ))}
+        </ul>
+        {!alts.length && <p className="muted small alt-empty">No alts yet.</p>}
+        {editing && editor.id && (
           <form
             onSubmit={(e) => {
               e.preventDefault();
               void editor.save();
             }}
           >
+            <p className="alt-form-title">
+              {editor.exists ? `Edit ${editor.value.name || "alt"}` : "New alt"}
+            </p>
             <fieldset className="roster-fields" disabled={editor.blocked}>
-              <legend>{editor.exists ? "Edit mapping" : "New mapping"}</legend>
+              <legend className="sr-only">
+                {editor.exists ? "Edit alt" : "New alt"}
+              </legend>
               <label className="field">
                 Character name
                 <input
@@ -89,7 +247,7 @@ export function CharacterMappingsPanel({
               </label>
               <label className="field">
                 Region
-                <select
+                <SelectControl
                   aria-label="Region"
                   value={editor.value.region}
                   onChange={(e) => field("region", e.target.value)}
@@ -99,46 +257,11 @@ export function CharacterMappingsPanel({
                       {region.toUpperCase()}
                     </option>
                   ))}
-                </select>
+                </SelectControl>
               </label>
-              <p className="muted small" id="character-match">
-                Names and realms match without case sensitivity; surrounding
-                spaces are trimmed when saved. An empty realm matches this name
-                on every realm in the selected region. A specific realm takes
-                precedence.
-              </p>
-              <label className="field">
-                Mapped main
-                <select
-                  aria-label="Mapped main"
-                  value={editor.value.playerId}
-                  aria-describedby="character-effects character-validation"
-                  onChange={(e) => field("playerId", e.target.value)}
-                >
-                  <option value="">Choose a main</option>
-                  {!roster.some(
-                    (player) => player.id === editor.value.playerId,
-                  ) &&
-                    editor.value.playerId && (
-                      <option value={editor.value.playerId}>
-                        Missing main — choose another
-                      </option>
-                    )}
-                  {roster.map((player) => (
-                    <option key={player.id} value={player.id}>
-                      {player.name}
-                      {player.active ? "" : " (inactive)"}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <p className="muted small" id="character-effects">
-                Editing keeps this mapping’s ID. Changing the name, realm or
-                region replaces its old match; changing the main moves matched
-                logs to that main on the next run. Inactive mains remain
-                available, but do not appear in active results. Completed
-                results stay unchanged until Run Pebble. Mappings cannot be
-                deleted here; edit an existing mapping to correct it.
+              <p className="muted small roster-help" id="character-match">
+                Leave realm blank to match this name on any realm. Changes apply
+                after Run Pebble.
               </p>
             </fieldset>
             <p
@@ -159,24 +282,21 @@ export function CharacterMappingsPanel({
                   !editor.dirty || Boolean(editor.validation) || editor.blocked
                 }
               >
-                {editor.saving ? "Saving…" : "Save mapping"}
+                {editor.saving ? "Saving…" : "Save alt"}
               </button>
               <button
                 className="button secondary"
                 type="button"
-                disabled={!editor.dirty || editor.blocked}
-                onClick={editor.cancel}
+                disabled={(editor.exists && !editor.dirty) || editor.blocked}
+                onClick={() => {
+                  editor.cancel();
+                  if (!editor.exists) cancelAdd();
+                }}
               >
-                Cancel mapping edits
+                Cancel alt edits
               </button>
             </div>
           </form>
-        )}
-        {!editor.id && (
-          <p>
-            No character mappings yet. Unmapped characters use main-name
-            matching.
-          </p>
         )}
       </div>
     </section>

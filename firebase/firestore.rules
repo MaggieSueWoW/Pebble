@@ -42,6 +42,7 @@ service cloud.firestore {
       }
       match /players/{id} {
         allow read: if officer();
+        allow delete: if officer() && validId(season) && validId(id);
         allow create, update: if officer() && validId(season) && versioned()
           && validId(id) && fields(request.resource.data, ['name', 'className', 'role', 'active', 'joinDate', 'leaveDate'], ['notes'])
           && text(request.resource.data.name, 32) && request.resource.data.name.size() > 0
@@ -53,6 +54,7 @@ service cloud.firestore {
       }
       match /characters/{id} {
         allow read: if officer();
+        allow delete: if officer() && validId(season) && validId(id);
         allow create, update: if officer() && validId(season) && versioned()
           && validId(id) && fields(request.resource.data, ['name','realm','region','playerId'], [])
           && text(request.resource.data.name, 32) && request.resource.data.name.size() > 0
@@ -78,6 +80,8 @@ service cloud.firestore {
       }
       match /availabilityOverrides/{id} {
         allow read: if officer();
+        allow delete: if officer() && validId(season)
+          && !existsAfter(/databases/$(database)/documents/seasons/$(season)/players/$(resource.data.playerId));
         allow create, update: if officer() && validId(season) && versioned()
           && fields(request.resource.data, ['nightId','playerId','pre','post'], ['notes'])
           && day(request.resource.data.nightId) && validId(request.resource.data.playerId)

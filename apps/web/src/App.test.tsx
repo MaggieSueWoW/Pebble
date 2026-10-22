@@ -10,6 +10,7 @@ import {
 } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import App from "./App";
+import { blankPlayer } from "./roster";
 import { freshState, type Player } from "./model";
 import { defaultCalculation } from "./calculation";
 import type { LiveConnection } from "./useFirestore";
@@ -46,6 +47,9 @@ function connection(players: Player[] = []): LiveConnection {
     calculation: defaultCalculation(),
     saveCalculation: vi.fn(async (_value, version) => version + 1),
     savePlayer: vi.fn(),
+    deletePlayer: vi.fn().mockResolvedValue(undefined),
+    deleteCharacter: vi.fn().mockResolvedValue(undefined),
+    swapMain: vi.fn().mockResolvedValue(undefined),
     nights: ["2026-10-15"],
     user: null,
     officer: true,
@@ -921,4 +925,73 @@ it("shows nightly audit values and highlights only the recorded override half", 
       (value) => value.textContent,
     ),
   ).toEqual(["—", "—", "—", "—"]);
+});
+
+it("lists mains with alts and scopes a new alt to the clicked main", () => {
+  const c = connection([alpha, beta]);
+  c.roster = [
+    { ...blankPlayer(), id: "b", name: beta.name, version: 1 },
+    { ...blankPlayer(), id: "a", name: alpha.name, version: 1 },
+  ];
+  c.characters = [
+    {
+      id: "alt",
+      name: "Existingalt",
+      realm: "Example realm",
+      region: "us",
+      playerId: "a",
+      version: 1,
+    },
+  ];
+  c.characters.push({ ...c.characters[0], id: "alt2", name: "Secondalt" });
+  render(<App connection={c} />);
+  fireEvent.click(screen.getByRole("button", { name: "Roster" }));
+  expect(
+    [...document.querySelectorAll(".roster-main-button strong")].map(
+      (el) => el.textContent,
+    ),
+  ).toEqual([alpha.name, beta.name]);
+  expect(
+    screen.getByRole("button", {
+      name: "Edit alt Existingalt for Example Alpha",
+    }),
+  ).toBeTruthy();
+  expect(document.querySelector(".roster-alts")?.textContent).toBe(
+    "Existingalt, Secondalt",
+  );
+  expect(screen.queryByRole("button", { name: /Add alt for/ })).toBeNull();
+  fireEvent.change(screen.getByRole("textbox", { name: "Search roster" }), {
+    target: { value: "Existingalt" },
+  });
+  expect(
+    screen.queryByRole("button", { name: "Edit Example Beta" }),
+  ).toBeNull();
+  fireEvent.change(screen.getByRole("textbox", { name: "Search roster" }), {
+    target: { value: "" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Edit Example Beta" }));
+  fireEvent.click(screen.getByRole("button", { name: "Add alt" }));
+  expect(screen.queryByRole("combobox", { name: "Mapped main" })).toBeNull();
+  expect(c.saveCharacter).not.toHaveBeenCalled();
+  fireEvent.change(screen.getByRole("textbox", { name: "Character name" }), {
+    target: { value: "Draftalt" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Edit Example Alpha" }));
+  expect(
+    (
+      screen.getByRole("textbox", {
+        name: "Character name",
+      }) as HTMLInputElement
+    ).value,
+  ).toBe("Draftalt");
+  fireEvent.click(
+    screen.getByRole("button", { name: "Keep editing", hidden: true }),
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Cancel alt edits" }));
+  fireEvent.click(screen.getByRole("button", { name: "Edit Example Alpha" }));
+  expect(screen.queryByRole("combobox", { name: "Role" })).toBeNull();
+  expect(
+    (screen.getByRole("textbox", { name: "Main name" }) as HTMLInputElement)
+      .value,
+  ).toBe(alpha.name);
 });

@@ -62,6 +62,7 @@ import { useCharacterEditor } from "./useCharacterEditor";
 import { CalculationEditor } from "./CalculationEditor";
 import { useCalculationEditor } from "./useCalculationEditor";
 import { defaultCalculation } from "./calculation";
+import { RosterList } from "./RosterList";
 import { RosterPanel } from "./RosterPanel";
 import { useRosterEditor } from "./useRosterEditor";
 import { blankTiming } from "./timing";
@@ -214,7 +215,8 @@ export default function App({ connection }: { connection?: LiveConnection }) {
     (action) => guard(action),
   );
   const page = navigation.page;
-  const showPageIntro = page === "settings" || page === "roster";
+  const showPageIntro = page === "settings";
+  const compactRunStatus = page === "reports" || page === "roster";
   const setPage = (page: Page) => navigation.navigate({ page });
   const [night, setNight] = useState(defaultNight);
   const nightChosen = useRef(false);
@@ -375,6 +377,7 @@ export default function App({ connection }: { connection?: LiveConnection }) {
     Boolean(connection?.busy) || !nightOptions.includes(night),
     !connection,
   );
+  const [rosterDetail, setRosterDetail] = useState<"main" | "alt" | null>(null);
   const rosterEditor = useRosterEditor(
     connection?.roster ?? [],
     async (id, value, expected) => {
@@ -903,7 +906,7 @@ export default function App({ connection }: { connection?: LiveConnection }) {
       </aside>
       <main>
         <div
-          className={`content ${page === "overrides" ? "overrides-page" : ""}`}
+          className={`content ${page === "overrides" ? "overrides-page" : page === "roster" ? "roster-page" : ""}`}
         >
           {connection?.error && (
             <Notice tone="amber">{connection.error}</Notice>
@@ -977,7 +980,7 @@ export default function App({ connection }: { connection?: LiveConnection }) {
                     : page === "settings"
                       ? "Calculation settings"
                       : page === "roster"
-                        ? "Your raid roster"
+                        ? "Roster"
                         : "Results"}
               </h1>
               {showPageIntro && (
@@ -999,9 +1002,9 @@ export default function App({ connection }: { connection?: LiveConnection }) {
           </div>
           {page !== "results" && page !== "overrides" && (
             <div
-              className={`${page === "reports" ? "reports-status" : "run-strip"} ${active || connection?.submitting || waitingForResults ? "is-running" : ""} ${(lastFailed || resultLoadFailed) && !active && !connection?.submitting ? "has-error" : ""}`}
+              className={`${compactRunStatus ? "reports-status" : "run-strip"} ${active || connection?.submitting || waitingForResults ? "is-running" : ""} ${(lastFailed || resultLoadFailed) && !active && !connection?.submitting ? "has-error" : ""}`}
             >
-              {page !== "reports" && (
+              {!compactRunStatus && (
                 <div
                   className={`strip-icon ${active || connection?.submitting || waitingForResults ? "running-icon" : ""}`}
                 >
@@ -1047,7 +1050,7 @@ export default function App({ connection }: { connection?: LiveConnection }) {
                                   ? "Changes ready for the next run"
                                   : connection && !connection.hasResults
                                     ? "No completed runs yet"
-                                    : page === "reports"
+                                    : compactRunStatus
                                       ? null
                                       : connection &&
                                           history[0]?.status === "succeeded"
@@ -1129,24 +1132,154 @@ export default function App({ connection }: { connection?: LiveConnection }) {
           )}
           {page === "roster" && connection?.officer && (
             <>
-              <RosterPanel
+              <RosterList
+                close={() => guard(() => setRosterDetail(null))}
                 roster={connection.roster}
-                editor={rosterEditor}
-                select={(id) => {
-                  if (id !== rosterEditor.id)
-                    guard(() => rosterEditor.select(id));
-                }}
-                add={() => guard(rosterEditor.add)}
-              />
-              <CharacterMappingsPanel
                 characters={connection.characters}
-                roster={connection.roster}
-                editor={characterEditor}
-                select={(id) => {
-                  if (id !== characterEditor.id)
-                    guard(() => characterEditor.select(id));
+                colors={Object.fromEntries(
+                  players.map((player) => [player.id, player.color]),
+                )}
+                editMain={(id) => {
+                  if (rosterDetail !== "main" || rosterEditor.id !== id)
+                    guard(() => {
+                      rosterEditor.select(id);
+                      setRosterDetail("main");
+                    });
                 }}
-                add={() => guard(characterEditor.add)}
+                addMain={() =>
+                  guard(() => {
+                    rosterEditor.add();
+                    setRosterDetail("main");
+                  })
+                }
+                editAlt={(id) => {
+                  if (rosterDetail !== "alt" || characterEditor.id !== id)
+                    guard(() => {
+                      const alt = connection.characters.find(
+                        (alt) => alt.id === id,
+                      );
+                      if (alt) rosterEditor.select(alt.playerId);
+                      characterEditor.select(id);
+                      setRosterDetail("alt");
+                    });
+                }}
+                detailPlayerId={
+                  rosterDetail && rosterEditor.exists
+                    ? rosterEditor.id
+                    : undefined
+                }
+                detail={
+                  rosterDetail ? (
+                    <div className="merged-roster-details">
+                      <RosterPanel
+                        editor={rosterEditor}
+                        cancelCreate={() => setRosterDetail(null)}
+                        deletionBlocked={
+                          characterEditor.dirty || characterEditor.saving
+                        }
+                        linkedAlts={
+                          connection.characters.filter(
+                            (alt) => alt.playerId === rosterEditor.id,
+                          ).length
+                        }
+                        linkedOverrides={
+                          Object.keys(inputs.adjustments).filter(
+                            (key) =>
+                              key.slice(key.indexOf("/") + 1) ===
+                              rosterEditor.id,
+                          ).length
+                        }
+                        remove={async () => {
+                          const expected = Object.fromEntries(
+                            Object.entries(connection.versions).filter(
+                              ([path]) =>
+                                path === `players/${rosterEditor.id}` ||
+                                (path.startsWith("characters/") &&
+                                  connection.characters.some(
+                                    (alt) =>
+                                      alt.id === path.slice(11) &&
+                                      alt.playerId === rosterEditor.id,
+                                  )) ||
+                                (path.startsWith("availabilityOverrides/") &&
+                                  path.slice(
+                                    "availabilityOverrides/".length + 11,
+                                  ) === rosterEditor.id),
+                            ),
+                          );
+                          await connection.deletePlayer(
+                            rosterEditor.id,
+                            expected,
+                          );
+                          setRosterDetail(null);
+                        }}
+                      />
+                      {rosterEditor.exists && (
+                        <CharacterMappingsPanel
+                          characters={connection.characters}
+                          mainName={
+                            connection.roster.find(
+                              (player) => player.id === rosterEditor.id,
+                            )?.name ?? rosterEditor.value.name
+                          }
+                          mainClass={rosterEditor.value.className}
+                          actionsBlocked={
+                            rosterEditor.dirty || rosterEditor.saving
+                          }
+                          swap={async (id, version) => {
+                            const main = connection.roster.find(
+                              (player) => player.id === rosterEditor.id,
+                            );
+                            if (!main)
+                              throw new Error(
+                                "This main is no longer in the roster.",
+                              );
+                            await connection.swapMain(
+                              main.id,
+                              id,
+                              main.version,
+                              version,
+                            );
+                            setRosterDetail("main");
+                          }}
+                          playerId={rosterEditor.id}
+                          editor={characterEditor}
+                          editing={rosterDetail === "alt"}
+                          cancelAdd={() => setRosterDetail("main")}
+                          edit={(id) => {
+                            if (
+                              !characterEditor.dirty &&
+                              !characterEditor.saving
+                            ) {
+                              characterEditor.select(id);
+                              setRosterDetail("alt");
+                            } else
+                              guard(() => {
+                                characterEditor.select(id);
+                                setRosterDetail("alt");
+                              });
+                          }}
+                          add={() => {
+                            const action = () => {
+                              characterEditor.add(rosterEditor.id);
+                              setRosterDetail("alt");
+                            };
+                            if (
+                              !characterEditor.dirty &&
+                              !characterEditor.saving
+                            )
+                              action();
+                            else guard(action);
+                          }}
+                          remove={async (id, version) => {
+                            await connection.deleteCharacter(id, version);
+                            if (characterEditor.id === id)
+                              setRosterDetail("main");
+                          }}
+                        />
+                      )}
+                    </div>
+                  ) : null
+                }
               />
             </>
           )}

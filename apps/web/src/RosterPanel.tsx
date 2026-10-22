@@ -1,56 +1,36 @@
-import { classes, roles, type RosterEntry, type RosterValue } from "./roster";
+import { useState } from "react";
+import { Trash2 } from "lucide-react";
+import { SelectControl } from "./SelectControl";
+import { classes, type RosterValue } from "./roster";
 import type { RosterEditorState } from "./useRosterEditor";
 export function RosterPanel({
-  roster,
   editor,
-  select,
-  add,
+  remove,
+  cancelCreate,
+  linkedAlts,
+  linkedOverrides,
+  deletionBlocked,
 }: {
-  roster: RosterEntry[];
   editor: RosterEditorState;
-  select: (id: string) => void;
-  add: () => void;
+  remove: () => Promise<void>;
+  cancelCreate: () => void;
+  linkedAlts: number;
+  linkedOverrides: number;
+  deletionBlocked: boolean;
 }) {
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
   const field = (key: keyof RosterValue, value: string | boolean) =>
     editor.change((old) => ({ ...old, [key]: value }));
   return (
-    <section className="panel roster-panel" aria-labelledby="roster-title">
-      <div className="panel-header">
-        <div>
-          <h2 id="roster-title">Manage roster</h2>
-          <p className="muted">
-            Add mains or update membership. Save, then Run Pebble to update
-            results.
-          </p>
+    <section className="panel roster-panel" aria-label="Main details">
+      {!editor.exists && (
+        <div className="panel-header">
+          <h2 id="roster-title">New main</h2>
         </div>
-        <button
-          className="button secondary"
-          onClick={add}
-          disabled={editor.saving}
-        >
-          Add main
-        </button>
-      </div>
+      )}
       <div className="roster-editor">
-        <label className="field">
-          Main player
-          <select
-            aria-label="Main player"
-            value={editor.exists ? editor.id : ""}
-            onChange={(e) => select(e.target.value)}
-            disabled={editor.blocked}
-          >
-            <option value="" disabled>
-              {roster.length ? "New main" : "No mains yet"}
-            </option>
-            {roster.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-                {p.active ? "" : " (inactive)"}
-              </option>
-            ))}
-          </select>
-        </label>
         {editor.id && (
           <form
             onSubmit={(e) => {
@@ -59,24 +39,21 @@ export function RosterPanel({
             }}
           >
             <fieldset disabled={editor.blocked} className="roster-fields">
-              <legend>{editor.exists ? "Edit main" : "New main"}</legend>
+              <legend className="sr-only">
+                {editor.exists ? "Edit main" : "New main"}
+              </legend>
               <label className="field">
                 Main name
                 <input
                   value={editor.value.name}
                   maxLength={32}
                   onChange={(e) => field("name", e.target.value)}
-                  aria-describedby="roster-identity roster-validation"
+                  aria-describedby="roster-validation"
                 />
               </label>
-              <p id="roster-identity" className="muted small">
-                Renaming keeps the same player ID and character mappings.
-                Unmapped logs match the main name; map old names and alts before
-                recomputing. Completed results change only after a new run.
-              </p>
               <label className="field">
                 Class
-                <select
+                <SelectControl
                   aria-label="Class"
                   value={editor.value.className}
                   onChange={(e) => field("className", e.target.value)}
@@ -84,21 +61,9 @@ export function RosterPanel({
                   {classes.map((v) => (
                     <option key={v}>{v}</option>
                   ))}
-                </select>
+                </SelectControl>
               </label>
-              <label className="field">
-                Role
-                <select
-                  aria-label="Role"
-                  value={editor.value.role}
-                  onChange={(e) => field("role", e.target.value)}
-                >
-                  {roles.map((v) => (
-                    <option key={v}>{v}</option>
-                  ))}
-                </select>
-              </label>
-              <label className="field">
+              <label className="field roster-active">
                 <span>
                   <input
                     type="checkbox"
@@ -109,8 +74,7 @@ export function RosterPanel({
                   Active
                 </span>
                 <span className="muted small">
-                  Uncheck to archive; no player or mapping is deleted. Dates
-                  apply to historical membership.
+                  Inactive players stay in the roster.
                 </span>
               </label>
               <label className="field">
@@ -134,6 +98,7 @@ export function RosterPanel({
               <label className="field">
                 Private roster notes
                 <textarea
+                  rows={2}
                   value={editor.value.notes}
                   maxLength={1000}
                   onChange={(e) => field("notes", e.target.value)}
@@ -150,6 +115,9 @@ export function RosterPanel({
             <div role="status" aria-label="Roster changes">
               {editor.message}
             </div>
+            <p className="muted small roster-help">
+              Changes apply after Run Pebble.
+            </p>
             <div className="button-row">
               <button
                 className="button primary"
@@ -163,12 +131,84 @@ export function RosterPanel({
               <button
                 className="button secondary"
                 type="button"
-                disabled={!editor.dirty || editor.blocked}
-                onClick={editor.cancel}
+                disabled={(editor.exists && !editor.dirty) || editor.blocked}
+                onClick={() => {
+                  editor.cancel();
+                  if (!editor.exists) cancelCreate();
+                }}
               >
                 Cancel roster edits
               </button>
+              {editor.exists && !confirmDelete && (
+                <button
+                  className="text-button delete-main-button"
+                  type="button"
+                  disabled={
+                    editor.dirty ||
+                    editor.blocked ||
+                    deleting ||
+                    deletionBlocked
+                  }
+                  onClick={() => setConfirmDelete(true)}
+                >
+                  <Trash2 size={14} /> Delete main
+                </button>
+              )}
             </div>
+            {confirmDelete && (
+              <div
+                className="delete-main-confirm"
+                role="group"
+                aria-label="Confirm main deletion"
+              >
+                <p>
+                  Delete <strong>{editor.value.name}</strong>
+                  {linkedAlts || linkedOverrides
+                    ? `, ${linkedAlts} alt ${linkedAlts === 1 ? "mapping" : "mappings"}, and ${linkedOverrides} availability ${linkedOverrides === 1 ? "override" : "overrides"}`
+                    : ""}
+                  ? This cannot be undone. Completed results stay until Run
+                  Pebble.
+                </p>
+                {deleteError && <p role="alert">{deleteError}</p>}
+                <div className="button-row">
+                  <button
+                    className="button danger"
+                    type="button"
+                    disabled={
+                      deleting ||
+                      editor.blocked ||
+                      editor.dirty ||
+                      deletionBlocked
+                    }
+                    onClick={async () => {
+                      setDeleting(true);
+                      setDeleteError("");
+                      try {
+                        await remove();
+                      } catch (cause) {
+                        setDeleteError(
+                          cause instanceof Error
+                            ? cause.message
+                            : "Could not delete this main.",
+                        );
+                      } finally {
+                        setDeleting(false);
+                      }
+                    }}
+                  >
+                    {deleting ? "Deleting…" : "Confirm delete main"}
+                  </button>
+                  <button
+                    type="button"
+                    className="button secondary"
+                    disabled={deleting}
+                    onClick={() => setConfirmDelete(false)}
+                  >
+                    Keep main
+                  </button>
+                </div>
+              </div>
+            )}
           </form>
         )}
         {!editor.id && (

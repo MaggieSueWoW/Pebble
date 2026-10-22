@@ -38,7 +38,7 @@ async function open(page: Page) {
     .getByRole("button", { name: "Roster", exact: true })
     .click();
   await expect(
-    page.getByRole("heading", { name: "Manage roster" }),
+    page.getByRole("region", { name: "Roster players" }),
   ).toBeVisible();
 }
 const save = (page: Page) =>
@@ -98,7 +98,6 @@ test("adds a Unicode main, edits and archives the same ID, preserves notes and f
   await page.getByRole("button", { name: "Add main" }).click();
   await page.getByLabel("Main name", { exact: true }).fill("Étoile");
   await page.getByLabel("Class", { exact: true }).selectOption("Mage");
-  await page.getByLabel("Role", { exact: true }).selectOption("Damage");
   await page.getByLabel("Join date", { exact: true }).fill("2026-10-01");
   await page.getByLabel("Leave date", { exact: true }).fill("2026-09-30");
   await expect(page.getByRole("alert")).toContainText(
@@ -124,7 +123,7 @@ test("adds a Unicode main, edits and archives the same ID, preserves notes and f
     expect(docs.docs[0].data()).toMatchObject({
       name: "Étoile",
       className: "Mage",
-      role: "Damage",
+      role: "Unknown",
       version: 1,
       notes: "Private note",
     });
@@ -134,10 +133,12 @@ test("adds a Unicode main, edits and archives the same ID, preserves notes and f
   await page.getByLabel("Leave date", { exact: true }).fill("2026-10-20");
   await save(page).click();
   await expect(save(page)).toBeDisabled();
-  await expect(page.getByLabel("Main player", { exact: true })).toHaveValue(id);
   await expect(
-    page.getByLabel("Main player", { exact: true }).locator("option:checked"),
-  ).toHaveText("Renamed (inactive)");
+    page.getByRole("button", { name: "Edit Renamed", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Edit Renamed", exact: true }),
+  ).toContainText("Inactive");
   await admin(async (ctx) => {
     const docs = await getDocs(
       collection(ctx.firestore(), `${season}/players`),
@@ -170,7 +171,7 @@ test("validates duplicates, protects drafts and reports an expected-version conf
     );
   });
   await open(page);
-  await page.getByLabel("Main player", { exact: true }).selectOption("alpha");
+  await page.getByRole("button", { name: "Edit Example", exact: true }).click();
   await page.getByLabel("Main name", { exact: true }).fill("beta");
   await expect(page.getByRole("alert")).toContainText("already used");
   await page.getByLabel("Main name", { exact: true }).fill("Draft");
@@ -219,5 +220,70 @@ test("validates duplicates, protects drafts and reports an expected-version conf
       (await getDoc(doc(ctx.firestore(), `${season}/players/beta`))).data()
         ?.version,
     ).toBe(1);
+  });
+});
+
+test("collapses main details and confirms deletion of only the selected main and its linked data", async ({
+  page,
+}) => {
+  await admin(async (ctx) => {
+    const db = ctx.firestore();
+    await setDoc(doc(db, `${season}/players/alpha`), player());
+    await setDoc(doc(db, `${season}/players/beta`), player("Beta"));
+    await setDoc(doc(db, `${season}/characters/alt`), {
+      name: "Alt",
+      realm: "",
+      region: "us",
+      playerId: "alpha",
+      version: 1,
+      updatedBy: "fixture",
+      updatedAt: Timestamp.now(),
+    });
+    await setDoc(doc(db, `${season}/availabilityOverrides/2026-10-15_alpha`), {
+      nightId: "2026-10-15",
+      playerId: "alpha",
+      pre: { mode: "automatic" },
+      post: { mode: "unavailable" },
+      notes: "",
+      version: 1,
+      updatedBy: "fixture",
+      updatedAt: Timestamp.now(),
+    });
+  });
+  await open(page);
+  const main = page.getByRole("button", { name: "Edit Example", exact: true });
+  await main.click();
+  await expect(page.getByLabel("Main name", { exact: true })).toBeVisible();
+  await page
+    .getByRole("button", { name: "Collapse Example", exact: true })
+    .click();
+  await expect(page.getByLabel("Main name", { exact: true })).toHaveCount(0);
+  await main.click();
+  await page.getByRole("button", { name: "Delete main", exact: true }).click();
+  await expect(
+    page.getByRole("group", { name: "Confirm main deletion" }),
+  ).toContainText("1 alt mapping, and 1 availability override");
+  await page.getByRole("button", { name: "Keep main", exact: true }).click();
+  await expect(main).toBeVisible();
+  await page.getByRole("button", { name: "Delete main", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Confirm delete main", exact: true })
+    .click();
+  await expect(main).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Edit Beta", exact: true }),
+  ).toBeVisible();
+  await admin(async (ctx) => {
+    for (const path of [
+      "players/alpha",
+      "characters/alt",
+      "availabilityOverrides/2026-10-15_alpha",
+    ])
+      expect(
+        (await getDoc(doc(ctx.firestore(), `${season}/${path}`))).exists(),
+      ).toBe(false);
+    expect(
+      (await getDoc(doc(ctx.firestore(), `${season}/players/beta`))).exists(),
+    ).toBe(true);
   });
 });

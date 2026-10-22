@@ -90,31 +90,30 @@ test("saved roster, mapping and settings feed one explicit run and remain stale 
     ).toContainText("Roster saved");
     await page.getByLabel("Main name", { exact: true }).fill("Renamed");
     await page.getByLabel("Class", { exact: true }).selectOption("Druid");
-    await page.getByLabel("Role", { exact: true }).selectOption("Healer");
     await expect(run).toBeDisabled();
     await page.getByRole("button", { name: "Save main", exact: true }).click();
     await expect(
       page.getByRole("status", { name: "Roster changes" }),
     ).toContainText("Roster saved");
-    const mainId = await page
-      .getByLabel("Main player", { exact: true })
-      .inputValue();
-    await page
-      .getByRole("button", { name: "Add mapping", exact: true })
-      .click();
+    let mainId = "";
+    await admin(async (ctx) => {
+      mainId = (await getDocs(collection(ctx.firestore(), `${season}/players`)))
+        .docs[0].id;
+    });
+    await page.getByRole("button", { name: "Add alt", exact: true }).click();
     await page.getByLabel("Character name", { exact: true }).fill("Loggedalt");
     await page.getByLabel("Realm", { exact: true }).fill("Example Realm");
-    await page.getByLabel("Mapped main", { exact: true }).selectOption(mainId);
     await expect(run).toBeDisabled();
-    await page
-      .getByRole("button", { name: "Save mapping", exact: true })
-      .click();
+    await page.getByRole("button", { name: "Save alt", exact: true }).click();
     await expect(
       page.getByRole("status", { name: "Character mapping changes" }),
     ).toContainText("Character mapping saved");
-    const mappingId = await page
-      .getByLabel("Character mapping", { exact: true })
-      .inputValue();
+    let mappingId = "";
+    await admin(async (ctx) => {
+      mappingId = (
+        await getDocs(collection(ctx.firestore(), `${season}/characters`))
+      ).docs[0].id;
+    });
     await page
       .getByRole("navigation")
       .getByRole("button", { name: "Settings", exact: true })
@@ -143,7 +142,7 @@ test("saved roster, mapping and settings feed one explicit run and remain stale 
       ).toMatchObject({
         name: "Renamed",
         className: "Druid",
-        role: "Healer",
+        role: "Unknown",
         version: 2,
       });
       expect(
@@ -193,6 +192,10 @@ test("saved roster, mapping and settings feed one explicit run and remain stale 
       );
     });
     await expect(status).toContainText("Calculating results");
+    await page
+      .getByRole("navigation")
+      .getByRole("button", { name: "Results", exact: true })
+      .click();
     await expect(page.getByText("Previous", { exact: true })).toBeVisible();
     const gate = new Promise<void>((resolve) => {
       release = resolve;
@@ -228,7 +231,7 @@ test("saved roster, mapping and settings feed one explicit run and remain stale 
         id: mainId,
         name: "Renamed",
         className: "Druid",
-        role: "Healer",
+        role: "Unknown",
       });
       batch.set(
         doc(db, `${season}/runs/${requestId}`),

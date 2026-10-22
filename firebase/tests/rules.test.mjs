@@ -2,7 +2,7 @@ import { after, before, beforeEach, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { assertFails, assertSucceeds, initializeTestEnvironment } from '@firebase/rules-unit-testing';
-import { collection, doc, getDoc, getDocs, getDocFromServer, getDocsFromServer, serverTimestamp, setDoc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, getDocFromServer, getDocsFromServer, serverTimestamp, setDoc, updateDoc, deleteDoc, writeBatch } from 'firebase/firestore';
 let env;
 const [emulatorHost, emulatorPort] = (process.env.FIRESTORE_EMULATOR_HOST || '127.0.0.1:8080').split(':');
 const season = 'seasons/midnight-s2';
@@ -124,7 +124,8 @@ for (const [family, [id, domain]] of Object.entries(families)) {
       await assertFails(updateDoc(ref, change));
     }
     await assertSucceeds(updateDoc(ref, meta('officer', 2)));
-    await assertFails(deleteDoc(ref));
+    if (family === 'players' || family === 'characters') await assertSucceeds(deleteDoc(ref));
+    else await assertFails(deleteDoc(ref));
     for (const reader of [env.unauthenticatedContext().firestore(), env.authenticatedContext('member').firestore()]) {
       await assertFails(getDocFromServer(doc(reader, `${season}/${family}/${id}`)));
       await assertFails(getDocsFromServer(collection(reader, `${season}/${family}`)));
@@ -206,4 +207,29 @@ test('recorded availability stays public while night diagnostics require current
   }
   await env.withSecurityRulesDisabled(async ctx => { await setDoc(doc(ctx.firestore(), 'officers/officer'), { enabled: false }); });
   await assertFails(getDocFromServer(doc(officer, runPath)));
+});
+
+test('only officers can delete a main and linked records together', async () => {
+  await env.withSecurityRulesDisabled(async ctx => {
+    const db = ctx.firestore();
+    await setDoc(doc(db, `${season}/characters/alt`), {name: 'Alt', realm: '', region: 'us', playerId: 'p1', version: 1});
+    await setDoc(doc(db, `${season}/availabilityOverrides/2026-10-15_p1`), {nightId:'2026-10-15', playerId:'p1', pre:{mode:'automatic'}, post:{mode:'unavailable'}, version:1});
+  });
+  const paths = ['players/p1', 'characters/alt', 'availabilityOverrides/2026-10-15_p1'];
+  for (const db of [env.unauthenticatedContext().firestore(), env.authenticatedContext('member').firestore()]) {
+    const batch = writeBatch(db); paths.forEach(path => batch.delete(doc(db, `${season}/${path}`)));
+    await assertFails(batch.commit());
+  }
+  const db = env.authenticatedContext('officer').firestore();
+  const batch = writeBatch(db); paths.forEach(path => batch.delete(doc(db, `${season}/${path}`)));
+  await assertSucceeds(batch.commit());
+  for (const path of paths) assert.equal((await getDoc(doc(db, `${season}/${path}`))).exists(), false);
+});
+
+test('officers can remove one alt without removing its main', async () => {
+  await env.withSecurityRulesDisabled(ctx => setDoc(doc(ctx.firestore(), `${season}/characters/alt`), {name:'Alt', realm:'', region:'us', playerId:'p1', version:1}));
+  for (const reader of [env.unauthenticatedContext().firestore(), env.authenticatedContext('member').firestore()]) await assertFails(deleteDoc(doc(reader, `${season}/characters/alt`)));
+  const db = env.authenticatedContext('officer').firestore();
+  await assertSucceeds(deleteDoc(doc(db, `${season}/characters/alt`)));
+  assert.equal((await getDoc(doc(db, `${season}/players/p1`))).exists(), true);
 });
