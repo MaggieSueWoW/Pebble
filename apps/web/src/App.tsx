@@ -3,7 +3,6 @@ import type { LiveConnection } from "./useFirestore";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   ArrowDown,
-  ArrowUpRight,
   BarChart3,
   Check,
   CheckCheck,
@@ -215,8 +214,8 @@ export default function App({ connection }: { connection?: LiveConnection }) {
     (action) => guard(action),
   );
   const page = navigation.page;
-  const showPageIntro = page === "settings";
-  const compactRunStatus = page === "reports" || page === "roster";
+  const compactRunStatus =
+    page === "reports" || page === "roster" || page === "settings";
   const setPage = (page: Page) => navigation.navigate({ page });
   const [night, setNight] = useState(defaultNight);
   const nightChosen = useRef(false);
@@ -906,7 +905,7 @@ export default function App({ connection }: { connection?: LiveConnection }) {
       </aside>
       <main>
         <div
-          className={`content ${page === "overrides" ? "overrides-page" : page === "roster" ? "roster-page" : ""}`}
+          className={`content ${page === "overrides" ? "overrides-page" : page === "roster" ? "roster-page" : page === "settings" ? "settings-page" : ""}`}
         >
           {connection?.error && (
             <Notice tone="amber">{connection.error}</Notice>
@@ -969,36 +968,18 @@ export default function App({ connection }: { connection?: LiveConnection }) {
             )}
           <div className="page-heading">
             <div>
-              {showPageIntro && (
-                <div className="eyebrow accent">A LITTLE LESS RAID ADMIN</div>
-              )}
               <h1 id="page-title" tabIndex={-1}>
                 {page === "reports"
                   ? "Reports"
                   : page === "overrides"
                     ? "Overrides"
                     : page === "settings"
-                      ? "Calculation settings"
+                      ? "Settings"
                       : page === "roster"
                         ? "Roster"
                         : "Results"}
               </h1>
-              {showPageIntro && (
-                <p>
-                  {page === "settings"
-                    ? "Set the calculation parameters, then recompute when ready."
-                    : "Keep membership current, then recompute when ready."}
-                </p>
-              )}
             </div>
-            {showPageIntro && (
-              <button
-                className="button secondary"
-                onClick={() => go("results")}
-              >
-                View results <ArrowUpRight size={16} />
-              </button>
-            )}
           </div>
           {page !== "results" && page !== "overrides" && (
             <div
@@ -1058,25 +1039,38 @@ export default function App({ connection }: { connection?: LiveConnection }) {
                                         : "You’re all caught up"}
                 </strong>
                 <span>
-                  {active
-                    ? "Your last completed results stay visible while Pebble works."
-                    : connection?.submitting
-                      ? "Waiting for the server to confirm your request."
-                      : connection?.officer && !connection.queueReady
-                        ? "Waiting to check for pending runs. Your previous results stay visible."
-                        : connection?.resultsError || connection?.resultsPending
-                          ? connection.hasResults
-                            ? "Showing the previous completed results until the latest set loads."
-                            : "The latest result set has not loaded yet."
-                          : lastFailed
-                            ? "Previous results are still available. You can run Pebble again."
-                            : unsaved
-                              ? "Save or discard your edits before running Pebble."
-                              : unprocessed
-                                ? "Saved inputs have changed. Run Pebble to update the results."
-                                : connection && !connection.hasResults
-                                  ? "Add reports and Run Pebble to create the first result set."
-                                  : `Last completed ${formatTime(results.completedAt)} PT · ${formatRunDate(results.completedAt)}`}
+                  {page === "settings" &&
+                  (!connection || connection.hasResults) ? (
+                    <>
+                      Updated{" "}
+                      <time dateTime={results.completedAt}>
+                        {formatTime(results.completedAt)} PT ·{" "}
+                        {formatRunDate(results.completedAt)}
+                      </time>
+                    </>
+                  ) : active ? (
+                    "Your last completed results stay visible while Pebble works."
+                  ) : connection?.submitting ? (
+                    "Waiting for the server to confirm your request."
+                  ) : connection?.officer && !connection.queueReady ? (
+                    "Waiting to check for pending runs. Your previous results stay visible."
+                  ) : connection?.resultsError || connection?.resultsPending ? (
+                    connection.hasResults ? (
+                      "Showing the previous completed results until the latest set loads."
+                    ) : (
+                      "The latest result set has not loaded yet."
+                    )
+                  ) : lastFailed ? (
+                    "Previous results are still available. You can run Pebble again."
+                  ) : unsaved ? (
+                    "Save or discard your edits before running Pebble."
+                  ) : unprocessed ? (
+                    "Saved inputs have changed. Run Pebble to update the results."
+                  ) : connection && !connection.hasResults ? (
+                    "Add reports and Run Pebble to create the first result set."
+                  ) : (
+                    `Last completed ${formatTime(results.completedAt)} PT · ${formatRunDate(results.completedAt)}`
+                  )}
                 </span>
               </div>
               {connection?.officer && connection.queueError && (
@@ -1782,19 +1776,6 @@ export default function App({ connection }: { connection?: LiveConnection }) {
                 ))}
               </div>
             </details>
-          )}
-          {showPageIntro && (
-            <footer className="page-footer">
-              <span>
-                <span className="footer-pebble" /> Small tool. Fairer raid
-                nights.
-              </span>
-              <span>
-                {connection
-                  ? `${connection.label} · Pacific time`
-                  : "Local prototype · sample data only · no Firestore"}
-              </span>
-            </footer>
           )}
         </div>
       </main>

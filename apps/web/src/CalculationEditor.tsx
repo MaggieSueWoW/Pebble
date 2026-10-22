@@ -1,3 +1,4 @@
+import { calculationFields } from "./calculationFields";
 import type { CalculationEditorState } from "./useCalculationEditor";
 export function CalculationEditor({
   editor,
@@ -16,27 +17,13 @@ export function CalculationEditor({
     save,
     cancel,
   } = editor;
-  const fields = [
-    ["breakWindowStart", "Break window start", "time"],
-    ["breakWindowEnd", "Break window end", "time"],
-    ["minBreakMinutes", "Minimum break minutes", "number"],
-    ["maxBreakMinutes", "Maximum break minutes", "number"],
-    ["defaultMythicStart", "Default mythic start", "time"],
-    ["postExtensionMinutes", "Post extension minutes", "number"],
-  ] as const;
   return (
     <section
-      className="card timing-card"
+      className="card timing-card calculation-card"
       aria-label="Calculation settings editor"
     >
-      <h2>Calculation settings</h2>
-      <p>
-        All times are Pacific (America/Los_Angeles). Leave default mythic start
-        empty for automatic detection.
-      </p>
-      <p>
-        Save settings, then Run Pebble when ready. Saving does not recompute
-        results.
+      <p className="settings-form-intro">
+        All times are Pacific. Save, then Run Pebble to apply changes.
       </p>
       <div role="status" aria-label="Calculation settings changes">
         {saving ? "Saving calculation settings…" : message}
@@ -46,53 +33,59 @@ export function CalculationEditor({
           {error}
         </p>
       )}
-      <fieldset disabled={blocked} className="timing-fields">
-        <legend>Calculation parameters</legend>
-        {fields.map(([key, label, type]) => (
-          <div className="field" key={key}>
-            <label>
-              {label}
-              <input
-                type={type}
-                step={
-                  type === "number"
-                    ? key === "postExtensionMinutes"
-                      ? "any"
-                      : "1"
-                    : undefined
-                }
-                min={
-                  type === "number"
-                    ? key === "postExtensionMinutes"
-                      ? 0
-                      : 1
-                    : undefined
-                }
-                max={
-                  type === "number"
-                    ? key === "postExtensionMinutes"
-                      ? 60
-                      : 120
-                    : undefined
-                }
-                value={Number.isNaN(value[key]) ? "" : value[key]}
-                aria-invalid={Boolean(validation)}
-                aria-describedby={
-                  validation ? "calculation-validation" : undefined
-                }
-                onChange={(event) =>
-                  change((old) => ({
-                    ...old,
-                    [key]:
-                      type === "number"
-                        ? event.target.value === ""
-                          ? NaN
-                          : Number(event.target.value)
-                        : event.target.value,
-                  }))
-                }
-              />
-            </label>
+      <fieldset
+        disabled={blocked}
+        className="calculation-fields"
+        aria-label="Calculation settings"
+      >
+        {calculationFields.map(({ key, label, type, description }) => (
+          <div className="field calculation-field" key={key}>
+            <label htmlFor={`calculation-${key}`}>{label}</label>
+            <input
+              id={`calculation-${key}`}
+              type={type}
+              step={
+                type === "number"
+                  ? key === "postExtensionMinutes"
+                    ? "any"
+                    : "1"
+                  : undefined
+              }
+              min={
+                type === "number"
+                  ? key === "postExtensionMinutes"
+                    ? 0
+                    : 1
+                  : undefined
+              }
+              max={
+                type === "number"
+                  ? key === "postExtensionMinutes"
+                    ? 60
+                    : 120
+                  : undefined
+              }
+              value={Number.isNaN(value[key]) ? "" : value[key]}
+              aria-invalid={Boolean(validation)}
+              aria-describedby={`calculation-${key}-description${validation ? " calculation-validation" : ""}`}
+              onChange={(event) =>
+                change((old) => ({
+                  ...old,
+                  [key]:
+                    type === "number"
+                      ? event.target.value === ""
+                        ? NaN
+                        : Number(event.target.value)
+                      : event.target.value,
+                }))
+              }
+            />
+            <p
+              className="calculation-description"
+              id={`calculation-${key}-description`}
+            >
+              {description}
+            </p>
           </div>
         ))}
       </fieldset>
@@ -115,7 +108,7 @@ export function CalculationEditor({
             disabled={!dirty || blocked || Boolean(validation)}
             onClick={save}
           >
-            Save calculation settings
+            Save
           </button>
         </div>
       </div>

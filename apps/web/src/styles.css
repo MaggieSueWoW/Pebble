@@ -3040,3 +3040,73 @@ tbody tr:last-child td {
 .swap-main-confirm .text-button {
   margin-right: 14px;
 }
+
+.settings-page .timing-card > p,
+.settings-page .timing-fields legend,
+.settings-page .field label,
+.settings-page .field input,
+.settings-page .button,
+.settings-page .field-error,
+.settings-page [role="status"] {
+  font-size: 13px;
+}
+.settings-page .small {
+  font-size: 12px;
+}
+.settings-page .field input {
+  color-scheme: dark;
+}
+
+.settings-page .calculation-card {
+  padding: 18px 20px;
+}
+.settings-page .settings-form-intro {
+  margin: 0 0 10px;
+  color: var(--muted);
+}
+.calculation-fields {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}
+.calculation-field {
+  display: grid;
+  grid-template-columns: 185px 155px minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+  padding: 10px 0;
+  margin: 0;
+  border-top: 1px solid var(--border);
+}
+.calculation-field label {
+  padding-top: 8px;
+}
+.settings-page .calculation-field input {
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+  padding: 7px 10px;
+}
+.calculation-description {
+  color: #a2acba;
+  font-size: 12px;
+  line-height: 1.6;
+  margin: 0;
+}
+.settings-page .calculation-card .card-action-row {
+  margin-top: 10px;
+  padding-top: 12px;
+}
+.calculation-card [role="status"]:empty {
+  display: none;
+}
+@media (max-width: 900px) {
+  .calculation-field {
+    grid-template-columns: minmax(0, 1fr) 150px;
+    gap: 8px 14px;
+  }
+  .calculation-description {
+    grid-column: 1 / -1;
+  }
+}

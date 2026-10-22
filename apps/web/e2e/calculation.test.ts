@@ -27,7 +27,7 @@ const settings = (extension: number, version: number) => ({
   updatedAt: Timestamp.now(),
 });
 const save = (page: Page) =>
-  page.getByRole("button", { name: "Save calculation settings", exact: true });
+  page.getByRole("button", { name: "Save", exact: true });
 async function open(page: Page) {
   await officer(page, env);
   await page
@@ -36,9 +36,9 @@ async function open(page: Page) {
     .click();
   await expect(
     page.getByRole("heading", {
-      name: "Calculation settings",
+      name: "Settings",
       exact: true,
-      level: 2,
+      level: 1,
     }),
   ).toBeVisible();
 }

@@ -121,7 +121,7 @@ test("saved roster, mapping and settings feed one explicit run and remain stale 
     await page.getByLabel("Post extension minutes", { exact: true }).fill("0");
     await expect(run).toBeDisabled();
     await page
-      .getByRole("button", { name: "Save calculation settings", exact: true })
+      .getByRole("button", { name: "Save", exact: true })
       .click();
     await expect(
       page.getByRole("status", { name: "Calculation settings changes" }),
