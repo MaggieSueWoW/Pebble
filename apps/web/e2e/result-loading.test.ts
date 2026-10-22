@@ -1268,7 +1268,7 @@ for (const signedIn of [false, true]) {
       breakdown.getByRole("table", { name: "Time by break" }).getByRole("row"),
     ).toHaveText([
       "PeriodBenchPlayed",
-      "Before break10 min0 min",
+      "Before break10 min-",
       "After break20 min60 min",
     ]);
     await breakdown

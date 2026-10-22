@@ -95,23 +95,29 @@ export function ResultRow({
                 <tbody>
                   <tr>
                     <th scope="row">Before break</th>
-                    <td>{row.preBench} min</td>
+                    <td>{row.preBench === 0 ? "-" : `${row.preBench} min`}</td>
                     {"overridden" in row && (
                       <td>
                         {row.prePlayed == null
                           ? "Not recorded"
-                          : `${row.prePlayed} min`}
+                          : row.prePlayed === 0
+                            ? "-"
+                            : `${row.prePlayed} min`}
                       </td>
                     )}
                   </tr>
                   <tr>
                     <th scope="row">After break</th>
-                    <td>{row.postBench} min</td>
+                    <td>
+                      {row.postBench === 0 ? "-" : `${row.postBench} min`}
+                    </td>
                     {"overridden" in row && (
                       <td>
                         {row.postPlayed == null
                           ? "Not recorded"
-                          : `${row.postPlayed} min`}
+                          : row.postPlayed === 0
+                            ? "-"
+                            : `${row.postPlayed} min`}
                       </td>
                     )}
                   </tr>

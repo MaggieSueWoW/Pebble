@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
-import { orderResultRows } from "./resultRanking";
+import { orderResultRows, sortResultRows } from "./resultRanking";
 import { ResultRow } from "./ResultRow";
 import type { PlayerResult } from "./model";
 
@@ -98,4 +98,41 @@ it("preserves recorded rank for a zero-time row without displaying a ratio", () 
   );
   expect(screen.getByText("03")).toBeTruthy();
   expect(screen.queryByText("Bench:played ratio")).toBeNull();
+});
+
+it("sorts displayed names and numeric times independently of recorded rank", () => {
+  const input = [
+    row("Beta", 100, 20),
+    row("Alpha", 20, 100),
+    row("Gamma", 3, 80),
+  ];
+  const names = (
+    key: "name" | "bench" | "played",
+    direction: "ascending" | "descending",
+  ) => sortResultRows(input, { key, direction }).map((row) => row.id);
+  expect(names("name", "ascending")).toEqual(["Alpha", "Beta", "Gamma"]);
+  expect(names("name", "descending")).toEqual(["Gamma", "Beta", "Alpha"]);
+  expect(names("bench", "ascending")).toEqual(["Gamma", "Alpha", "Beta"]);
+  expect(names("bench", "descending")).toEqual(["Beta", "Alpha", "Gamma"]);
+  expect(names("played", "descending")).toEqual(["Alpha", "Gamma", "Beta"]);
+  expect(input.map((row) => row.id)).toEqual(["Beta", "Alpha", "Gamma"]);
+  expect(sortResultRows(input, null)).toBe(input);
+});
+it("sorts Time Played by actual share, keeps undefined shares last, and breaks ties by name", () => {
+  const input = [
+    row("Zero", 0, 0),
+    row("Beta", 20, 80),
+    row("Alpha", 2, 8),
+    row("High", 1, 99),
+  ];
+  expect(
+    sortResultRows(input, { key: "share", direction: "descending" }).map(
+      (row) => row.id,
+    ),
+  ).toEqual(["High", "Alpha", "Beta", "Zero"]);
+  expect(
+    sortResultRows(input, { key: "share", direction: "ascending" }).map(
+      (row) => row.id,
+    ),
+  ).toEqual(["Alpha", "Beta", "High", "Zero"]);
 });

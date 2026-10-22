@@ -503,7 +503,11 @@ export const wallTime = (value: string) =>
         timeZone: "UTC",
       }).format(new Date(`${value}Z`));
 export const minutes = (value: number) =>
-  `${Math.floor(value / 60)}h ${String(value % 60).padStart(2, "0")}m`;
+  value === 0
+    ? "-"
+    : value < 60
+      ? `${value}m`
+      : `${Math.floor(value / 60)}h ${String(value % 60).padStart(2, "0")}m`;
 
 export function stableJSON(value: unknown): string {
   if (Array.isArray(value)) return "[" + value.map(stableJSON).join(",") + "]";

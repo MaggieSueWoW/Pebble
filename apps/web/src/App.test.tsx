@@ -995,3 +995,62 @@ it("lists mains with alts and scopes a new alt to the clicked main", () => {
       .value,
   ).toBe(alpha.name);
 });
+
+it("toggles Results column sorting while keeping details on the selected player", () => {
+  const c = connection([alpha, beta]);
+  c.hasResults = true;
+  c.saved.results.players = [
+    {
+      id: alpha.id,
+      name: alpha.name,
+      played: 30,
+      bench: 10,
+      preBench: 10,
+      postBench: 0,
+      overridden: false,
+      nights: 1,
+    },
+    {
+      id: beta.id,
+      name: beta.name,
+      played: 10,
+      bench: 20,
+      preBench: 20,
+      postBench: 0,
+      overridden: false,
+      nights: 1,
+    },
+  ];
+  render(<App connection={c} />);
+  fireEvent.click(screen.getByRole("button", { name: "Results" }));
+  const names = () =>
+    [...document.querySelectorAll(".result-name strong")].map(
+      (el) => el.textContent,
+    );
+  fireEvent.click(
+    screen.getByRole("button", { name: "Details for Example Alpha" }),
+  );
+  const columns = screen.getAllByRole("columnheader");
+  expect(within(columns[0]).queryByRole("button")).toBeNull();
+  const benchSort = screen.getByRole("button", { name: "Bench" });
+  expect(benchSort.closest("th")?.getAttribute("aria-sort")).toBe("ascending");
+  fireEvent.click(benchSort);
+  expect(benchSort.closest("th")?.getAttribute("aria-sort")).toBe("descending");
+  expect(names()).toEqual([beta.name, alpha.name]);
+  const nameSort = screen.getByRole("button", { name: "Player" });
+  fireEvent.click(nameSort);
+  expect(names()).toEqual([alpha.name, beta.name]);
+  expect(nameSort.closest("th")?.getAttribute("aria-sort")).toBe("ascending");
+  fireEvent.click(nameSort);
+  expect(names()).toEqual([beta.name, alpha.name]);
+  expect(nameSort.closest("th")?.getAttribute("aria-sort")).toBe("descending");
+  fireEvent.click(screen.getByRole("button", { name: "Bench" }));
+  expect(names()).toEqual([alpha.name, beta.name]);
+  fireEvent.click(screen.getByRole("button", { name: "Played" }));
+  expect(names()).toEqual([alpha.name, beta.name]);
+  fireEvent.click(screen.getByRole("button", { name: "Time Played" }));
+  expect(names()).toEqual([alpha.name, beta.name]);
+  expect(
+    document.querySelector('.result-name[aria-expanded="true"]')?.textContent,
+  ).toBe(alpha.name);
+});

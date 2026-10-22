@@ -3,6 +3,8 @@ import type { LiveConnection } from "./useFirestore";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   ArrowDown,
+  ArrowUp,
+  ArrowUpDown,
   BarChart3,
   Check,
   CheckCheck,
@@ -46,7 +48,11 @@ import {
 
 import { resultLink, useResultNavigation } from "./useResultNavigation";
 import { NightDiagnostics } from "./NightDiagnostics";
-import { orderResultRows } from "./resultRanking";
+import {
+  orderResultRows,
+  sortResultRows,
+  type ResultSort,
+} from "./resultRanking";
 import { ResultRow } from "./ResultRow";
 import { AttendanceDetails } from "./AttendanceDetails";
 import { useReportEditor } from "./useReportEditor";
@@ -214,6 +220,30 @@ export default function App({ connection }: { connection?: LiveConnection }) {
     (action) => guard(action),
   );
   const page = navigation.page;
+  const [resultSort, setResultSort] = useState<ResultSort | null>(null);
+  const activeResultSort: ResultSort = resultSort ?? {
+    key: "bench",
+    direction: "ascending",
+  };
+  function changeResultSort(key: ResultSort["key"]) {
+    setResultSort((selection) => {
+      const current: ResultSort = selection ?? {
+        key: "bench",
+        direction: "ascending",
+      };
+      return {
+        key,
+        direction:
+          current.key === key
+            ? current.direction === "ascending"
+              ? "descending"
+              : "ascending"
+            : key === "name" || key === "bench"
+              ? "ascending"
+              : "descending",
+      };
+    });
+  }
   const compactRunStatus =
     page === "reports" || page === "roster" || page === "settings";
   const setPage = (page: Page) => navigation.navigate({ page });
@@ -660,13 +690,20 @@ export default function App({ connection }: { connection?: LiveConnection }) {
     ? resultNight
     : "season";
   const latestNight = results.nights.find((n) => n.night === night);
-  const resultRows = orderResultRows(
-    visibleResultNight === "season"
-      ? results.players
-      : (results.nights.find((n) => n.night === visibleResultNight)?.players ??
-          []),
-    visibleResultNight === "season" ? "season" : "night",
-    (row) => row.name ?? players.find((p) => p.id === row.id)?.name ?? row.id,
+  const resultRows = sortResultRows(
+    orderResultRows(
+      visibleResultNight === "season"
+        ? results.players
+        : (results.nights.find((n) => n.night === visibleResultNight)
+            ?.players ?? []),
+      visibleResultNight === "season" ? "season" : "night",
+      (row) => row.name ?? players.find((p) => p.id === row.id)?.name ?? row.id,
+    ),
+    resultSort,
+    (row) =>
+      row.name ??
+      players.find((player) => player.id === row.id)?.name ??
+      row.id,
   );
   const additionalAttendance =
     visibleResultNight === "season"
@@ -1611,12 +1648,41 @@ export default function App({ connection }: { connection?: LiveConnection }) {
                     <thead>
                       <tr>
                         <th>#</th>
-                        <th>Player</th>
-                        <th aria-sort="ascending">
-                          Bench <ArrowDown size={12} />
-                        </th>
-                        <th>Played</th>
-                        <th>Time Played</th>
+                        {(
+                          [
+                            ["name", "Player"],
+                            ["bench", "Bench"],
+                            ["played", "Played"],
+                            ["share", "Time Played"],
+                          ] as const
+                        ).map(([key, label]) => (
+                          <th
+                            key={key}
+                            scope="col"
+                            aria-sort={
+                              activeResultSort.key === key
+                                ? activeResultSort.direction
+                                : undefined
+                            }
+                          >
+                            <button
+                              className="result-sort-button"
+                              onClick={() => changeResultSort(key)}
+                              title={`Sort by ${label}`}
+                            >
+                              {label}
+                              {activeResultSort.key === key ? (
+                                activeResultSort.direction === "ascending" ? (
+                                  <ArrowUp size={12} aria-hidden="true" />
+                                ) : (
+                                  <ArrowDown size={12} aria-hidden="true" />
+                                )
+                              ) : (
+                                <ArrowUpDown size={12} aria-hidden="true" />
+                              )}
+                            </button>
+                          </th>
+                        ))}
                         <th />
                       </tr>
                     </thead>

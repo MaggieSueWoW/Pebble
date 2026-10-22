@@ -40,3 +40,35 @@ export function orderResultRows<T extends Row>(
       return a.bench - b.bench || compareNames(name(a), name(b));
     });
 }
+
+export type ResultSort = {
+  key: "name" | "bench" | "played" | "share";
+  direction: "ascending" | "descending";
+};
+
+/** Sort displayed values while retaining the worker's row eligibility and rank. */
+export function sortResultRows<T extends Row>(
+  rows: T[],
+  sort: ResultSort | null,
+  name: (row: T) => string = (row) => row.name ?? row.id,
+): T[] {
+  if (!sort) return rows;
+  const compareNames = (a: T, b: T) =>
+    name(a).localeCompare(name(b), "en", { sensitivity: "base" }) ||
+    a.id.localeCompare(b.id);
+  return [...rows].sort((a, b) => {
+    let compared: number;
+    if (sort.key === "name") compared = compareNames(a, b);
+    else if (sort.key === "share") {
+      const aTotal = a.played + a.bench,
+        bTotal = b.played + b.bench;
+      if (!aTotal || !bTotal)
+        return aTotal ? -1 : bTotal ? 1 : compareNames(a, b);
+      compared = a.played / aTotal - b.played / bTotal;
+    } else compared = a[sort.key] - b[sort.key];
+    return (
+      (sort.direction === "ascending" ? compared : -compared) ||
+      compareNames(a, b)
+    );
+  });
+}

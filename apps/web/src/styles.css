@@ -3110,3 +3110,25 @@ tbody tr:last-child td {
     grid-column: 1 / -1;
   }
 }
+
+.result-sort-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  padding: 0;
+  white-space: nowrap;
+}
+.result-sort-button svg {
+  color: #6e7c91;
+}
+th[aria-sort] .result-sort-button svg {
+  color: var(--lime);
+}
+.result-sort-button:hover,
+.result-sort-button:focus-visible {
+  color: var(--lime);
+}

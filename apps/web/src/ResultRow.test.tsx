@@ -52,10 +52,16 @@ afterEach(cleanup);
 
 it("displays recorded pre/post played and bench values including zero without inference", () => {
   const breakdown = show({ ...base, prePlayed: 0, postPlayed: 90 });
+  expect(
+    document.querySelector(".result-player-row .bench-value")?.textContent,
+  ).toBe("30m");
+  expect(
+    document.querySelectorAll(".result-player-row .numeric")[1]?.textContent,
+  ).toBe("1h 30m");
   const rows = within(breakdown).getAllByRole("row");
   expect(rows.map((row) => row.textContent)).toEqual([
     "PeriodBenchPlayed",
-    "Before break10 min0 min",
+    "Before break10 min-",
     "After break20 min90 min",
   ]);
   const disclosure = within(breakdown)
