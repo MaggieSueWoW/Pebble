@@ -1,6 +1,6 @@
 # Isolated web worker deployment (OPS-1)
 
-Implementation PRs target `codex/pebble-web-app`. Keep `main` and the existing
+Implementation PRs target `web-app`. Keep `main` and the existing
 `pebble-loop` container, image, credentials, networks, Mongo database and Redis
 keys unchanged. This moves the web worker; it does not retire the Sheets bot.
 

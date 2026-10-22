@@ -1,6 +1,6 @@
 # Data contracts and S2 recomputation (DATA-1)
 
-Implementation targets `codex/pebble-web-app`; no production deployment or legacy
+Implementation targets `web-app`; no production deployment or legacy
 bot restart is part of this change. Season 2 uses the intended web inputs and
 reprocesses all included Warcraft Logs reports whenever Run Pebble is requested.
 Cached WCL bundles may avoid upstream reads, but calculations rebuild the web

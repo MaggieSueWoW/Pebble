@@ -2,7 +2,7 @@ name: Checks
 on:
   pull_request:
   push:
-    branches: [codex/pebble-web-app]
+    branches: [web-app]
 concurrency:
   group: checks-${{ github.ref }}
   cancel-in-progress: true

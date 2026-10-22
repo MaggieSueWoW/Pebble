@@ -1,6 +1,6 @@
 # Web hosting and release (WEB-1)
 
-Work targets `codex/pebble-web-app`. Hosting commands do not restart, replace or
+Work targets `web-app`. Hosting commands do not restart, replace or
 reconfigure either worker, MongoDB or Redis. Main stays unchanged. Review the PR
 before the first hosted release; this runbook is a release procedure, not evidence
 that the live or preview URL has been published or accepted.

@@ -9,7 +9,7 @@ Firestore and security contracts (#3), and
 officer/public UX (#4). These reference issues include design targets;
 the tracker records what is implemented and what remains.
 
-Web-app work integrates into `codex/pebble-web-app`; keep `main` unchanged until
+Web-app work integrates into `web-app`; keep `main` unchanged until
 that work is complete. The existing Pebble/Sheets bot on deployment host must remain
 undisturbed during implementation; deployment and cutover remain future work.
 
