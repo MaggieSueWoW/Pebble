@@ -144,7 +144,10 @@ it("retains a removed player's draft until return or explicit cancellation", () 
     screen.getByText(/This player is no longer in the roster/),
   ).toBeTruthy();
   expect(screen.queryByRole("button", { name: "Save adjustment" })).toBeNull();
-  expect(screen.queryByRole("button", { name: "Run Pebble" })).toBeNull();
+  expect(
+    (screen.getByRole("button", { name: "Run Pebble" }) as HTMLButtonElement)
+      .disabled,
+  ).toBe(true);
   rerender(<App connection={c} />);
   expect(notes().value).toBe("Retained draft");
   rerender(<App connection={{ ...c, players: [beta] }} />);
@@ -482,7 +485,7 @@ it.each([true, false])(
         }),
       );
       expect(
-        screen.getByRole("heading", { name: "Add a report" }),
+        screen.getByRole("textbox", { name: "Warcraft Logs reports" }),
       ).toBeTruthy();
     } else
       expect(
@@ -719,7 +722,11 @@ it("offers season and night results and falls back from a removed weekly link", 
   expect(period.value).toBe("season");
   expect(location.search).toContain("period=season");
   expect(screen.getByText(/This result period is not available/)).toBeTruthy();
-  expect(screen.queryByRole("button", { name: "Run Pebble" })).toBeNull();
+  expect(
+    within(screen.getByRole("complementary")).getByRole("button", {
+      name: "Run Pebble",
+    }),
+  ).toBeTruthy();
   expect(
     screen.getByRole("status", { name: "Run status" }).querySelector("time")
       ?.dateTime,

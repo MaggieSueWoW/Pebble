@@ -187,7 +187,7 @@ test("validates timing and preserves blank/detected semantics through save, canc
   await page.getByRole("button", { name: "Reset to automatic" }).click();
   await expect(
     page.getByRole("button", { name: "Run Pebble", exact: true }),
-  ).toHaveCount(0);
+  ).toBeDisabled();
   await admin(async (ctx) => {
     expect((await getDoc(doc(ctx.firestore(), path))).data()?.version).toBe(5);
   });
@@ -246,7 +246,7 @@ test("holds saves, retains newer fields and guards night/tab/page navigation", a
   await expect(page.getByRole("dialog")).not.toBeVisible();
   await expect(
     page.getByRole("button", { name: "Run Pebble", exact: true }),
-  ).toHaveCount(0);
+  ).toBeDisabled();
   release();
   await expect(status(page)).toContainText("Timing saved");
   await expect(notes(page)).toHaveValue("Newer notes");

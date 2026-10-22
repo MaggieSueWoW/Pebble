@@ -815,13 +815,13 @@ describe("run submission", () => {
     expect(
       screen
         .getByRole("status", { name: "Run status" })
-        .closest(".run-strip")!
+        .closest(".run-strip, .reports-status")!
         .classList.contains("is-running"),
     ).toBe(true);
     expect(
       screen
         .getByRole("status", { name: "Run status" })
-        .closest(".run-strip")!
+        .closest(".run-strip, .reports-status")!
         .classList.contains("has-error"),
     ).toBe(false);
     await act(async () => {

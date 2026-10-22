@@ -391,7 +391,7 @@ test("an edit saved during computation still needs another run after completion 
   await expect(status(page)).toContainText("Changes ready for the next run");
   await expect(
     page.getByRole("button", { name: "Run Pebble", exact: true }),
-  ).toHaveCount(0);
+  ).toBeEnabled();
   await page
     .getByRole("navigation")
     .getByRole("button", { name: /^Reports/ })
@@ -685,7 +685,7 @@ test("explains non-officer access through grant, revocation and keyboard sign-ou
     .getByRole("button", { name: /^Reports/ })
     .click();
   await expect(
-    page.getByRole("heading", { name: "Add a report" }),
+    page.getByRole("textbox", { name: "Warcraft Logs reports" }),
   ).toBeVisible();
   await page
     .getByRole("textbox", { name: "Warcraft Logs reports" })
@@ -822,7 +822,7 @@ test("officer empty periods and recent history keep progress visible and link to
     .focus();
   await page.keyboard.press("Enter");
   await expect(
-    page.getByRole("heading", { name: "Add a report" }),
+    page.getByRole("textbox", { name: "Warcraft Logs reports" }),
   ).toBeVisible();
   await expect(
     page.getByRole("textbox", { name: "Warcraft Logs reports" }),
@@ -1169,7 +1169,7 @@ for (const signedIn of [false, true]) {
     ]);
     await expect(
       page.getByRole("button", { name: "Run Pebble", exact: true }),
-    ).toHaveCount(0);
+    ).toHaveCount(signedIn ? 1 : 0);
     expect(
       await page.evaluate(
         () => document.documentElement.scrollWidth <= window.innerWidth,
@@ -1390,7 +1390,7 @@ test("browser Back preserves officer drafts until discard and blocks pending sav
     page.getByText("Wait for the save to finish.", { exact: true }),
   ).toBeVisible();
   await expect(
-    page.getByRole("heading", { name: "Add a report" }),
+    page.getByRole("textbox", { name: "Warcraft Logs reports" }),
   ).toBeVisible();
   expect(new URL(page.url()).searchParams.has("view")).toBe(false);
   release();

@@ -83,7 +83,7 @@ test("saved roster, mapping and settings feed one explicit run and remain stale 
       .click();
     await page.getByRole("button", { name: "Add main", exact: true }).click();
     await page.getByLabel("Main name", { exact: true }).fill("Example");
-    await expect(run).toHaveCount(0);
+    await expect(run).toBeDisabled();
     await page.getByRole("button", { name: "Save main", exact: true }).click();
     await expect(
       page.getByRole("status", { name: "Roster changes" }),
@@ -91,7 +91,7 @@ test("saved roster, mapping and settings feed one explicit run and remain stale 
     await page.getByLabel("Main name", { exact: true }).fill("Renamed");
     await page.getByLabel("Class", { exact: true }).selectOption("Druid");
     await page.getByLabel("Role", { exact: true }).selectOption("Healer");
-    await expect(run).toHaveCount(0);
+    await expect(run).toBeDisabled();
     await page.getByRole("button", { name: "Save main", exact: true }).click();
     await expect(
       page.getByRole("status", { name: "Roster changes" }),
@@ -105,7 +105,7 @@ test("saved roster, mapping and settings feed one explicit run and remain stale 
     await page.getByLabel("Character name", { exact: true }).fill("Loggedalt");
     await page.getByLabel("Realm", { exact: true }).fill("Example Realm");
     await page.getByLabel("Mapped main", { exact: true }).selectOption(mainId);
-    await expect(run).toHaveCount(0);
+    await expect(run).toBeDisabled();
     await page
       .getByRole("button", { name: "Save mapping", exact: true })
       .click();
@@ -120,7 +120,7 @@ test("saved roster, mapping and settings feed one explicit run and remain stale 
       .getByRole("button", { name: "Settings", exact: true })
       .click();
     await page.getByLabel("Post extension minutes", { exact: true }).fill("0");
-    await expect(run).toHaveCount(0);
+    await expect(run).toBeDisabled();
     await page
       .getByRole("button", { name: "Save calculation settings", exact: true })
       .click();

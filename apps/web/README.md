@@ -171,7 +171,7 @@ keyboard behavior. Actual screen-reader listening remains part of final acceptan
 Results offers season totals and individual raid nights. The toolbar shows the
 completion time for the displayed results and the season's raid-night count.
 Loading and retry preserve the previous completed results and their timestamp.
-Run Pebble is available on Reports. Older weekly result links fall back to season
+Run Pebble is available in the sidebar on every officer page. Older weekly result links fall back to season
 totals; stored weekly projections remain part of the published data schema.
 
 Season and nightly result details show the worker's recorded pre/post played

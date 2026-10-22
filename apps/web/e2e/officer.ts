@@ -33,6 +33,6 @@ export async function officer(page: Page, env: RulesTestEnvironment) {
     .getByRole("button", { name: /^Reports/ })
     .click();
   await expect(
-    page.getByRole("heading", { name: "Add a report" }),
+    page.getByRole("textbox", { name: "Warcraft Logs reports" }),
   ).toBeVisible();
 }

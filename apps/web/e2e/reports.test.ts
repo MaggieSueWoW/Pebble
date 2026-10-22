@@ -73,20 +73,17 @@ test.afterEach(async () => {
 test.afterAll(async () => {
   await env?.cleanup();
 });
-test("validates batches, adds once, re-enables, and saves/cancels selections", async ({
+test("validates a single report, adds once, re-enables, and saves/cancels selections", async ({
   page,
 }) => {
   await officer(page, env);
   const input = page.getByRole("textbox", { name: "Warcraft Logs reports" });
-  await input.fill(`${c}\ninvalid`);
+  await input.fill("invalid");
   await expect(input).toHaveAttribute("aria-invalid", "true");
   await expect(
     page.getByRole("button", { name: "Add report", exact: true }),
   ).toBeDisabled();
-  await input.fill(`${c}\nhttps://www.warcraftlogs.com/reports/${c}`);
-  await expect(
-    page.getByText("Repeated in this list · will be skipped"),
-  ).toBeVisible();
+  await input.fill(`https://www.warcraftlogs.com/reports/${c}`);
   await page.getByRole("button", { name: "Add report", exact: true }).click();
   await expect(input).toHaveValue("");
   await expect(
@@ -157,7 +154,7 @@ test("holds a pending save, preserves newer text, and blocks navigation/run", as
     .getByRole("button", { name: /^Results/ })
     .click();
   await expect(
-    page.getByRole("heading", { name: "Add a report" }),
+    page.getByRole("textbox", { name: "Warcraft Logs reports" }),
   ).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Run Pebble", exact: true }),

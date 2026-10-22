@@ -5,8 +5,6 @@ import {
   ExternalLink,
   FileText,
   Info,
-  Plus,
-  ShieldCheck,
 } from "lucide-react";
 import { demoCode, formatDate, type Report } from "./model";
 import type { ReportEditor } from "./useReportEditor";
@@ -50,35 +48,47 @@ export function ReportsPanel({
         {saving ? "Saving report changes…" : message}
       </div>
       <section className="card add-card" aria-busy={saving}>
-        <div className="section-title">
-          <span className="icon-tile">
-            <Plus size={20} />
-          </span>
-          <div>
-            <h2>Add a report</h2>
-            <p>Paste Warcraft Logs links or report codes, one per line.</p>
-          </div>
-          <Badge tone="purple">WARCRAFT LOGS</Badge>
-        </div>
-        <label className="sr-only" htmlFor="report-input">
-          Warcraft Logs reports
-        </label>
-        <textarea
-          id="report-input"
-          rows={3}
-          value={reportText}
-          onChange={(e) => setReportText(e.target.value)}
-          placeholder={
-            "https://www.warcraftlogs.com/reports/…\nOr a 16-character report code"
-          }
-          spellCheck={false}
-          aria-describedby={
-            parsed.some((p) => p.state === "invalid")
-              ? "report-help report-validation"
-              : "report-help"
-          }
-          aria-invalid={parsed.some((p) => p.state === "invalid")}
-        />
+        <form
+          className="report-entry"
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (
+              !blocked &&
+              ready.length &&
+              !parsed.some((item) => item.state === "invalid")
+            )
+              void addReports();
+          }}
+        >
+          <label className="sr-only" htmlFor="report-input">
+            Warcraft Logs reports
+          </label>
+          <input
+            id="report-input"
+            type="text"
+            value={reportText}
+            onChange={(e) => setReportText(e.target.value)}
+            placeholder="Warcraft Logs link or report code"
+            spellCheck={false}
+            aria-describedby={
+              parsed.some((p) => p.state === "invalid")
+                ? "report-help report-validation"
+                : "report-help"
+            }
+            aria-invalid={parsed.some((p) => p.state === "invalid")}
+          />
+          <button
+            className="button primary compact"
+            type="submit"
+            disabled={
+              blocked ||
+              !ready.length ||
+              parsed.some((p) => p.state === "invalid")
+            }
+          >
+            Add {ready.length > 1 ? `${ready.length} reports` : "report"}
+          </button>
+        </form>
         {parsed.length > 0 && (
           <ul
             id="report-validation"
@@ -114,7 +124,8 @@ export function ReportsPanel({
         )}
         <div className="card-action-row">
           <span className="muted small" id="report-help">
-            <ShieldCheck size={14} /> Adding a report won’t start the bot.
+            Paste a Warcraft Logs link or 16-character code. Adding a report
+            won’t start the bot.
           </span>
           <div className="button-row">
             {demo && (
@@ -122,44 +133,23 @@ export function ReportsPanel({
                 className="text-button"
                 onClick={() => {
                   setReportText(
-                    `${reportText.trim() ? reportText.trim() + "\n" : ""}https://www.warcraftlogs.com/reports/${demoCode}`,
+                    `https://www.warcraftlogs.com/reports/${demoCode}`,
                   );
                 }}
               >
                 Try a sample link <ArrowUpRight size={13} />
               </button>
             )}
-            <button
-              className="button primary compact"
-              onClick={addReports}
-              disabled={
-                blocked ||
-                !ready.length ||
-                parsed.some((p) => p.state === "invalid")
-              }
-            >
-              <Plus size={15} /> Add{" "}
-              {ready.length > 1 ? `${ready.length} reports` : "report"}
-            </button>
           </div>
         </div>
       </section>
       <section className="card reports-card" aria-busy={saving}>
-        <div className="table-heading">
-          <div>
-            <h2>
-              Your reports <span className="count-pill">{reports.length}</span>
-            </h2>
-            <p>Include the logs you want Pebble to use.</p>
-          </div>
-          <span className="small muted">All dates in Pacific time</span>
-        </div>
         <div className="table-scroll">
           <table>
             <thead>
               <tr>
                 <th>Report</th>
-                <th>Raid night</th>
+                <th>Raid night (PT)</th>
                 <th>Status</th>
                 <th className="align-right">Include</th>
               </tr>
@@ -197,31 +187,33 @@ export function ReportsPanel({
                             {r.fetched && r.title.trim() ? r.title : r.code}
                             <ExternalLink size={12} />
                           </a>
-                          <span className="report-code">
-                            {r.fetched
-                              ? r.code
-                              : "Metadata appears after the next run"}
-                          </span>
-                          <span className="cell-subtitle">
-                            {checkedAt ? (
-                              <>
-                                Last checked{" "}
-                                <time dateTime={checkedAt}>
-                                  {new Intl.DateTimeFormat("en-US", {
-                                    year: "numeric",
-                                    month: "short",
-                                    day: "numeric",
-                                    hour: "numeric",
-                                    minute: "2-digit",
-                                    timeZone: "America/Los_Angeles",
-                                    timeZoneName: "short",
-                                  }).format(new Date(checkedAt))}
-                                </time>
-                              </>
-                            ) : (
-                              "Last checked unavailable"
-                            )}
-                          </span>
+                          <div className="report-metadata">
+                            <span className="report-code">
+                              {r.fetched
+                                ? r.code
+                                : "Metadata appears after the next run"}
+                            </span>
+                            <span className="cell-subtitle">
+                              {checkedAt ? (
+                                <>
+                                  Last checked{" "}
+                                  <time dateTime={checkedAt}>
+                                    {new Intl.DateTimeFormat("en-US", {
+                                      year: "numeric",
+                                      month: "short",
+                                      day: "numeric",
+                                      hour: "numeric",
+                                      minute: "2-digit",
+                                      timeZone: "America/Los_Angeles",
+                                      timeZoneName: "short",
+                                    }).format(new Date(checkedAt))}
+                                  </time>
+                                </>
+                              ) : (
+                                "Last checked unavailable"
+                              )}
+                            </span>
+                          </div>
                         </div>
                       </div>
                     </td>

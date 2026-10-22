@@ -336,6 +336,12 @@ h3 {
   line-height: 20px;
   text-align: center;
 }
+.sidebar-run {
+  margin-top: 20px;
+}
+.sidebar-run .run-button {
+  width: 100%;
+}
 .sidebar-footer {
   margin-top: auto;
   padding-top: 32px;
@@ -643,11 +649,39 @@ main {
   margin-bottom: 24px;
   background: linear-gradient(120deg, #191b27 0, #151921 55%);
 }
-.add-card textarea {
-  width: 100%;
-  font-size: 12px;
-  min-height: 93px;
-  display: block;
+.report-entry {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.report-entry input {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+}
+.report-entry .button {
+  flex-shrink: 0;
+}
+.reports-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+.reports-status .strip-copy {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px 16px;
+}
+.reports-status .strip-copy strong,
+.reports-status .strip-copy > span {
+  font-size: 13px;
+  margin: 0;
+}
+.reports-status .strip-copy strong:empty {
+  display: none;
 }
 .badge {
   display: inline-flex;
@@ -810,6 +844,47 @@ tbody tr:last-child td {
 }
 .align-right {
   text-align: right;
+}
+.reports-card th {
+  font-size: 12px;
+}
+.reports-card tbody td {
+  font-size: 13px;
+  padding-top: 6px;
+  padding-bottom: 6px;
+}
+.reports-card .report-cell a {
+  font-size: 13px;
+}
+.report-metadata {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin-top: 3px;
+}
+.reports-card .report-metadata > span {
+  font-size: 11px;
+  margin-top: 0;
+}
+.reports-card .report-icon {
+  width: 28px;
+  height: 28px;
+}
+.reports-card .report-icon svg {
+  width: 16px;
+  height: 16px;
+}
+.reports-card .badge {
+  font-size: 12px;
+}
+.reports-card td:nth-child(2) .cell-title,
+.reports-card td:nth-child(2) .cell-subtitle {
+  display: inline;
+  font-size: 13px;
+}
+.reports-card td:nth-child(2) .cell-subtitle {
+  margin-left: 6px;
 }
 .report-cell {
   display: flex;
@@ -2075,9 +2150,8 @@ tbody tr:last-child td {
   .card-action-row .button {
     font-size: 11px;
   }
-  .add-card textarea {
-    font-size: 11px;
-    min-height: 98px;
+  .report-entry {
+    gap: 8px;
   }
   .table-heading {
     padding: 19px;

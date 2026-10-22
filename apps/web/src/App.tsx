@@ -2,7 +2,6 @@ import { authMessage } from "./authMessages";
 import type { LiveConnection } from "./useFirestore";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
-  Activity,
   ArrowDown,
   ArrowUpRight,
   BarChart3,
@@ -124,28 +123,6 @@ function Notice({
     <div className={`notice ${tone}`}>
       <Info size={16} />
       <span>{children}</span>
-    </div>
-  );
-}
-function Stat({
-  label,
-  value,
-  detail,
-  icon,
-}: {
-  label: string;
-  value: ReactNode;
-  detail: string;
-  icon: ReactNode;
-}) {
-  return (
-    <div className="stat">
-      <span className="stat-icon">{icon}</span>
-      <div>
-        <span className="eyebrow">{label}</span>
-        <div className="stat-number">{value}</div>
-        <span className="muted small">{detail}</span>
-      </div>
     </div>
   );
 }
@@ -453,7 +430,6 @@ export default function App({ connection }: { connection?: LiveConnection }) {
   const unprocessed = connection
     ? connection.unprocessed
     : results.signature !== signature(inputs);
-  const included = inputs.reports.filter((r) => r.enabled);
   const visiblePlayers = players.filter((p) =>
     `${p.name} ${p.className}`.toLowerCase().includes(search.toLowerCase()),
   );
@@ -803,6 +779,7 @@ export default function App({ connection }: { connection?: LiveConnection }) {
               </button>
             ))}
         </nav>
+        {canManage && <div className="sidebar-run">{runButton}</div>}
         <div className="sidebar-footer">
           {canManage && (
             <span className={`connection ${online ? "" : "offline"}`}>
@@ -983,12 +960,12 @@ export default function App({ connection }: { connection?: LiveConnection }) {
             )}
           <div className="page-heading">
             <div>
-              {page !== "results" && (
+              {page !== "results" && page !== "reports" && (
                 <div className="eyebrow accent">A LITTLE LESS RAID ADMIN</div>
               )}
               <h1 id="page-title" tabIndex={-1}>
                 {page === "reports"
-                  ? "Raid reports"
+                  ? "Reports"
                   : page === "overrides"
                     ? "Fine-tune the night"
                     : page === "settings"
@@ -997,19 +974,17 @@ export default function App({ connection }: { connection?: LiveConnection }) {
                         ? "Your raid roster"
                         : "Results"}
               </h1>
-              {page !== "results" && (
+              {page !== "results" && page !== "reports" && (
                 <p>
-                  {page === "reports"
-                    ? "Bring the logs. Pebble handles the numbers."
-                    : page === "overrides"
-                      ? "A few adjustments, then back to the raid."
-                      : page === "settings"
-                        ? "Set the calculation parameters, then recompute when ready."
-                        : "Keep membership current, then recompute when ready."}
+                  {page === "overrides"
+                    ? "A few adjustments, then back to the raid."
+                    : page === "settings"
+                      ? "Set the calculation parameters, then recompute when ready."
+                      : "Keep membership current, then recompute when ready."}
                 </p>
               )}
             </div>
-            {page !== "results" && (
+            {page !== "results" && page !== "reports" && (
               <button
                 className="button secondary"
                 onClick={() => go("results")}
@@ -1020,23 +995,25 @@ export default function App({ connection }: { connection?: LiveConnection }) {
           </div>
           {page !== "results" && (
             <div
-              className={`run-strip ${active || connection?.submitting || waitingForResults ? "is-running" : ""} ${(lastFailed || resultLoadFailed) && !active && !connection?.submitting ? "has-error" : ""}`}
+              className={`${page === "reports" ? "reports-status" : "run-strip"} ${active || connection?.submitting || waitingForResults ? "is-running" : ""} ${(lastFailed || resultLoadFailed) && !active && !connection?.submitting ? "has-error" : ""}`}
             >
-              <div
-                className={`strip-icon ${active || connection?.submitting || waitingForResults ? "running-icon" : ""}`}
-              >
-                {active ||
-                connection?.submitting ||
-                (waitingForResults && !resultLoadFailed) ? (
-                  <LoaderCircle size={19} className="spin" />
-                ) : lastFailed || resultLoadFailed ? (
-                  <CircleAlert size={19} />
-                ) : unprocessed ? (
-                  <Clock3 size={19} />
-                ) : (
-                  <CheckCheck size={19} />
-                )}
-              </div>
+              {page !== "reports" && (
+                <div
+                  className={`strip-icon ${active || connection?.submitting || waitingForResults ? "running-icon" : ""}`}
+                >
+                  {active ||
+                  connection?.submitting ||
+                  (waitingForResults && !resultLoadFailed) ? (
+                    <LoaderCircle size={19} className="spin" />
+                  ) : lastFailed || resultLoadFailed ? (
+                    <CircleAlert size={19} />
+                  ) : unprocessed ? (
+                    <Clock3 size={19} />
+                  ) : (
+                    <CheckCheck size={19} />
+                  )}
+                </div>
+              )}
               <div
                 className="strip-copy"
                 role="status"
@@ -1066,10 +1043,12 @@ export default function App({ connection }: { connection?: LiveConnection }) {
                                   ? "Changes ready for the next run"
                                   : connection && !connection.hasResults
                                     ? "No completed runs yet"
-                                    : connection &&
-                                        history[0]?.status === "succeeded"
-                                      ? "Results updated"
-                                      : "You’re all caught up"}
+                                    : page === "reports"
+                                      ? null
+                                      : connection &&
+                                          history[0]?.status === "succeeded"
+                                        ? "Results updated"
+                                        : "You’re all caught up"}
                 </strong>
                 <span>
                   {active
@@ -1101,7 +1080,6 @@ export default function App({ connection }: { connection?: LiveConnection }) {
                   Retry run queue
                 </button>
               )}
-              {page === "reports" && runButton}
             </div>
           )}
           {storageError && (
@@ -1135,34 +1113,6 @@ export default function App({ connection }: { connection?: LiveConnection }) {
           )}
           {page === "reports" && (
             <>
-              <div className="stats-grid">
-                <Stat
-                  icon={<FileText size={20} />}
-                  label="Included reports"
-                  value={
-                    <>
-                      {included.length}
-                      <span className="stat-denominator">
-                        {" "}
-                        / {inputs.reports.length}
-                      </span>
-                    </>
-                  }
-                  detail="Ready for your next run"
-                />
-                <Stat
-                  icon={<Activity size={20} />}
-                  label="Raid nights"
-                  value={results.nights.length}
-                  detail="In the latest completed results"
-                />
-                <Stat
-                  icon={<Users size={20} />}
-                  label={connection ? "Team roster" : "Sample roster"}
-                  value={players.length}
-                  detail="Players tracked this season"
-                />
-              </div>
               <ReportsPanel
                 reports={inputs.reports}
                 editor={reportEditor}
@@ -1622,7 +1572,7 @@ export default function App({ connection }: { connection?: LiveConnection }) {
               </div>
             </details>
           )}
-          {page !== "results" && (
+          {page !== "results" && page !== "reports" && (
             <footer className="page-footer">
               <span>
                 <span className="footer-pebble" /> Small tool. Fairer raid
