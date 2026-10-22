@@ -369,7 +369,7 @@ test("retains conflicts/denied writes, refreshes clean snapshots, and retries wi
   await override("Same value", 5);
   await expect(
     page.getByRole("button", { name: /Example Alpha/ }),
-  ).toContainText("Automatic");
+  ).not.toContainText("Override");
   await saveButton(page).click();
   await expect(status(page)).toContainText("Availability saved");
   await expect(saveButton(page)).toBeDisabled();

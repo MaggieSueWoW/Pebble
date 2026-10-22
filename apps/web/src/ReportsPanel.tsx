@@ -159,7 +159,7 @@ export function ReportsPanel({
                 <tr>
                   <td colSpan={4} className="empty-state">
                     No reports yet. Paste a Warcraft Logs link or report code in
-                    Add a report above.
+                    the field above.
                   </td>
                 </tr>
               )}

@@ -2,9 +2,6 @@ import { authMessage } from "./authMessages";
 import type { LiveConnection } from "./useFirestore";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
-  ArrowDown,
-  ArrowUp,
-  ArrowUpDown,
   BarChart3,
   Check,
   CheckCheck,
@@ -53,6 +50,7 @@ import {
   sortResultRows,
   type ResultSort,
 } from "./resultRanking";
+import { SortButton } from "./SortButton";
 import { ResultRow } from "./ResultRow";
 import { AttendanceDetails } from "./AttendanceDetails";
 import { useReportEditor } from "./useReportEditor";
@@ -216,7 +214,7 @@ export default function App({ connection }: { connection?: LiveConnection }) {
     )[0]?.id ?? "";
   const navigation = useResultNavigation(
     canManage ? "reports" : "results",
-    () => unsaved,
+    () => unsaved || Boolean(connection?.busy),
     (action) => guard(action),
   );
   const page = navigation.page;
@@ -532,13 +530,13 @@ export default function App({ connection }: { connection?: LiveConnection }) {
   }, [saved]);
   useEffect(() => {
     const handle = (e: BeforeUnloadEvent) => {
-      if (unsaved) {
+      if (unsaved || connection?.busy) {
         e.preventDefault();
       }
     };
     window.addEventListener("beforeunload", handle);
     return () => window.removeEventListener("beforeunload", handle);
-  }, [unsaved]);
+  }, [unsaved, connection?.busy]);
   useEffect(() => {
     if (connection || !active || active.status !== "queued" || !online) return;
     const timer = setTimeout(() => {
@@ -640,6 +638,7 @@ export default function App({ connection }: { connection?: LiveConnection }) {
   }
   function guard(action: () => void) {
     if (
+      connection?.busy ||
       characterEditor.saving ||
       calculationEditor.saving ||
       rosterEditor.saving ||
@@ -789,6 +788,27 @@ export default function App({ connection }: { connection?: LiveConnection }) {
     }
   }
   const lastFailed = history[0]?.status === "failed";
+  const runStatusMessage = active
+    ? active.status === "queued" && !online
+      ? "Queued · waiting for your local bot"
+      : `${steps[active.stage]}…`
+    : connection?.submitting
+      ? "Submitting run…"
+      : connection?.officer && !connection.queueReady
+        ? connection.queueError
+          ? "Run queue is unavailable"
+          : "Checking run queue…"
+        : connection?.resultsError
+          ? "Latest results are unavailable"
+          : connection?.resultsPending
+            ? "Loading latest results…"
+            : lastFailed
+              ? "Last run didn’t finish"
+              : unsaved
+                ? "You have unsaved edits"
+                : unprocessed
+                  ? "Changes ready for the next run"
+                  : "";
   const waitingForResults = Boolean(
     connection?.submitting || connection?.resultsPending,
   );
@@ -1081,34 +1101,10 @@ export default function App({ connection }: { connection?: LiveConnection }) {
                 aria-atomic="true"
               >
                 <strong>
-                  {active
-                    ? active.status === "queued" && !online
-                      ? "Queued · waiting for your local bot"
-                      : steps[active.stage] + "…"
-                    : connection?.submitting
-                      ? "Submitting run…"
-                      : connection?.officer && !connection.queueReady
-                        ? connection.queueError
-                          ? "Run queue is unavailable"
-                          : "Checking run queue…"
-                        : connection?.resultsError
-                          ? "Latest results are unavailable"
-                          : connection?.resultsPending
-                            ? "Loading latest results…"
-                            : lastFailed
-                              ? "Last run didn’t finish"
-                              : unsaved
-                                ? "You have unsaved edits"
-                                : unprocessed
-                                  ? "Changes ready for the next run"
-                                  : connection && !connection.hasResults
-                                    ? "No completed runs yet"
-                                    : compactRunStatus
-                                      ? null
-                                      : connection &&
-                                          history[0]?.status === "succeeded"
-                                        ? "Results updated"
-                                        : "You’re all caught up"}
+                  {runStatusMessage ||
+                    (connection && !connection.hasResults
+                      ? "No completed runs yet"
+                      : null)}
                 </strong>
                 <span>
                   {page === "settings" &&
@@ -1382,23 +1378,7 @@ export default function App({ connection }: { connection?: LiveConnection }) {
                   aria-label="Run status"
                   aria-atomic="true"
                 >
-                  {active
-                    ? `${active.status === "queued" && !online ? "Queued · waiting for your local bot" : `${steps[active.stage]}…`} · `
-                    : connection?.submitting
-                      ? "Submitting run… · "
-                      : connection?.officer && !connection.queueReady
-                        ? `${connection.queueError ? "Run queue is unavailable" : "Checking run queue…"} · `
-                        : connection?.resultsError
-                          ? "Latest results are unavailable · "
-                          : connection?.resultsPending
-                            ? "Loading latest results… · "
-                            : lastFailed
-                              ? "Last run didn’t finish · "
-                              : unsaved
-                                ? "You have unsaved edits · "
-                                : unprocessed
-                                  ? "Changes ready for the next run · "
-                                  : ""}
+                  {runStatusMessage && `${runStatusMessage} · `}
                   {!connection || connection.hasResults ? (
                     <>
                       Updated{" "}
@@ -1478,24 +1458,18 @@ export default function App({ connection }: { connection?: LiveConnection }) {
                               }
                             >
                               {columns.map(([key, label]) => (
-                                <button
+                                <SortButton
                                   key={key}
-                                  className="result-sort-button"
+                                  label={label}
+                                  direction={
+                                    overrideSort.key === key
+                                      ? overrideSort.direction
+                                      : undefined
+                                  }
                                   aria-pressed={overrideSort.key === key}
                                   aria-label={`Sort by ${group === "Player" ? "Player" : `${group} ${label.toLowerCase()} break`}${overrideSort.key === key ? `, ${overrideSort.direction}` : ""}`}
                                   onClick={() => changeOverrideSort(key)}
-                                >
-                                  {label}
-                                  {overrideSort.key === key ? (
-                                    overrideSort.direction === "ascending" ? (
-                                      <ArrowUp size={12} aria-hidden="true" />
-                                    ) : (
-                                      <ArrowDown size={12} aria-hidden="true" />
-                                    )
-                                  ) : (
-                                    <ArrowUpDown size={12} aria-hidden="true" />
-                                  )}
-                                </button>
+                                />
                               ))}
                             </span>
                           </span>
@@ -1688,15 +1662,7 @@ export default function App({ connection }: { connection?: LiveConnection }) {
                     aria-label="Run status"
                     aria-atomic="true"
                   >
-                    {connection?.resultsPending
-                      ? "Loading latest results… · "
-                      : connection?.resultsError
-                        ? "Latest results are unavailable · "
-                        : active
-                          ? `${steps[active.stage]}… · `
-                          : unprocessed
-                            ? "Changes ready for the next run · "
-                            : ""}
+                    {runStatusMessage && `${runStatusMessage} · `}
                     Updated{" "}
                     <time dateTime={results.completedAt}>
                       {formatTime(results.completedAt)} PT ·{" "}
@@ -1741,22 +1707,15 @@ export default function App({ connection }: { connection?: LiveConnection }) {
                                 : undefined
                             }
                           >
-                            <button
-                              className="result-sort-button"
+                            <SortButton
+                              label={label}
+                              direction={
+                                activeResultSort.key === key
+                                  ? activeResultSort.direction
+                                  : undefined
+                              }
                               onClick={() => changeResultSort(key)}
-                              title={`Sort by ${label}`}
-                            >
-                              {label}
-                              {activeResultSort.key === key ? (
-                                activeResultSort.direction === "ascending" ? (
-                                  <ArrowUp size={12} aria-hidden="true" />
-                                ) : (
-                                  <ArrowDown size={12} aria-hidden="true" />
-                                )
-                              ) : (
-                                <ArrowUpDown size={12} aria-hidden="true" />
-                              )}
-                            </button>
+                            />
                           </th>
                         ))}
                         <th />

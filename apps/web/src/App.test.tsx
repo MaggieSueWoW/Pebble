@@ -1138,3 +1138,62 @@ it("sorts each Overrides audit column with an explicit active direction and miss
   expect(order()).toEqual([alpha.name, "Missing"]);
   expect(editor().textContent).toContain(alpha.name);
 });
+
+it("keeps failed-run status visible on every page after compacting the headers", () => {
+  const c = connection([alpha]);
+  c.hasResults = true;
+  c.saved.history = [
+    {
+      id: "failed",
+      at: "2026-10-15T04:00:00Z",
+      status: "failed",
+      message: "Synthetic failure",
+    },
+  ];
+  render(<App connection={c} />);
+  for (const page of ["Results", "Overrides", "Roster", "Settings"]) {
+    fireEvent.click(screen.getByRole("button", { name: page }));
+    expect(
+      screen.getByRole("status", { name: "Run status" }).textContent,
+    ).toContain("Last run didn’t finish");
+  }
+});
+
+it("guards roster navigation, sign-out and reload during a pending mutation", () => {
+  const c = connection([alpha, beta]);
+  c.roster = [alpha, beta].map((player) => ({
+    ...blankPlayer(),
+    id: player.id,
+    name: player.name,
+    version: 1,
+  }));
+  c.user = { uid: "officer", displayName: "Example Officer" } as NonNullable<
+    LiveConnection["user"]
+  >;
+  const { rerender } = render(<App connection={c} />);
+  fireEvent.click(screen.getByRole("button", { name: "Roster" }));
+  fireEvent.click(screen.getByRole("button", { name: `Edit ${alpha.name}` }));
+  rerender(<App connection={{ ...c, busy: true }} />);
+  fireEvent.click(screen.getByRole("button", { name: "Results" }));
+  fireEvent.click(screen.getByRole("button", { name: `Edit ${beta.name}` }));
+  fireEvent.click(screen.getByRole("button", { name: "Sign out" }));
+  expect(c.signOut).not.toHaveBeenCalled();
+  expect(
+    screen.getByRole("heading", { name: "Roster", level: 1 }),
+  ).toBeTruthy();
+  expect(
+    (
+      screen.getByRole("textbox", {
+        name: "Main name",
+      }) as HTMLInputElement
+    ).value,
+  ).toBe(alpha.name);
+  const unloading = new Event("beforeunload", { cancelable: true });
+  window.dispatchEvent(unloading);
+  expect(unloading.defaultPrevented).toBe(true);
+  rerender(<App connection={c} />);
+  fireEvent.click(screen.getByRole("button", { name: "Results" }));
+  expect(
+    screen.getByRole("heading", { name: "Results", level: 1 }),
+  ).toBeTruthy();
+});

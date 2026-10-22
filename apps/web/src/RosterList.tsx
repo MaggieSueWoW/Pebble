@@ -1,13 +1,6 @@
 import { Fragment, useState, type ReactNode } from "react";
-import {
-  ArrowDown,
-  ArrowUp,
-  ArrowUpDown,
-  ChevronDown,
-  ChevronRight,
-  Plus,
-  Search,
-} from "lucide-react";
+import { ChevronDown, ChevronRight, Plus, Search } from "lucide-react";
+import { SortButton } from "./SortButton";
 import type { RosterEntry } from "./roster";
 import { identityCasefold } from "./characters";
 import type { CharacterEntry } from "./characters";
@@ -123,9 +116,9 @@ export function RosterList({
                   scope="col"
                   aria-sort={sort.key === key ? sort.direction : undefined}
                 >
-                  <button
-                    className="result-sort-button"
-                    title={`Sort by ${label}`}
+                  <SortButton
+                    label={label}
+                    direction={sort.key === key ? sort.direction : undefined}
                     onClick={() =>
                       setSort((current) => ({
                         key,
@@ -136,18 +129,7 @@ export function RosterList({
                             : "ascending",
                       }))
                     }
-                  >
-                    {label}
-                    {sort.key === key ? (
-                      sort.direction === "ascending" ? (
-                        <ArrowUp size={12} aria-hidden="true" />
-                      ) : (
-                        <ArrowDown size={12} aria-hidden="true" />
-                      )
-                    ) : (
-                      <ArrowUpDown size={12} aria-hidden="true" />
-                    )}
-                  </button>
+                  />
                 </th>
               ))}
               <th scope="col">

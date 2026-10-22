@@ -100,7 +100,7 @@ export type LiveConnection = {
 };
 const ACCESS_WAIT_MS = 15000;
 const ACCESS_ERROR =
-  "Couldn’t verify officer access. Check your connection, then retry access or switch Google accounts.";
+  "Couldn’t verify officer access. Check your connection, then retry access or sign out and sign back in with another Google account.";
 const names = [
   "reports",
   "players",

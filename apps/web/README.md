@@ -1,7 +1,7 @@
 # Pebble web app
 
-React + TypeScript frontend for reports, availability/timing overrides, results,
-and Run Pebble. Google officer login and Firestore are the only hosted services;
+React + TypeScript frontend for Reports, Overrides, Results, Roster and Settings.
+Run Pebble is available in the sidebar on every officer page. Google officer login and Firestore are the only hosted services;
 the Python bot continues running locally. Successful runs automatically update
 public results. There is no approval or publish step.
 
@@ -44,6 +44,35 @@ The web rollout tracker (#14) contains the implementation backlog
 and acceptance status. Architecture references cover stack/workflow (#2),
 Firestore/security (#3), and officer/public UX (#4).
 
+## Current interface
+
+The sidebar holds navigation, the season, Run Pebble, bot status and account actions.
+Page headers contain only the page name. Results and Overrides show run status and
+the displayed publication's completion time in their toolbars. Reports, Roster and
+Settings use a compact status line. Saving never starts a calculation.
+
+Results rows expand by clicking the row or either detail button. Bench precedes
+Played; zero durations use `-` and durations below an hour omit `0h`. Player,
+Bench, Played and Time Played sort by their displayed values; the default preserves
+the published ranking. The `#` value stays with the published season player.
+
+Overrides lists players alphabetically with Bench and Played before/after the break.
+All five data columns are sortable; zero and unavailable recorded values remain
+distinct. Applied overrides highlight the affected halves. Raid timing uses a
+compact detected/override table.
+
+Roster lists Player, Joined, Left and comma-separated Alts. Each data column sorts;
+Alts uses the alphabetically ordered visible names. Empty dates and alt lists sort
+last in either direction. Expanded details combine main editing, alt editing,
+adding/deleting alts, main deletion and a confirmed main/alt swap. Swaps preserve
+the player ID, membership, class, history and the promoted character's mapping.
+Roster deletion requires the accompanying Firestore rules to be released; a frontend
+release alone does not enable it in an environment with older rules.
+
+Every sortable list marks its active direction, including the default. Sorting is
+local to the displayed list and makes no writes or run requests. Settings field
+labels and detailed descriptions are editable in `src/calculationFields.ts`.
+
 ## Sample mode
 
 Open http://127.0.0.1:5173/?demo=1 for the original standalone sample prototype.
@@ -51,8 +80,8 @@ It uses localStorage and illustrative calculations, independently of Firestore.
 Prototype controls simulate offline/failing runs and reset sample data. The
 production Python fairness engine remains authoritative in the connected app.
 
-Roster and calculation settings have validated Firestore schemas and an import
-command; dedicated browser editors for them remain future work.
+Sample mode illustrates Reports, Overrides and Results. The connected officer
+app additionally exposes the real Roster and Settings editors.
 
 ## Officer workflow browser acceptance
 
@@ -92,11 +121,12 @@ missing class/role labels, and retention of a removed player's draft until expli
 cancel or roster return. The editor waits for pending saves before choosing a
 replacement. An empty officer roster stays separate from historical result players.
 
-Overrides initially selects the newest known report/result night, or today's date
-in Pacific time if none is known. An untouched default follows arriving metadata;
-choosing a date or starting an edit keeps that date selected. Custom dates remain
-available in the picker. Date coverage checks late metadata, ordered options,
-explicit/custom choices, draft-discard guards and held saves on the original night.
+Overrides initially selects the newest night identified by fetched report metadata
+or completed results. An untouched default follows arriving metadata; choosing a
+night or starting an edit keeps that night selected. Custom dates are not offered.
+With no known nights, the app explains how to add reports and run Pebble first.
+Date coverage checks late metadata, ordered options, explicit choices,
+draft-discard guards and held saves on the original night.
 
 Timing coverage adds save/cancel/reset, blank and detected values, ordering and
 paired break validation, delayed/denied commits, version conflicts, newer edits,
@@ -132,7 +162,7 @@ expected emulator request, with no worker process.
 
 Access coverage signs in a synthetic non-officer, opens account details with the
 keyboard, grants and revokes officer membership, and signs out through the visible
-account-switch action. Published results remain readable while private controls
+Sign out action. Published results remain readable while private controls
 and unsaved private drafts disappear on revocation. These cases create no requests
 or input changes; all sign-in helpers use the visible account-details disclosure.
 
@@ -175,7 +205,7 @@ Run Pebble is available in the sidebar on every officer page. Older weekly resul
 totals; stored weekly projections remain part of the published data schema.
 
 Season and nightly result details show the worker's recorded pre/post played
-minutes beside the existing pre/post bench minutes. Zero is displayed as zero;
+minutes beside the existing pre/post bench minutes. Zero is displayed as `-`;
 a missing played half is labelled Not recorded, without splitting or inferring
 from the total. The recorded per-row adjustment flag retains its existing general
 explanation; no per-half availability or private provenance is invented. The
@@ -184,8 +214,10 @@ existing atomic completed-run loader supplies the fields with no extra reads.
 Played-breakdown coverage checks recorded values, zero/missing halves,
 public/officer visibility, period changes, keyboard details and narrow
 layout. The illustrative sample calculation supplies its own played halves only
-in sample mode. Attendance, possible time, weekly P/B/O, richer availability/source
-explanations, private diagnostics and shareable links remain in #11.
+in sample mode. Published attendance, possible time and weekly P/B/O appear in
+season details; explanation and weekly tables use disclosures. Safe availability
+explanations, private officer diagnostics and shareable links are implemented
+and accepted in #11.
 
 Officer Settings edits the existing calculation parameters in Pacific time. Missing
 settings show the worker defaults; they are written only after an explicit edit
@@ -199,7 +231,7 @@ Result links identify a view within the deployment's configured season:
 
 - `?view=results&period=season` — season totals.
 - `?view=results&period=2026-10-14` — a recorded raid night.
-- `?view=results&period=week%3A2026-10-13` — a recorded game week.
+- Older `period=week%3A2026-10-13` links fall back to season totals with a notice.
 - Add `&player=player-id` to expand that published player's details.
 
 The existing selector and detail controls update browser history; refresh and
@@ -213,9 +245,8 @@ links exclude sample mode, configuration and auth parameters; explicit sample
 mode produces a sample link. The existing draft dialog and pending-save guard
 also protect browser Back/Forward, keeping both the editor and address unchanged
 when navigation is canceled or a save is still pending. Result navigation and
-sharing create no input writes or run requests. UI-3 still tracks attendance and
-possible time, weekly P/B/O, richer safe availability/source explanations, private
-night diagnostics and final parity acceptance.
+sharing create no input writes or run requests. UI-3 attendance, explanations,
+private diagnostics and parity acceptance are complete; see #11 and #14.
 
 
 Season player rows optionally include the established materialized ranking:
@@ -224,12 +255,13 @@ season rankings; absence means an older publication has no recorded ranking
 metadata. The frontend follows recorded season ranks, including zero-time ranked
 mains, rather than inferring eligibility from the live roster or attendance.
 Equal bench totals retain the established binary name order and sequential ranks.
-Night and week views retain their own recorded coverage and existing visibility.
+Night views retain their recorded coverage and existing visibility. Weekly
+projections remain in the data contract for attendance; they are not selector options.
 
-Season details show the recorded Bench:played ratio to two decimals. A recorded
-null ratio says Not defined (no played time), distinct from a real zero ratio.
-Older results and night/week output without recorded ratios omit this field.
-Played share and attendance retain their separate labels and meanings. The worker
+The Time Played bar and percentage show played / (played + bench); zero total
+time says No recorded time. The redundant numeric Bench:played ratio is not
+shown. Published ranking metadata remains unchanged by presentation sorting.
+Played share and attendance retain separate labels and meanings. The worker
 projection uses existing materialized ranking documents; parity checks verify
 ranking minutes equal the existing season player sums across representative cases.
 
