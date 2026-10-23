@@ -30,7 +30,6 @@ function loadSaved(): Saved {
 type DemoRun = {
   id: string;
   status: "queued" | "running";
-  stage: number;
   snapshot?: Inputs;
   fail?: boolean;
 };
@@ -41,6 +40,7 @@ export function useDemoSession() {
   const [online, setOnline] = useState(true);
   const [failNext, setFailNext] = useState(false);
   const [active, setActive] = useState<DemoRun | null>(null);
+  const [stage, setStage] = useState(0);
   const [storageError, setStorageError] = useState(false);
   const [notification, setNotification] = useState<{
     text: string;
@@ -68,24 +68,21 @@ export function useDemoSession() {
           ? {
               ...current,
               status: "running",
-              stage: 1,
               snapshot: structuredClone(inputRef.current),
               fail: failRef.current,
             }
           : null,
       );
+      setStage(1);
       setFailNext(false);
     }, 650);
     return () => clearTimeout(timer);
-  }, [active?.id, active?.status, online]);
+  }, [active, online]);
   useEffect(() => {
     if (!active || active.status !== "running" || !active.snapshot) return;
     const current = active;
     const timers = [1400, 2600, 3800].map((time, i) =>
-      setTimeout(
-        () => setActive((r) => (r ? { ...r, stage: i + 2 } : null)),
-        time,
-      ),
+      setTimeout(() => setStage(i + 2), time),
     );
     timers.push(
       setTimeout(() => {
@@ -143,7 +140,7 @@ export function useDemoSession() {
       }, 4800),
     );
     return () => timers.forEach(clearTimeout);
-  }, [active?.id, active?.status]);
+  }, [active]);
 
   async function saveInputs(
     next: Inputs,
@@ -170,7 +167,8 @@ export function useDemoSession() {
     );
   }
   async function requestRun() {
-    setActive({ id: crypto.randomUUID(), status: "queued", stage: 0 });
+    setStage(0);
+    setActive({ id: crypto.randomUUID(), status: "queued" });
   }
   function reset() {
     setSaved(freshState());
@@ -181,7 +179,7 @@ export function useDemoSession() {
     saved,
     players,
     nights: nightOptions,
-    active,
+    active: active ? { ...active, stage } : null,
     online,
     setOnline,
     failNext,

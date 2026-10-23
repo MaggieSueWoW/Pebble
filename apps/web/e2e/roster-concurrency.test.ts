@@ -17,7 +17,10 @@ import {
 } from "firebase/firestore";
 import { readFileSync } from "node:fs";
 import { officer } from "./officer";
-import { readLinkedPlayers, advanceLinkedPlayers } from "../src/data/firestore/linkedPlayers";
+import {
+  readLinkedPlayers,
+  advanceLinkedPlayers,
+} from "../src/data/firestore/linkedPlayers";
 
 const season = "seasons/test-reports";
 let env: RulesTestEnvironment;

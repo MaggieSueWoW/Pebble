@@ -4,7 +4,7 @@ import {
   assertFails,
   type RulesTestEnvironment,
 } from "@firebase/rules-unit-testing";
-import { doc, getDoc, setDoc, Timestamp, writeBatch } from "firebase/firestore";
+import { doc, getDoc, Timestamp, writeBatch } from "firebase/firestore";
 import { readFileSync } from "node:fs";
 import { officer } from "./officer";
 

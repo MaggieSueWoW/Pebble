@@ -1,4 +1,10 @@
-import { useEffect, useRef, useState, type SetStateAction } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type SetStateAction,
+} from "react";
 import { stableJSON } from "./model";
 
 type Draft<T> = {
@@ -47,10 +53,10 @@ export function useVersionedEditor<T>({
     current && stableJSON(current.value) !== stableJSON(current.base),
   );
   const validation = validate(value);
-  function store(next: Draft<T> | null) {
+  const store = useCallback((next: Draft<T> | null) => {
     draftRef.current = next;
     setDraft(next);
-  }
+  }, []);
   useEffect(() => {
     alive.current = true;
     return () => {
@@ -61,6 +67,7 @@ export function useVersionedEditor<T>({
     setError("");
     setMessage("");
   }, [epoch]);
+  const savedSignature = stableJSON(saved);
   useEffect(() => {
     // Hold acknowledged values until their listener snapshot arrives. Once clean,
     // later remote edits can refresh the editor without manufacturing a draft.
@@ -73,7 +80,7 @@ export function useVersionedEditor<T>({
           version >= latest.version))
     )
       store(null);
-  }, [epoch, version, stableJSON(saved), draft]);
+  }, [epoch, version, savedSignature, draft, store]);
   function change(next: SetStateAction<T>) {
     if (!enabled) return;
     const latest = draftRef.current?.epoch === epoch ? draftRef.current : null;

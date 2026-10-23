@@ -109,7 +109,17 @@ export function useInputWrites(
         if (accessSession === session.current) setBusy(false);
       }
     },
-    [documents, versions, user, assertAccess, accessSession, fail],
+    [
+      documents,
+      versions,
+      user,
+      assertAccess,
+      accessSession,
+      fail,
+      session,
+      setBusy,
+      setError,
+    ],
   );
   async function saveCalculation(value: CalculationSettings, expected: number) {
     assertAccess();

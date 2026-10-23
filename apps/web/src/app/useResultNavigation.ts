@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { Page } from "../shared/model";
 
 export type ResultLocation = {
@@ -69,18 +69,21 @@ export function useResultNavigation(
   const restored = useRef<(() => void) | null>(null);
   const approved = useRef(false);
 
-  function navigate(next: Partial<ResultLocation>, replace = false) {
-    const value = { ...current.current.selection, ...next };
-    const url = navigationURL(value);
-    const index = current.current.index + (replace ? 0 : 1);
-    const state = {
-      ...history.state,
-      pebbleNavigation: { index, page: value.page },
-    };
-    history[replace ? "replaceState" : "pushState"](state, "", url);
-    current.current = { selection: value, index };
-    setSelection(value);
-  }
+  const navigate = useCallback(
+    (next: Partial<ResultLocation>, replace = false) => {
+      const value = { ...current.current.selection, ...next };
+      const url = navigationURL(value);
+      const index = current.current.index + (replace ? 0 : 1);
+      const state = {
+        ...history.state,
+        pebbleNavigation: { index, page: value.page },
+      };
+      history[replace ? "replaceState" : "pushState"](state, "", url);
+      current.current = { selection: value, index };
+      setSelection(value);
+    },
+    [],
+  );
 
   useEffect(() => {
     if (!entry())

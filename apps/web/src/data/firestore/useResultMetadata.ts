@@ -66,5 +66,16 @@ export function useResultMetadata(
       cleanup();
       if (stopConsumed.current === cleanup) stopConsumed.current = null;
     };
-  }, [officer, user, accessGeneration, resultRun, fail, accessFailed]);
+  }, [
+    officer,
+    user,
+    accessGeneration,
+    resultRun,
+    fail,
+    accessFailed,
+    authorized,
+    session,
+    setConsumed,
+    stopConsumed,
+  ]);
 }

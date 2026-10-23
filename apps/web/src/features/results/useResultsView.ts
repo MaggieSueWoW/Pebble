@@ -31,7 +31,7 @@ export function useResultsView({
   demo: boolean;
   notify: (text: string, error?: boolean) => void;
 }) {
-  const page = navigation.page;
+  const { page, navigate } = navigation;
   const [resultSort, setResultSort] = useState<ResultSort | null>(null);
   const activeResultSort: ResultSort = resultSort ?? {
     key: "bench",
@@ -58,17 +58,12 @@ export function useResultsView({
   }
   const resultNight = navigation.period;
   const expandedPlayer = navigation.player;
-  const setResultNight = (period: string) =>
-    navigation.navigate({ period, player: null });
-  const setExpandedPlayer = (player: string | null) =>
-    navigation.navigate({ player });
+  const setResultNight = (period: string) => navigate({ period, player: null });
+  const setExpandedPlayer = (player: string | null) => navigate({ player });
   const [resultLinkNotice, setResultLinkNotice] =
     useState<ResultLinkNotice | null>(null);
-  const hasResultPeriod = (period: string) =>
-    results.nights.some((n) => n.night === period);
-  const visibleResultNight = hasResultPeriod(resultNight)
-    ? resultNight
-    : "season";
+  const periodAvailable = results.nights.some((n) => n.night === resultNight);
+  const visibleResultNight = periodAvailable ? resultNight : "season";
   const resultRows = sortResultRows(
     orderResultRows(
       visibleResultNight === "season"
@@ -93,28 +88,36 @@ export function useResultsView({
         )
       : [];
   const resultSelectionReady = selectionReady;
+  const playerAvailable =
+    !expandedPlayer ||
+    resultRows.some((row) => row.id === expandedPlayer) ||
+    additionalAttendance.some((row) => row.id === expandedPlayer);
   useEffect(() => {
     if (page !== "results" || !resultSelectionReady) return;
-    if (resultNight !== "season" && !hasResultPeriod(resultNight)) {
+    if (resultNight !== "season" && !periodAvailable) {
       setResultLinkNotice({
         text: "This result period is not available in the latest completed results. Showing season totals.",
         period: "season",
         player: null,
       });
-      navigation.navigate({ period: "season", player: null }, true);
-    } else if (
-      expandedPlayer &&
-      !resultRows.some((row) => row.id === expandedPlayer) &&
-      !additionalAttendance.some((row) => row.id === expandedPlayer)
-    ) {
+      navigate({ period: "season", player: null }, true);
+    } else if (expandedPlayer && !playerAvailable) {
       setResultLinkNotice({
         text: "This player is not available for this result period. Showing all players.",
         period: resultNight,
         player: null,
       });
-      navigation.navigate({ player: null }, true);
+      navigate({ player: null }, true);
     }
-  }, [page, results, resultNight, expandedPlayer, resultSelectionReady]);
+  }, [
+    page,
+    resultNight,
+    expandedPlayer,
+    resultSelectionReady,
+    periodAvailable,
+    playerAvailable,
+    navigate,
+  ]);
   async function copyResultLink() {
     try {
       await navigator.clipboard.writeText(

@@ -23,8 +23,8 @@ manufacture an offline scenario. The existing Sheets bot remains independent.
 Only Firebase web app fields enter a release. Service-account keys, WCL credentials
 and administrator/worker configs stay outside the browser build. Use an existing
 administrator Firebase CLI login for manual deployment. Do not grant the worker
-Hosting, rules, Auth or IAM administration permissions. CI has read-only repository
-permissions, synthetic config and no deployment secrets or publishing step.
+Hosting, rules, Auth or IAM administration permissions. Releases are built,
+checked and deployed locally; there is no automated GitHub deployment.
 
 ## Prepare a release
 
@@ -159,12 +159,13 @@ respective hosted acceptance is actually observed.
 
 ```sh
 node --test scripts/web-release.test.mjs
+npm --prefix apps/web run check
 npm --prefix apps/web test
 npm --prefix apps/web run test:browser
 ```
 
-The GitHub Actions workflow runs Python, web build/tests, release checks, a Hosting
-emulator HTTP smoke and browser acceptance. Rules and worker emulator tests run
+Run checks locally; the GitHub Actions Checks workflow is disabled and its
+configuration has been removed. Rules and worker emulator tests must run
 sequentially when using the same demo project, because rules tests clear its data.
-It never publishes a release. Lifecycle tests requiring separate disposable Mongo/
+Checks do not publish a release. Lifecycle tests requiring separate disposable Mongo/
 Redis services remain opt-in; skipped fault tests are not hosted acceptance.

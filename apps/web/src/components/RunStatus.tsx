@@ -1,11 +1,4 @@
-import { formatTime } from "../shared/model";
-
-export const formatRunDate = (iso: string) =>
-  new Intl.DateTimeFormat("en-US", {
-    timeZone: "America/Los_Angeles",
-    month: "short",
-    day: "numeric",
-  }).format(new Date(iso));
+import { formatTime, formatRunDate } from "../shared/model";
 
 /** One timestamp format and live announcement region across all workflow pages. */
 export function RunStatus({

@@ -219,6 +219,13 @@ export function formatDate(night: string, long = false) {
     timeZone: "UTC",
   }).format(new Date(`${night}T12:00:00Z`));
 }
+export const formatRunDate = (iso: string) =>
+  new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Los_Angeles",
+    month: "short",
+    day: "numeric",
+  }).format(new Date(iso));
+
 export const formatTime = (iso: string) =>
   new Intl.DateTimeFormat("en-US", {
     hour: "numeric",

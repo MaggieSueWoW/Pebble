@@ -91,11 +91,22 @@ export function useRunQueue(
       alive = false;
       stop();
     };
-  }, [officer, accessGeneration, queueAttempt, accessFailed]);
+  }, [
+    officer,
+    accessGeneration,
+    queueAttempt,
+    accessFailed,
+    authorized,
+    session,
+    setQueue,
+    setSubmittedRun,
+    submission,
+  ]);
+  const submittedRunId = submittedRun?.id;
   useEffect(() => {
-    if (!officer || !submittedRun || !authorized.current) return;
+    if (!officer || !submittedRunId || !authorized.current) return;
     const own = session.current;
-    const id = submittedRun.id;
+    const id = submittedRunId;
     let alive = true;
     const stop = onSnapshot(
       doc(db!, "seasons", seasonId, "runs", id),
@@ -128,7 +139,17 @@ export function useRunQueue(
       alive = false;
       stop();
     };
-  }, [officer, accessGeneration, submittedRun?.id, fail, accessFailed]);
+  }, [
+    officer,
+    accessGeneration,
+    submittedRunId,
+    fail,
+    accessFailed,
+    authorized,
+    session,
+    setSubmittedRun,
+    submission,
+  ]);
   async function requestRun() {
     assertAccess();
     const prior = submission.current;

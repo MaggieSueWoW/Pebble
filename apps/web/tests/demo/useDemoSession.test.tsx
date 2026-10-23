@@ -13,6 +13,22 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+it("advances progress without restarting the simulated run's completion timer", async () => {
+  const { result } = renderHook(useDemoSession);
+  await act(() => result.current.requestRun());
+  act(() => vi.advanceTimersByTime(650));
+  expect(result.current.active?.stage).toBe(1);
+  act(() => vi.advanceTimersByTime(1400));
+  expect(result.current.active?.stage).toBe(2);
+  act(() => vi.advanceTimersByTime(1200));
+  expect(result.current.active?.stage).toBe(3);
+  act(() => vi.advanceTimersByTime(1200));
+  expect(result.current.active?.stage).toBe(4);
+  act(() => vi.advanceTimersByTime(1000));
+  expect(result.current.active).toBeNull();
+  expect(result.current.saved.history[0].status).toBe("succeeded");
+});
+
 it("keeps offline work queued and publishes the captured inputs without losing later edits", async () => {
   const { result } = renderHook(useDemoSession);
   act(() => result.current.setOnline(false));

@@ -1,5 +1,5 @@
 import { Check, CircleAlert, LoaderCircle, Play, X } from "lucide-react";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { authMessage } from "./authMessages";
 import { adjustmentKey, emptyAdjustment, type Page } from "../shared/model";
 import type { LiveConnection } from "../data/useFirestore";
@@ -64,20 +64,27 @@ export function Workspace({
     }
   }
   const players = connection?.players ?? demo!.players;
-  const nightOptions = connection
-    ? [
-        ...new Set(
-          [
-            ...connection.nights,
-            ...inputs.reports
-              .filter((report) => report.fetched)
-              .map((report) => report.night),
-          ].filter(Boolean),
-        ),
-      ]
-        .sort()
-        .reverse()
-    : demo!.nights;
+  const connected = Boolean(connection);
+  const knownNights = connection?.nights ?? demo!.nights;
+  const reports = inputs.reports;
+  const nightOptions = useMemo(
+    () =>
+      connected
+        ? [
+            ...new Set(
+              [
+                ...knownNights,
+                ...reports
+                  .filter((report) => report.fetched)
+                  .map((report) => report.night),
+              ].filter(Boolean),
+            ),
+          ]
+            .sort()
+            .reverse()
+        : knownNights,
+    [connected, knownNights, reports],
+  );
   const defaultNight = nightOptions[0] ?? "";
   const firstPlayer =
     [...players].sort((a, b) =>
@@ -256,7 +263,7 @@ export function Workspace({
     if (unsaved) nightChosen.current = true;
     if (!unsaved && (!nightChosen.current || !nightOptions.includes(night)))
       setNight(defaultNight);
-  }, [defaultNight, nightOptions.join(","), night, unsaved]);
+  }, [defaultNight, nightOptions, night, unsaved]);
   const unprocessed = connection?.unprocessed ?? demo!.unprocessed;
   const latestNight = results.nights.find((n) => n.night === night);
   const nightlyPlayers = new Map(

@@ -1,7 +1,6 @@
 import { Clock3, ChevronDown, Check, CircleAlert } from "lucide-react";
 import type { History } from "../shared/model";
-import { formatTime } from "../shared/model";
-import { formatRunDate } from "../components/RunStatus";
+import { formatTime, formatRunDate } from "../shared/model";
 export function RunHistory({
   history,
   connected,

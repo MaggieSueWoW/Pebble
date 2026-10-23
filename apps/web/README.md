@@ -7,7 +7,7 @@ public results. There is no approval or publish step.
 
 ## Local setup
 
-Requires Node.js 22.12+ on the 22.x line, or Node.js 24+.
+Requires Node.js 22.13+ on the 22.x line, or Node.js 24+.
 
 ```sh
 cd apps/web
@@ -45,6 +45,27 @@ Application code lives in `src/`, unit and component tests mirror its folders in
 `src/features/roster/RosterList.tsx` has its component tests in
 `tests/features/roster/RosterList.test.tsx`. `npm test` runs `tests/` through Vitest,
 and the build type-checks both application code and unit/component tests.
+
+## Local checks
+
+```sh
+npm run check        # ESLint, CSS lint, TypeScript and Prettier verification
+npm test            # Unit and component tests
+npm run test:browser # Browser workflows against isolated emulators
+npm run build       # Lint, type-check and build the production app
+```
+
+Checks run locally. The GitHub Actions Checks workflow is disabled and its
+configuration has been removed.
+
+`npm run lint` covers TypeScript, React hook usage/dependencies, Vite Fast Refresh
+exports and CSS. Warnings fail the command. `npm run typecheck` checks application
+and unit-test types. `npm run format:check` checks formatting across the web app,
+including browser tests, config and documentation. Generated files, browser traces
+and local environment files are excluded. Use `npm run lint:fix` for ESLint fixes
+and `npm run format` to apply Prettier formatting. Review effect-dependency changes
+carefully: listeners and timers should depend on their identity, not progress
+updates or a new object created on every render.
 
 The web rollout tracker (#14) contains the implementation backlog
 and acceptance status. Architecture references cover stack/workflow (#2),
@@ -321,7 +342,6 @@ leave results unchanged until Run Pebble. Public and sample views do not expose
 this editor. Unit and isolated browser tests cover defaults, validation, guarded
 navigation, targeted saves, conflict recovery and narrow layouts.
 
-
 Result links identify a view within the deployment's configured season:
 
 - `?view=results&period=season` — season totals.
@@ -342,7 +362,6 @@ also protect browser Back/Forward, keeping both the editor and address unchanged
 when navigation is canceled or a save is still pending. Result navigation and
 sharing create no input writes or run requests. UI-3 attendance, explanations,
 private diagnostics and parity acceptance are complete; see #11 and #14.
-
 
 Season player rows optionally include the established materialized ranking:
 `ranking: {rank, played, bench, ratio}`. Explicit `null` excludes the main from

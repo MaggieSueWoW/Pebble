@@ -113,5 +113,17 @@ export function usePrivateSubscriptions(
       stop();
       if (stopPrivate.current === stop) stopPrivate.current = null;
     };
-  }, [officer, user, accessGeneration, accessFailed]);
+  }, [
+    officer,
+    user,
+    accessGeneration,
+    accessFailed,
+    authorized,
+    session,
+    setDocuments,
+    setHeartbeat,
+    setLoaded,
+    setRuns,
+    stopPrivate,
+  ]);
 }
