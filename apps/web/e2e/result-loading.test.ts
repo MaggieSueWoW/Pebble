@@ -568,6 +568,7 @@ test("defaults to report-only dates, follows late metadata and retains explicit 
   await expect(raidDate(page)).toHaveValue("2026-10-15");
   await loggedNight("2026-10-16");
   await expect(raidDate(page)).toHaveValue("2026-10-16");
+  await page.locator(".availability-notes > summary").click();
   const notes = page.getByRole("textbox", { name: "Availability notes" });
   await notes.fill("Keep this night draft");
   await loggedNight("2026-10-17");
@@ -611,6 +612,7 @@ test("keeps the default night during a held save and preserves its acknowledged 
 }) => {
   await overrides(page);
   await expect(raidDate(page)).toHaveValue(nights.baseline);
+  await page.locator(".availability-notes > summary").click();
   const notes = page.getByRole("textbox", { name: "Availability notes" });
   await notes.fill("Saved for the original night");
   await reportNight(nights.latest);
@@ -632,7 +634,7 @@ test("keeps the default night during a held save and preserves its acknowledged 
     await route.continue();
   });
   await page
-    .getByRole("button", { name: "Save adjustment", exact: true })
+    .getByRole("button", { name: "Save availability", exact: true })
     .click();
   await requested;
   // The SDK may defer incoming snapshots until this held commit completes.
@@ -1057,6 +1059,12 @@ test("keyboard details, validation and labelled discard work across narrow workf
   await page
     .getByRole("navigation", { name: "Main navigation" })
     .getByRole("button", { name: "Review Night", exact: true })
+    .click();
+  await expect(
+    page.getByRole("region", { name: "Raid timing editor" }),
+  ).toBeHidden();
+  await page
+    .getByText("Times look wrong? Adjust timing", { exact: true })
     .click();
   await expect(
     page.getByRole("region", { name: "Raid timing editor" }),

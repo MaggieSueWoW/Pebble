@@ -52,6 +52,13 @@ async function open(page: Page) {
   await page
     .getByRole("combobox", { name: "Raid night", exact: true })
     .selectOption(night);
+  await expect(notes(page)).toBeHidden();
+  const expand = page.getByText("Times look wrong? Adjust timing", {
+    exact: true,
+  });
+  await expand.focus();
+  await page.keyboard.press("Enter");
+  await expect(notes(page)).toBeVisible();
   await expect(notes(page)).toHaveValue("Timing baseline");
 }
 // Deliberately use a non-Pacific browser timezone: values must remain Pacific wall times.
@@ -360,6 +367,9 @@ test("keeps timing edits working in standalone sample mode", async ({
     .getByRole("navigation")
     .getByRole("button", { name: "Review Night", exact: true })
     .click();
+  await page
+    .getByText("Times look wrong? Adjust timing", { exact: true })
+    .click();
   await notes(page).fill("Sample timing notes");
   await save(page).click();
   await saved(page);
@@ -371,6 +381,10 @@ test("keeps timing edits working in standalone sample mode", async ({
   await page
     .getByRole("navigation")
     .getByRole("button", { name: "Review Night", exact: true })
+    .click();
+  await expect(notes(page)).toBeHidden();
+  await page
+    .getByText("Times look wrong? Adjust timing", { exact: true })
     .click();
   await expect(notes(page)).toHaveValue("Sample timing notes");
 });

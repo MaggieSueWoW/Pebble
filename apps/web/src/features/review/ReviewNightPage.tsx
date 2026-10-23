@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { MissingPlayers } from "./MissingPlayers";
 import type { MissingPlayerEditor, Resolution } from "./useMissingPlayerEditor";
 import type { MissingPlayer } from "../results/resultProvenance";
@@ -9,12 +10,7 @@ import type { TimingEditorState } from "../overrides/useTimingEditor";
 import { NightDiagnostics } from "../results/NightDiagnostics";
 import { ResultWarnings } from "./ResultWarnings";
 import { warningsForNight } from "./warnings";
-import {
-  formatDate,
-  wallTime,
-  type Results,
-  type Timing,
-} from "../../shared/model";
+import { formatDate, type Results, type Timing } from "../../shared/model";
 
 export function ReviewNightPage({
   night,
@@ -30,6 +26,7 @@ export function ReviewNightPage({
   connection,
   playerEditor,
   onPlayerAction,
+  nextAction,
 }: {
   night: string;
   nights: string[];
@@ -40,6 +37,7 @@ export function ReviewNightPage({
   diagnostics: LiveConnection["resultDiagnostics"];
   detected: Timing;
   editor: TimingEditorState;
+  nextAction?: ReactNode;
   onRoster?: () => void;
   connection?: LiveConnection;
   playerEditor: MissingPlayerEditor;
@@ -72,29 +70,21 @@ export function ReviewNightPage({
           </SelectControl>
         </label>
       </div>
-      <section className="card panel-body" aria-labelledby="night-review-title">
-        <h2 id="night-review-title">
-          Raid times <span className="muted small">Pacific</span>
-        </h2>
-        <dl className="raid-time-summary">
-          <div>
-            <dt>Start</dt>
-            <dd>{wallTime(recorded?.timing.start ?? "")}</dd>
-          </div>
-          <div>
-            <dt>End</dt>
-            <dd>{wallTime(recorded?.timing.end ?? "")}</dd>
-          </div>
-          <div>
-            <dt>Break</dt>
-            <dd>
-              {recorded?.timing.breakStart && recorded.timing.breakEnd
-                ? `${wallTime(recorded.timing.breakStart)} – ${wallTime(recorded.timing.breakEnd)}${diagnostic?.breakMinutes != null ? ` (${diagnostic.breakMinutes} min)` : ""}`
-                : "No break recorded"}
-            </dd>
-          </div>
-        </dl>
+      <section className="card panel-body" aria-label="Raid night summary">
+        <NightDiagnostics
+          night={night}
+          recorded={recorded}
+          diagnostic={diagnostic}
+        />
+        <details className="timing-disclosure">
+          <summary>
+            Times look wrong? Adjust timing
+            {editor.dirty && <span className="badge amber">Unsaved</span>}
+          </summary>
+          <TimingEditor night={night} detected={detected} editor={editor} />
+        </details>
       </section>
+      {nextAction}
       {hasResults ? (
         <>
           <ResultWarnings
@@ -138,8 +128,6 @@ export function ReviewNightPage({
       ) : (
         <Notice>Run Pebble to load night checks.</Notice>
       )}
-      <TimingEditor night={night} detected={detected} editor={editor} />
-      <NightDiagnostics night={night} diagnostic={diagnostic} />
     </div>
   );
 }

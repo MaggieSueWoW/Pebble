@@ -280,14 +280,30 @@ processed. Successful guided runs open the newly fetched report’s night for re
 Failed submissions/runs stay on Reports, and an offline worker leaves the request
 queued with visible status. Review Night groups timing checks/corrections, missing-player
 warnings, source links and private night diagnostics for the selected raid night.
-Review Night starts with recorded Pacific start/end/break times, then terse
-warnings and per-character actions, with timing overrides below. Officers can
+Review Night starts with one compact row of recorded start/end/break times,
+raid duration, report count, and encounter count, followed immediately by Next.
+Timing sources appear under each time; durations round to whole minutes.
+Timing overrides are collapsed by default behind “Times look wrong? Adjust timing”
+in the summary box, with an Unsaved badge when there is a timing draft. Times
+use Pacific, as in the timing editor. Terse warnings and compact
+per-character action rows follow, with timing overrides below. Officers can
 ignore a character for this season, add a main with the reviewed night as its join
 date, or map an alt to an existing main without leaving the page. Character
 identities come from private completed-run diagnostics, preserving exact names,
 realms and regions. Older runs require a new worker run before inline actions are
 available. Player forms share the workspace draft and save guards. Main creation
-uses the logged class as its default and lets officers choose a role.
+uses the logged class as its default without asking for a role. Ignore requires
+an inline confirmation; Cancel leaves the character unchanged. Player actions
+keep one row per character, with horizontal scrolling on narrow screens.
+
+Overrides keeps the player list and editor side by side, with Next beside the raid night selector above both.
+The list shows sortable before/after-break and total bench minutes; played minutes appear in
+the selected player's details. The “Overrides only” filter and adjusted-player
+count use current saved availability modes, including resets before a rerun.
+Available includes time spent benched. Before/after-break choices sit together,
+optional private notes start collapsed, and Save availability, Cancel, and Reset
+to detected share one action group. Saved changes recalculate through the top
+Next button before Results opens.
 
 Ignores use versioned character inputs with `ignored: true` and an empty `playerId`.
 They use the existing character subscription and input-version freshness checks.

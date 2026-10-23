@@ -422,14 +422,6 @@
   .availability-explanation h3 {
     margin-bottom: var(--space-3);
   }
-  .night-diagnostics {
-    padding: var(--panel-padding);
-    margin-bottom: var(--space-4);
-  }
-  .night-diagnostics[open] summary {
-    margin-bottom: var(--space-4);
-  }
-
   .confirm-dialog {
     max-width: 28rem;
     width: calc(100% - var(--space-8));

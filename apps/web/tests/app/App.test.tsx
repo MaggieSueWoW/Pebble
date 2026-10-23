@@ -12,7 +12,11 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import App from "../../src/app/App";
 import { blankPlayer } from "../../src/features/roster/roster";
 import { freshState } from "../../src/demo/model";
-import type { Player } from "../../src/shared/model";
+import {
+  adjustmentKey,
+  emptyAdjustment,
+  type Player,
+} from "../../src/shared/model";
 import { defaultCalculation } from "../../src/features/settings/calculation";
 import type { LiveConnection } from "../../src/data/useFirestore";
 
@@ -107,6 +111,8 @@ it("keeps connected sessions out of sample storage and submits runs through the 
 
 function overrides() {
   fireEvent.click(screen.getByRole("button", { name: "Overrides" }));
+  const summary = document.querySelector(".availability-notes > summary");
+  if (summary) fireEvent.click(summary);
 }
 beforeEach(() => {
   window.history.replaceState(null, "", "/");
@@ -176,7 +182,9 @@ it("retains a removed player's draft until return or explicit cancellation", () 
   expect(
     screen.getByText(/This player is no longer in the roster/),
   ).toBeTruthy();
-  expect(screen.queryByRole("button", { name: "Save adjustment" })).toBeNull();
+  expect(
+    screen.queryByRole("button", { name: "Save availability" }),
+  ).toBeNull();
   expect(
     (screen.getByRole("button", { name: "Run Pebble" }) as HTMLButtonElement)
       .disabled,
@@ -202,7 +210,7 @@ it("waits for a removed player's pending save before selecting a replacement", a
   const { rerender } = render(<App connection={c} />);
   overrides();
   fireEvent.change(notes(), { target: { value: "Submitted draft" } });
-  fireEvent.click(screen.getByRole("button", { name: "Save adjustment" }));
+  fireEvent.click(screen.getByRole("button", { name: "Save availability" }));
   rerender(<App connection={{ ...c, players: [beta] }} />);
   expect(
     (screen.getByRole("button", { name: "Cancel edits" }) as HTMLButtonElement)
@@ -338,7 +346,7 @@ it("blocks a draft whose logged night disappears until cancellation", () => {
   rerender(<App connection={dates(c, ["2026-10-15"])} />);
   expect(
     screen
-      .getByRole("button", { name: "Save adjustment" })
+      .getByRole("button", { name: "Save availability" })
       .hasAttribute("disabled"),
   ).toBe(true);
   expect(notes().value).toBe("Night-bound draft");
@@ -359,7 +367,7 @@ it("keeps a pending save on its date until acknowledgement and afterwards", asyn
   const { rerender } = render(<App connection={c} />);
   overrides();
   fireEvent.change(notes(), { target: { value: "Save this night" } });
-  fireEvent.click(screen.getByRole("button", { name: "Save adjustment" }));
+  fireEvent.click(screen.getByRole("button", { name: "Save availability" }));
   rerender(<App connection={dates(c, ["2026-10-15"])} />);
   expect(notes().value).toBe("Save this night");
   await act(async () => finish({ "availabilityOverrides/2026-10-14_a": 1 }));
@@ -584,6 +592,12 @@ it("places timing review on Review Night and availability on Overrides", () => {
     screen.queryByRole("region", { name: "Raid timing editor" }),
   ).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: "Review Night" }));
+  const disclosure = screen
+    .getByText("Times look wrong? Adjust timing")
+    .closest("details")!;
+  expect(disclosure.open).toBe(false);
+  fireEvent.click(screen.getByText("Times look wrong? Adjust timing"));
+  expect(disclosure.open).toBe(true);
   expect(
     screen.getByRole("region", { name: "Raid timing editor" }),
   ).toBeTruthy();
@@ -951,28 +965,47 @@ it("shows nightly audit values and highlights only the recorded override half", 
       ],
     },
   ];
-  render(<App connection={c} />);
+  const { rerender } = render(<App connection={c} />);
   overrides();
   const row = screen.getByRole("button", { name: /Example Alpha/ });
   expect(row.textContent).not.toContain("Automatic");
   expect(within(row).getByText("Override")).toBeTruthy();
   const values = [...row.querySelectorAll(".override-minute")];
-  expect(values.map((value) => value.textContent)).toEqual([
-    "10",
-    "-",
-    "-",
-    "80",
-  ]);
+  expect(values.map((value) => value.textContent)).toEqual(["10", "-", "10"]);
   expect(
     values.map((value) => value.classList.contains("override-affected")),
-  ).toEqual([true, false, true, false]);
+  ).toEqual([true, false, true]);
   const uncalculated = screen.getByRole("button", { name: /Example Beta/ });
   expect(uncalculated.querySelectorAll(".override-affected").length).toBe(0);
   expect(
     [...uncalculated.querySelectorAll(".override-minute")].map(
       (value) => value.textContent,
     ),
-  ).toEqual(["—", "—", "—", "—"]);
+  ).toEqual(["—", "—", "—"]);
+  expect(within(editor()).getByText("1h 20m")).toBeTruthy();
+  // A saved reset takes precedence over stale published override markers.
+  rerender(
+    <App
+      connection={{
+        ...c,
+        saved: {
+          ...c.saved,
+          inputs: {
+            ...c.saved.inputs,
+            adjustments: {
+              [adjustmentKey("2026-10-15", alpha.id)]: emptyAdjustment(),
+            },
+          },
+        },
+      }}
+    />,
+  );
+  expect(screen.getByText("0 players adjusted")).toBeTruthy();
+  expect(within(row).queryByText("Override")).toBeNull();
+  expect(row.querySelectorAll(".override-affected").length).toBe(0);
+  fireEvent.click(screen.getByRole("checkbox", { name: "Overrides only" }));
+  expect(screen.getByText("No matching availability overrides.")).toBeTruthy();
+  expect(editor().textContent).toContain(alpha.name);
 });
 
 it("lists mains with alts and scopes a new alt to the clicked main", () => {
@@ -1162,8 +1195,7 @@ it("sorts each Overrides audit column with an explicit active direction and miss
   for (const [label, first, second, direction] of [
     ["Bench before break", alpha.name, beta.name, "ascending"],
     ["Bench after break", beta.name, alpha.name, "ascending"],
-    ["Played before break", alpha.name, beta.name, "descending"],
-    ["Played after break", beta.name, alpha.name, "descending"],
+    ["Total bench", alpha.name, beta.name, "ascending"],
   ]) {
     fireEvent.click(screen.getByRole("button", { name: `Sort by ${label}` }));
     expect(order()).toEqual([first, second, "Missing"]);
@@ -1301,7 +1333,7 @@ it("walks through four numbered steps and carries the reviewed night to results"
     screen.getByRole("button", { name: "Next: Review overrides →" }),
   );
   expect(raidPicker().value).toBe("2026-10-14");
-  fireEvent.click(screen.getByRole("button", { name: "View results →" }));
+  fireEvent.click(screen.getByRole("button", { name: "Next: Results →" }));
   expect(
     (
       screen.getByRole("combobox", {
@@ -1537,6 +1569,9 @@ it.each(["main", "alt", "ignore"] as const)(
     );
     if (mode === "main") {
       expect(screen.getByText("Join date: 2026-10-21")).toBeTruthy();
+      expect(
+        screen.queryByRole("combobox", { name: "Role for Extra" }),
+      ).toBeNull();
       await act(async () =>
         fireEvent.click(screen.getByRole("button", { name: "Save main" })),
       );
@@ -1569,6 +1604,17 @@ it.each(["main", "alt", "ignore"] as const)(
         0,
       );
     } else {
+      expect(c.ignoreCharacter).not.toHaveBeenCalled();
+      fireEvent.click(
+        screen.getByRole("button", { name: "Cancel player change" }),
+      );
+      expect(c.ignoreCharacter).not.toHaveBeenCalled();
+      fireEvent.click(
+        within(row).getByRole("button", { name: "Ignore forever" }),
+      );
+      await act(async () =>
+        fireEvent.click(screen.getByRole("button", { name: "Confirm ignore" })),
+      );
       expect(c.ignoreCharacter).toHaveBeenCalledWith(expect.any(String), {
         name: "Extra",
         realm: "Azjol-Nerub",

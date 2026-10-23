@@ -121,9 +121,7 @@ export function Workspace({
           ? current.direction === "ascending"
             ? "descending"
             : "ascending"
-          : key === "prePlayed" || key === "postPlayed"
-            ? "descending"
-            : "ascending",
+          : "ascending",
     }));
   }
   const setPage = (page: Page) => navigate({ page });
@@ -612,6 +610,69 @@ export function Workspace({
       </button>
     </div>
   );
+  const reviewNextAction = (
+    <div className="flow-actions">
+      {(page === "review" || page === "overrides") && (
+        <>
+          {(page !== "overrides" || unsaved || pendingFlow) && (
+            <p className="muted">
+              {unsaved
+                ? "Save or discard your edits to continue."
+                : pendingFlow
+                  ? "Updating results before continuing…"
+                  : unprocessed
+                    ? "Saved changes will be recalculated before continuing."
+                    : "Continue when you’ve finished reviewing this night."}
+            </p>
+          )}
+          <button
+            className="button primary"
+            disabled={
+              unsaved ||
+              Boolean(active) ||
+              Boolean(pendingFlow) ||
+              waitingForResults ||
+              Boolean(connection?.busy) ||
+              Boolean(connection?.resultsError) ||
+              Boolean(connection && !connection.hasResults) ||
+              !nightOptions.length
+            }
+            onClick={() =>
+              void advanceFlow(page === "review" ? "overrides" : "results")
+            }
+          >
+            {page === "review"
+              ? unprocessed
+                ? "Recalculate and review overrides →"
+                : "Next: Review overrides →"
+              : unprocessed
+                ? "Recalculate and view Results →"
+                : "Next: Results →"}
+          </button>
+        </>
+      )}
+      {page === "results" && (
+        <>
+          <p>
+            {active || waitingForResults
+              ? "Results are updating…"
+              : unprocessed
+                ? "Saved changes need a new run before this night is finished."
+                : connection?.resultsError
+                  ? "Results are unavailable. Retry loading to finish reviewing."
+                  : lastFailed
+                    ? "The last run failed. Review run history before continuing."
+                    : !connection || connection.hasResults
+                      ? "You’ve reached the results. Night processing is complete."
+                      : "Add a report and run Pebble to get started."}
+          </p>
+          <button className="button secondary" onClick={() => go("reports")}>
+            Process another night
+          </button>
+        </>
+      )}
+    </div>
+  );
   return (
     <AppShell
       page={page}
@@ -686,7 +747,7 @@ export function Workspace({
       {canManage && (
         <>
           <NightFlow page={page} go={go} />
-          {night && ["review", "overrides", "roster"].includes(page) && (
+          {night && ["roster"].includes(page) && (
             <p className="muted">
               Selected raid night: {formatDate(night, true)}
             </p>
@@ -754,6 +815,7 @@ export function Workspace({
           editor={timingEditor}
           connection={connection}
           playerEditor={missingPlayerEditor}
+          nextAction={canManage ? reviewNextAction : undefined}
           onPlayerAction={(player, mode) =>
             guard(() => missingPlayerEditor.open(player, night, mode))
           }
@@ -800,6 +862,7 @@ export function Workspace({
       )}
       {page === "overrides" && (
         <OverridesPage
+          nextAction={canManage ? reviewNextAction : undefined}
           nightSelection={{
             value: night,
             options: nightOptions,
@@ -872,70 +935,8 @@ export function Workspace({
           }
         />
       )}
-      {canManage && ["review", "overrides", "results"].includes(page) && (
-        <div className="flow-actions">
-          {(page === "review" || page === "overrides") && (
-            <>
-              <p className="muted">
-                {unsaved
-                  ? "Save or discard your edits to continue."
-                  : pendingFlow
-                    ? "Updating results before continuing…"
-                    : unprocessed
-                      ? "Saved changes will be recalculated before continuing."
-                      : "Continue when you’ve finished reviewing this night."}
-              </p>
-              <button
-                className="button primary"
-                disabled={
-                  unsaved ||
-                  Boolean(active) ||
-                  Boolean(pendingFlow) ||
-                  waitingForResults ||
-                  Boolean(connection?.busy) ||
-                  Boolean(connection?.resultsError) ||
-                  Boolean(connection && !connection.hasResults) ||
-                  !nightOptions.length
-                }
-                onClick={() =>
-                  void advanceFlow(page === "review" ? "overrides" : "results")
-                }
-              >
-                {page === "review"
-                  ? unprocessed
-                    ? "Recalculate and review overrides →"
-                    : "Next: Review overrides →"
-                  : unprocessed
-                    ? "Recalculate and view results →"
-                    : "View results →"}
-              </button>
-            </>
-          )}
-          {page === "results" && (
-            <>
-              <p>
-                {active || waitingForResults
-                  ? "Results are updating…"
-                  : unprocessed
-                    ? "Saved changes need a new run before this night is finished."
-                    : connection?.resultsError
-                      ? "Results are unavailable. Retry loading to finish reviewing."
-                      : lastFailed
-                        ? "The last run failed. Review run history before continuing."
-                        : !connection || connection.hasResults
-                          ? "You’ve reached the results. Night processing is complete."
-                          : "Add a report and run Pebble to get started."}
-              </p>
-              <button
-                className="button secondary"
-                onClick={() => go("reports")}
-              >
-                Process another night
-              </button>
-            </>
-          )}
-        </div>
-      )}
+      {canManage && page === "results" && reviewNextAction}
+
       {canManage && (
         <RunHistory history={history} connected={Boolean(connection)} />
       )}

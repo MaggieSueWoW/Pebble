@@ -1,4 +1,23 @@
 @layer pages {
+  .override-next {
+    margin-left: auto;
+    max-width: 100%;
+  }
+  .override-next .flow-actions {
+    margin: 0;
+    justify-content: flex-end;
+  }
+  .override-filter {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    margin: 0 var(--panel-padding) var(--space-3);
+    color: var(--color-muted);
+  }
+  .override-filter input {
+    width: auto;
+    margin: 0;
+  }
   .override-toolbar {
     margin-bottom: var(--space-5);
   }
@@ -14,7 +33,7 @@
   }
   .override-grid {
     display: grid;
-    grid-template-columns: minmax(0, 1.35fr) minmax(18rem, 1fr);
+    grid-template-columns: minmax(0, 1.1fr) minmax(18rem, 1fr);
     align-items: start;
     gap: var(--space-5);
   }
@@ -30,10 +49,10 @@
   .override-player-columns,
   .override-player-row {
     display: grid;
-    grid-template-columns: minmax(7rem, 1fr) 4rem repeat(4, 3rem) 1rem;
+    grid-template-columns: minmax(7rem, 1fr) 4rem repeat(3, 3.5rem) 1rem;
     align-items: center;
     gap: var(--space-2);
-    min-width: 32rem;
+    min-width: 26.5rem;
     padding-inline: var(--space-3);
   }
   .override-player-columns {
@@ -42,17 +61,14 @@
     font-size: var(--text-caption);
   }
   .override-player-columns > span:nth-child(2) {
-    grid-column: 3 / 5;
-  }
-  .override-player-columns > span:nth-child(3) {
-    grid-column: 5 / 7;
+    grid-column: 3 / 6;
   }
   .override-player-columns > span:not(:first-child) {
     text-align: center;
   }
   .override-sort-halves {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(3, 1fr);
     gap: var(--space-2);
     margin-top: var(--space-1);
   }
@@ -104,15 +120,39 @@
     background: var(--color-purple-soft);
   }
   .override-player-row > svg {
-    grid-column: 7;
+    grid-column: 6;
     color: var(--color-subtle);
   }
   .adjustment-card {
     position: sticky;
     top: var(--space-5);
   }
-  .adjustment-card > .field {
+  .availability-halves,
+  .availability-played {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-4);
     margin-block: var(--space-4);
+  }
+  .availability-played dt {
+    color: var(--color-muted);
+    font-size: var(--text-caption);
+  }
+  .availability-played dd {
+    margin: 0;
+  }
+  .availability-halves .select-control {
+    width: 100%;
+    min-width: 0;
+  }
+  .availability-notes {
+    margin-block: var(--space-4);
+  }
+  .availability-notes summary {
+    color: var(--color-muted);
+  }
+  .availability-notes .field {
+    margin-top: var(--space-3);
   }
   .editor-intro,
   .timing-help {
@@ -122,8 +162,11 @@
   .editor-actions .primary {
     flex: 1;
   }
-  .reset-link {
-    margin-top: var(--space-3);
+  .editor-actions {
+    flex-wrap: wrap;
+  }
+  .editor-actions .reset-link {
+    margin: 0;
   }
   .timing-table {
     margin-block: var(--space-4);
@@ -158,6 +201,9 @@
     }
   }
   @media (max-width: 40rem) {
+    .availability-halves {
+      grid-template-columns: minmax(0, 1fr);
+    }
     .timing-table,
     .timing-table tbody {
       display: block;

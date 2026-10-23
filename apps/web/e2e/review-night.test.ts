@@ -88,23 +88,41 @@ test("reviews times and resolves each extra player without leaving the night", a
     .getByRole("navigation", { name: "Main navigation" })
     .getByRole("button", { name: "Review Night", exact: true })
     .click();
-  await expect(page.getByText("7:00 PM", { exact: true })).toBeVisible();
+  await expect(page.getByText(/^7:00 PMDetected$/)).toBeVisible();
   await expect(
-    page.getByText("8:30 PM – 8:40 PM (10 min)", { exact: true }),
+    page.getByText(/^8:30 PM – 8:40 PM \(10 min\)Detected$/),
   ).toBeVisible();
   await expect(
     page.getByRole("region", { name: "Result warnings" }),
   ).toHaveCount(0);
   const main = page.getByRole("article", { name: "Missing player Newmain" });
+  const summary = page.getByRole("region", { name: "Raid night summary" });
+  await expect(summary).toContainText("Mythic encounters");
+  await expect(summary).toContainText("Detected");
+  const next = page.getByRole("button", {
+    name: "Next: Review overrides →",
+    exact: true,
+  });
+  await expect(next).toHaveCount(1);
+  const summaryBox = (await summary.boundingBox())!;
+  const nextBox = (await next.boundingBox())!;
+  const missingBox = (await page
+    .getByRole("region", { name: "Missing players", exact: true })
+    .boundingBox())!;
+  expect(nextBox.y).toBeGreaterThanOrEqual(summaryBox.y + summaryBox.height);
+  expect(nextBox.y + nextBox.height).toBeLessThanOrEqual(missingBox.y);
+  const rowHeight = (await main.boundingBox())!.height;
   await main.getByRole("button", { name: "Add main", exact: true }).click();
+  expect((await main.boundingBox())!.height).toBe(rowHeight);
   await expect(main.getByText(`Join date: ${night}`)).toBeVisible();
-  await main
-    .getByRole("combobox", { name: "Role for Newmain" })
-    .selectOption("Damage");
+  await expect(
+    main.getByRole("combobox", { name: "Role for Newmain" }),
+  ).toHaveCount(0);
   await main.getByRole("button", { name: "Save main", exact: true }).click();
   await expect(main).toContainText(`joins ${night}`);
   const alt = page.getByRole("article", { name: "Missing player Newalt" });
   await alt.getByRole("button", { name: "Add alt", exact: true }).click();
+  expect((await alt.boundingBox())!.height).toBe(rowHeight);
   await alt
     .getByRole("combobox", { name: "Main for Newalt" })
     .selectOption("main");
@@ -114,6 +132,24 @@ test("reviews times and resolves each extra player without leaving the night", a
   await guest
     .getByRole("button", { name: "Ignore forever", exact: true })
     .click();
+  await expect(
+    guest.getByRole("button", { name: "Confirm ignore" }),
+  ).toBeVisible();
+  expect((await guest.boundingBox())!.height).toBe(rowHeight);
+  await emulator.admin(async (context) => {
+    const entries = await getDocs(
+      collection(context.firestore(), `${season}/characters`),
+    );
+    expect(entries.docs.some((entry) => entry.data().name === "Guest")).toBe(
+      false,
+    );
+  });
+  await guest.getByRole("button", { name: "Cancel player change" }).click();
+  await expect(
+    guest.getByRole("button", { name: "Ignore forever" }),
+  ).toBeVisible();
+  await guest.getByRole("button", { name: "Ignore forever" }).click();
+  await guest.getByRole("button", { name: "Confirm ignore" }).click();
   await expect(guest).toContainText("Ignored for this season");
   await page.reload();
   await expect(
@@ -131,7 +167,7 @@ test("reviews times and resolves each extra player without leaving the night", a
       joinDate: night,
       active: true,
       className: "Mage",
-      role: "Damage",
+      role: "Unknown",
     });
     const characters = (
       await getDocs(collection(db, `${season}/characters`))

@@ -10,7 +10,6 @@ export type MissingPlayerDraft = {
   night: string;
   mode: Resolution;
   className: string;
-  role: string;
   mainId: string;
 };
 export function useMissingPlayerEditor(connection?: LiveConnection) {
@@ -36,13 +35,11 @@ export function useMissingPlayerEditor(connection?: LiveConnection) {
             name.replaceAll(" ", "").toLowerCase() ===
             player.className.replaceAll(" ", "").toLowerCase(),
         ) ?? "Unknown",
-      role: "Unknown",
       mainId: "",
     };
     setDraft(value);
     setError("");
     setMessage("");
-    if (mode === "ignore") void commit(value);
   }
   async function commit(value: MissingPlayerDraft) {
     if (!connection?.officer || connection.busy || pending.current) return;
@@ -57,7 +54,6 @@ export function useMissingPlayerEditor(connection?: LiveConnection) {
             ...blankPlayer(),
             name: value.player.name,
             className: value.className,
-            role: value.role,
             joinDate: value.night,
           },
           0,

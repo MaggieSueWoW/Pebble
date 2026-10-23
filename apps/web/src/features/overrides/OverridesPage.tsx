@@ -1,3 +1,4 @@
+import { useState, type ReactNode } from "react";
 import { Clock3, Search, Info, ChevronRight } from "lucide-react";
 import {
   adjustmentKey,
@@ -14,14 +15,16 @@ import { SortButton } from "../../components/SortButton";
 import { AvailabilityEditor } from "./AvailabilityEditor";
 import type { AvailabilityEditorState } from "./useAvailabilityEditor";
 export type OverrideSort = {
-  key: "name" | "preBench" | "postBench" | "prePlayed" | "postPlayed";
+  key: "name" | "preBench" | "postBench" | "bench";
   direction: "ascending" | "descending";
 };
 export function OverridesPage({
   nightSelection,
   status,
   availability,
+  nextAction,
 }: {
+  nextAction?: ReactNode;
   nightSelection: {
     value: string;
     options: string[];
@@ -65,6 +68,24 @@ export function OverridesPage({
     editor: availabilityEditor,
     span,
   } = availability;
+  const [overridesOnly, setOverridesOnly] = useState(false);
+  function isOverridden(id: string) {
+    const adjustment = inputs.adjustments[adjustmentKey(night, id)];
+    if (adjustment)
+      return (
+        adjustment.pre.mode !== "automatic" ||
+        adjustment.post.mode !== "automatic"
+      );
+    return (
+      latestNight?.players.find((row) => row.id === id)?.overridden ?? false
+    );
+  }
+  const adjustedCount = players.filter((player) =>
+    isOverridden(player.id),
+  ).length;
+  const shownPlayers = overridesOnly
+    ? visiblePlayers.filter((player) => isOverridden(player.id))
+    : visiblePlayers;
   return (
     <>
       {!nightOptions.length && (
@@ -97,13 +118,18 @@ export function OverridesPage({
                 Retry run queue
               </button>
             )}
+            <div className="override-next">{nextAction}</div>
           </div>
-
           <div className="override-grid" id="override-panel">
             <section className="card player-card">
               <PanelHeader
                 title="Who was available?"
-                description="Select a player to adjust their availability."
+                actions={
+                  <Badge>
+                    {adjustedCount} {adjustedCount === 1 ? "player" : "players"}{" "}
+                    adjusted
+                  </Badge>
+                }
               />
               <label className="search-field">
                 <Search size={16} />
@@ -113,6 +139,14 @@ export function OverridesPage({
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                 />
+              </label>
+              <label className="override-filter">
+                <input
+                  type="checkbox"
+                  checked={overridesOnly}
+                  onChange={(event) => setOverridesOnly(event.target.checked)}
+                />
+                Overrides only
               </label>
               <div className="player-list">
                 <div className="override-player-columns">
@@ -124,13 +158,7 @@ export function OverridesPage({
                         [
                           ["preBench", "Before"],
                           ["postBench", "After"],
-                        ],
-                      ],
-                      [
-                        "Played",
-                        [
-                          ["prePlayed", "Before"],
-                          ["postPlayed", "After"],
+                          ["bench", "Total"],
                         ],
                       ],
                     ] as const
@@ -154,7 +182,7 @@ export function OverridesPage({
                                 : undefined
                             }
                             aria-pressed={overrideSort.key === key}
-                            aria-label={`Sort by ${group === "Player" ? "Player" : `${group} ${label.toLowerCase()} break`}${overrideSort.key === key ? `, ${overrideSort.direction}` : ""}`}
+                            aria-label={`Sort by ${group === "Player" ? "Player" : key === "bench" ? "Total bench" : `${group} ${label.toLowerCase()} break`}${overrideSort.key === key ? `, ${overrideSort.direction}` : ""}`}
                             onClick={() => changeOverrideSort(key)}
                           />
                         ))}
@@ -162,21 +190,19 @@ export function OverridesPage({
                     </span>
                   ))}
                 </div>
-                {visiblePlayers.map((player) => {
+                {shownPlayers.map((player) => {
                   const a = inputs.adjustments[adjustmentKey(night, player.id)];
-                  const overridden =
-                    a &&
-                    (a.pre.mode !== "automatic" || a.post.mode !== "automatic");
+                  const overridden = isOverridden(player.id);
                   const row = latestNight?.players.find(
                     (r) => r.id === player.id,
                   );
                   const preOverride =
-                    (row?.availability?.pre.mode ??
-                      a?.pre.mode ??
+                    (a?.pre.mode ??
+                      row?.availability?.pre.mode ??
                       "automatic") !== "automatic";
                   const postOverride =
-                    (row?.availability?.post.mode ??
-                      a?.post.mode ??
+                    (a?.post.mode ??
+                      row?.availability?.post.mode ??
                       "automatic") !== "automatic";
                   return (
                     <button
@@ -190,15 +216,16 @@ export function OverridesPage({
                           {player.name}
                         </strong>
                       </span>
-                      {(overridden || row?.overridden) && (
-                        <Badge tone="purple">Override</Badge>
-                      )}
+                      {overridden && <Badge tone="purple">Override</Badge>}
                       {(
                         [
                           ["Bench before break", row?.preBench, preOverride],
                           ["Bench after break", row?.postBench, postOverride],
-                          ["Played before break", row?.prePlayed, preOverride],
-                          ["Played after break", row?.postPlayed, postOverride],
+                          [
+                            "Total bench",
+                            row?.bench,
+                            preOverride || postOverride,
+                          ],
                         ] as const
                       ).map(([label, minutes, affected], index) => (
                         <span
@@ -219,10 +246,12 @@ export function OverridesPage({
                     </button>
                   );
                 })}
-                {!visiblePlayers.length && (
+                {!shownPlayers.length && (
                   <p className="empty-state" role="status">
                     {players.length
-                      ? "No matching players. Try another search."
+                      ? overridesOnly
+                        ? "No matching availability overrides."
+                        : "No matching players. Try another search."
                       : "No players in the roster yet."}
                   </p>
                 )}
@@ -236,6 +265,7 @@ export function OverridesPage({
               player={selectedPlayer}
               editor={availabilityEditor}
               span={span}
+              recorded={latestNight?.players.find((row) => row.id === selected)}
             />
           </div>
         </>

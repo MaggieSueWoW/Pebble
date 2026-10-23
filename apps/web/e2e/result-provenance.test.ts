@@ -98,7 +98,7 @@ test("public recorded explanations and officer-only diagnostics survive selectio
   await expect(explanation).toContainText("Partial availability");
   await expect(explanation).toContainText("Recorded unavailable");
   await expect(
-    page.getByLabel("Officer night diagnostics", { exact: true }),
+    page.getByLabel("Night details for 2026-10-15", { exact: true }),
   ).toHaveCount(0);
   await officer(page, emulator.environment);
   await page
@@ -112,15 +112,14 @@ test("public recorded explanations and officer-only diagnostics survive selectio
     .getByRole("navigation", { name: "Main navigation" })
     .getByRole("button", { name: "Review Night", exact: true })
     .click();
-  const diagnostics = page.getByLabel("Officer night diagnostics", {
+  const diagnostics = page.getByLabel("Night details for 2026-10-15", {
     exact: true,
   });
   await expect(diagnostics).toBeVisible();
-  await diagnostics.locator("summary").focus();
-  await page.keyboard.press("Enter");
-  await expect(diagnostics).toContainText("Configured default");
-  await expect(diagnostics).toContainText("Officer timing override");
-  await expect(diagnostics.locator("dd").nth(2)).toHaveText("2");
+  await expect(diagnostics).toContainText("Configured");
+  await expect(diagnostics).toContainText("Overridden");
+  await expect(diagnostics.locator("dd").nth(5)).toHaveText("4");
+  await expect(page.getByText(/Selected raid night:/)).toHaveCount(0);
   await page.setViewportSize({ width: 390, height: 844 });
   expect(
     await page.evaluate(
