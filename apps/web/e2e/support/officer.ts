@@ -1,5 +1,5 @@
-import { expect, type Page } from "@playwright/test";
 import type { RulesTestEnvironment } from "@firebase/rules-unit-testing";
+import { expect, type Page } from "@playwright/test";
 import { doc, setDoc } from "firebase/firestore";
 
 export async function signIn(page: Page) {

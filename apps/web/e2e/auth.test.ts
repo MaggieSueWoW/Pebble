@@ -1,35 +1,10 @@
-import { test, expect } from "@playwright/test";
-import {
-  initializeTestEnvironment,
-  type RulesTestEnvironment,
-} from "@firebase/rules-unit-testing";
+import { expect, test } from "@playwright/test";
 import { doc, setDoc } from "firebase/firestore";
-import { readFileSync } from "node:fs";
-import { signIn } from "./officer";
+import { setupEmulator } from "./support/emulator";
+import { signIn } from "./support/officer";
 
-let env: RulesTestEnvironment;
-const admin = (
-  fn: Parameters<RulesTestEnvironment["withSecurityRulesDisabled"]>[0],
-) => env.withSecurityRulesDisabled(fn);
-test.beforeAll(async () => {
-  env = await initializeTestEnvironment({
-    projectId: "demo-pebble-reports",
-    firestore: {
-      host: "127.0.0.1",
-      port: 8180,
-      rules: readFileSync(
-        new URL("../../../firebase/firestore.rules", import.meta.url),
-        "utf8",
-      ),
-    },
-  });
-});
-test.beforeEach(async () => {
-  await env.clearFirestore();
-});
-test.afterAll(async () => {
-  await env?.cleanup();
-});
+const emulator = setupEmulator();
+const admin = emulator.admin;
 
 test("Google emulator onboarding, refresh, revocation during editing, regrant and sign-out", async ({
   page,

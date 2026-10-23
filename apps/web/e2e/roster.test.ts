@@ -1,8 +1,4 @@
-import { test, expect, type Page } from "@playwright/test";
-import {
-  initializeTestEnvironment,
-  type RulesTestEnvironment,
-} from "@firebase/rules-unit-testing";
+import { expect, test, type Page } from "@playwright/test";
 import {
   collection,
   doc,
@@ -11,14 +7,12 @@ import {
   setDoc,
   Timestamp,
 } from "firebase/firestore";
-import { readFileSync } from "node:fs";
-import { officer } from "./officer";
-const projectId = "demo-pebble-reports",
-  season = "seasons/test-reports";
-let env: RulesTestEnvironment;
-const admin = (
-  fn: Parameters<RulesTestEnvironment["withSecurityRulesDisabled"]>[0],
-) => env.withSecurityRulesDisabled(fn);
+import { setupEmulator } from "./support/emulator";
+import { seedHeartbeat } from "./support/fixtures";
+import { officer } from "./support/officer";
+const season = "seasons/test-reports";
+const emulator = setupEmulator();
+const admin = emulator.admin;
 const player = (name = "Example", version = 1) => ({
   name,
   className: "Druid",
@@ -32,7 +26,7 @@ const player = (name = "Example", version = 1) => ({
   updatedAt: Timestamp.now(),
 });
 async function open(page: Page) {
-  await officer(page, env);
+  await officer(page, emulator.environment);
   await page
     .getByRole("navigation")
     .getByRole("button", { name: "Roster", exact: true })
@@ -43,25 +37,9 @@ async function open(page: Page) {
 }
 const save = (page: Page) =>
   page.getByRole("button", { name: "Save main", exact: true });
-test.beforeAll(async () => {
-  env = await initializeTestEnvironment({
-    projectId,
-    firestore: {
-      host: "127.0.0.1",
-      port: 8180,
-      rules: readFileSync(
-        new URL("../../../firebase/firestore.rules", import.meta.url),
-        "utf8",
-      ),
-    },
-  });
-});
 test.beforeEach(async () => {
-  await env.clearFirestore();
   await admin(async (ctx) => {
-    await setDoc(doc(ctx.firestore(), "bot/status"), {
-      lastHeartbeatAt: Timestamp.now(),
-    });
+    await seedHeartbeat(ctx.firestore());
     await setDoc(doc(ctx.firestore(), `${season}/reports/AAAAAAAAAAAAAAAA`), {
       enabled: true,
       version: 1,
@@ -70,9 +48,6 @@ test.beforeEach(async () => {
       updatedAt: Timestamp.now(),
     });
   });
-});
-test.afterAll(async () => {
-  await env?.cleanup();
 });
 test.afterEach(async () => {
   await admin(async (ctx) => {

@@ -1,35 +1,16 @@
-import { test, expect } from "@playwright/test";
-import {
-  initializeTestEnvironment,
-  assertFails,
-  type RulesTestEnvironment,
-} from "@firebase/rules-unit-testing";
+import { assertFails } from "@firebase/rules-unit-testing";
+import { expect, test } from "@playwright/test";
 import { doc, getDoc, Timestamp, writeBatch } from "firebase/firestore";
-import { readFileSync } from "node:fs";
-import { officer } from "./officer";
+import { setupEmulator } from "./support/emulator";
+import { officer } from "./support/officer";
 
-let env: RulesTestEnvironment;
+const emulator = setupEmulator();
 const season = "seasons/test-reports",
   night = "2026-10-15";
-test.beforeAll(async () => {
-  env = await initializeTestEnvironment({
-    projectId: "demo-pebble-reports",
-    firestore: {
-      host: "127.0.0.1",
-      port: 8180,
-      rules: readFileSync(
-        new URL("../../../firebase/firestore.rules", import.meta.url),
-        "utf8",
-      ),
-    },
-  });
-});
-test.afterAll(async () => env.cleanup());
 test("public recorded explanations and officer-only diagnostics survive selection and clear on sign-out", async ({
   page,
 }) => {
-  await env.clearFirestore();
-  await env.withSecurityRulesDisabled(async (ctx) => {
+  await emulator.admin(async (ctx) => {
     const db = ctx.firestore(),
       batch = writeBatch(db),
       at = Timestamp.now();
@@ -95,13 +76,16 @@ test("public recorded explanations and officer-only diagnostics survive selectio
   });
   await assertFails(
     getDoc(
-      doc(env.unauthenticatedContext().firestore(), `${season}/runs/ready`),
+      doc(
+        emulator.environment.unauthenticatedContext().firestore(),
+        `${season}/runs/ready`,
+      ),
     ),
   );
   await assertFails(
     getDoc(
       doc(
-        env.authenticatedContext("non-officer").firestore(),
+        emulator.environment.authenticatedContext("non-officer").firestore(),
         `${season}/runs/ready`,
       ),
     ),
@@ -116,7 +100,7 @@ test("public recorded explanations and officer-only diagnostics survive selectio
   await expect(
     page.getByLabel("Officer night diagnostics", { exact: true }),
   ).toHaveCount(0);
-  await officer(page, env);
+  await officer(page, emulator.environment);
   await page
     .getByRole("navigation")
     .getByRole("button", { name: "Results", exact: true })

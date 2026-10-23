@@ -1,11 +1,7 @@
-import { test, expect } from "@playwright/test";
-import {
-  initializeTestEnvironment,
-  type RulesTestEnvironment,
-} from "@firebase/rules-unit-testing";
+import { expect, test } from "@playwright/test";
 import { doc, setDoc, Timestamp } from "firebase/firestore";
-import { readFileSync } from "node:fs";
-let env: RulesTestEnvironment;
+import { setupEmulator } from "./support/emulator";
+const emulator = setupEmulator();
 const season = "seasons/test-reports";
 const attendance = {
   played: 60,
@@ -31,22 +27,8 @@ const row = (id: string, name: string) => ({
   overridden: false,
   nights: 1,
 });
-test.beforeAll(async () => {
-  env = await initializeTestEnvironment({
-    projectId: "demo-pebble-reports",
-    firestore: {
-      host: "127.0.0.1",
-      port: 8180,
-      rules: readFileSync(
-        new URL("../../../firebase/firestore.rules", import.meta.url),
-        "utf8",
-      ),
-    },
-  });
-});
 test.beforeEach(async () => {
-  await env.clearFirestore();
-  await env.withSecurityRulesDisabled(async (ctx) => {
+  await emulator.admin(async (ctx) => {
     const db = ctx.firestore(),
       root = `${season}/results/published`;
     await setDoc(doc(db, root), {
@@ -113,9 +95,6 @@ test.beforeEach(async () => {
       latestRunId: "published",
     });
   });
-});
-test.afterAll(async () => {
-  await env.cleanup();
 });
 test("presents published season attendance separately, orders P/B/O weeks and does not fetch on expansion", async ({
   page,

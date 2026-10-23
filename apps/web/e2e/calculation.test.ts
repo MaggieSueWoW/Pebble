@@ -1,8 +1,4 @@
-import { test, expect, type Page } from "@playwright/test";
-import {
-  initializeTestEnvironment,
-  type RulesTestEnvironment,
-} from "@firebase/rules-unit-testing";
+import { expect, test, type Page } from "@playwright/test";
 import {
   collection,
   doc,
@@ -11,14 +7,13 @@ import {
   setDoc,
   Timestamp,
 } from "firebase/firestore";
-import { readFileSync } from "node:fs";
-import { officer } from "./officer";
 import { defaultCalculation } from "../src/features/settings/calculation";
-let env: RulesTestEnvironment;
+import { setupEmulator } from "./support/emulator";
+import { seedHeartbeat } from "./support/fixtures";
+import { officer } from "./support/officer";
+const emulator = setupEmulator();
 const season = "seasons/test-reports";
-const admin = (
-  fn: Parameters<RulesTestEnvironment["withSecurityRulesDisabled"]>[0],
-) => env.withSecurityRulesDisabled(fn);
+const admin = emulator.admin;
 const settings = (extension: number, version: number) => ({
   ...defaultCalculation(),
   postExtensionMinutes: extension,
@@ -29,7 +24,7 @@ const settings = (extension: number, version: number) => ({
 const save = (page: Page) =>
   page.getByRole("button", { name: "Save", exact: true });
 async function open(page: Page) {
-  await officer(page, env);
+  await officer(page, emulator.environment);
   await page
     .getByRole("navigation")
     .getByRole("button", { name: "Settings", exact: true })
@@ -42,25 +37,9 @@ async function open(page: Page) {
     }),
   ).toBeVisible();
 }
-test.beforeAll(async () => {
-  env = await initializeTestEnvironment({
-    projectId: "demo-pebble-reports",
-    firestore: {
-      host: "127.0.0.1",
-      port: 8180,
-      rules: readFileSync(
-        new URL("../../../firebase/firestore.rules", import.meta.url),
-        "utf8",
-      ),
-    },
-  });
-});
 test.beforeEach(async () => {
-  await env.clearFirestore();
   await admin(async (ctx) => {
-    await setDoc(doc(ctx.firestore(), "bot/status"), {
-      lastHeartbeatAt: Timestamp.now(),
-    });
+    await seedHeartbeat(ctx.firestore());
     await setDoc(doc(ctx.firestore(), `${season}/reports/AAAAAAAAAAAAAAAA`), {
       enabled: true,
       version: 1,
@@ -80,9 +59,6 @@ test.afterEach(async () => {
       ).data()?.version,
     ).toBe(1);
   });
-});
-test.afterAll(async () => {
-  await env.cleanup();
 });
 test("creates default settings with validation, guarded navigation and no recomputation", async ({
   page,

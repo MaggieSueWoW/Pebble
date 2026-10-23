@@ -1,8 +1,4 @@
-import { test, expect } from "@playwright/test";
-import {
-  initializeTestEnvironment,
-  type RulesTestEnvironment,
-} from "@firebase/rules-unit-testing";
+import { expect, test } from "@playwright/test";
 import {
   collection,
   deleteDoc,
@@ -12,19 +8,17 @@ import {
   setDoc,
   Timestamp,
 } from "firebase/firestore";
-import { readFileSync } from "node:fs";
-import { officer } from "./officer";
-const projectId = "demo-pebble-reports",
-  season = "seasons/test-reports";
+import { setupEmulator } from "./support/emulator";
+import { seedHeartbeat } from "./support/fixtures";
+import { officer } from "./support/officer";
+const season = "seasons/test-reports";
 const a = "AAAAAAAAAAAAAAAA",
   b = "BBBBBBBBBBBBBBBB",
   c = "CCCCCCCCCCCCCCCC",
   d = "DDDDDDDDDDDDDDDD";
-let env: RulesTestEnvironment;
+const emulator = setupEmulator();
 let expectedRunIds: string[] = [];
-const admin = (
-  fn: Parameters<RulesTestEnvironment["withSecurityRulesDisabled"]>[0],
-) => env.withSecurityRulesDisabled(fn);
+const admin = emulator.admin;
 const seedReport = (code: string, enabled: boolean, version = 1, notes = "") =>
   admin(async (ctx) => {
     await setDoc(doc(ctx.firestore(), `${season}/reports/${code}`), {
@@ -35,30 +29,12 @@ const seedReport = (code: string, enabled: boolean, version = 1, notes = "") =>
       updatedAt: Timestamp.now(),
     });
   });
-test.beforeAll(async () => {
-  if (!projectId.startsWith("demo-"))
-    throw new Error("Browser tests require a demo project");
-  env = await initializeTestEnvironment({
-    projectId,
-    firestore: {
-      host: "127.0.0.1",
-      port: 8180,
-      rules: readFileSync(
-        new URL("../../../firebase/firestore.rules", import.meta.url),
-        "utf8",
-      ),
-    },
-  });
-});
 test.beforeEach(async () => {
   expectedRunIds = [];
-  await env.clearFirestore();
   await seedReport(a, true);
   await seedReport(b, false);
   await admin(async (ctx) => {
-    await setDoc(doc(ctx.firestore(), "bot/status"), {
-      lastHeartbeatAt: Timestamp.now(),
-    });
+    await seedHeartbeat(ctx.firestore());
   });
 });
 test.afterEach(async () => {
@@ -70,13 +46,10 @@ test.afterEach(async () => {
     ).toEqual(expectedRunIds);
   });
 });
-test.afterAll(async () => {
-  await env?.cleanup();
-});
 test("validates a single report, adds once, re-enables, and saves/cancels selections", async ({
   page,
 }) => {
-  await officer(page, env);
+  await officer(page, emulator.environment);
   const input = page.getByRole("textbox", { name: "Warcraft Logs reports" });
   await input.fill("invalid");
   await expect(input).toHaveAttribute("aria-invalid", "true");
@@ -124,7 +97,7 @@ test("validates a single report, adds once, re-enables, and saves/cancels select
 test("holds a pending save, preserves newer text, and blocks navigation/run", async ({
   page,
 }) => {
-  await officer(page, env);
+  await officer(page, emulator.environment);
   let release!: () => void;
   let intercepted!: () => void;
   const requested = new Promise<void>((resolve) => {
@@ -168,7 +141,7 @@ test("holds a pending save, preserves newer text, and blocks navigation/run", as
 test("retains failed saves and version conflicts until cancel/retry", async ({
   page,
 }) => {
-  await officer(page, env);
+  await officer(page, emulator.environment);
   await page.getByRole("switch", { name: `Include ${a}` }).click();
   await seedReport(a, true, 2, "Concurrent edit");
   await page
@@ -218,7 +191,7 @@ test("protects drafts with a keyboard-accessible dialog at a narrow viewport", a
   page,
 }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await officer(page, env);
+  await officer(page, emulator.environment);
   const input = page.getByRole("textbox", { name: "Warcraft Logs reports" });
   await input.fill(c);
   await page
@@ -256,7 +229,7 @@ test("explains an empty report list and keeps Add a report available", async ({
     await deleteDoc(doc(ctx.firestore(), `${season}/reports/${a}`));
     await deleteDoc(doc(ctx.firestore(), `${season}/reports/${b}`));
   });
-  await officer(page, env);
+  await officer(page, emulator.environment);
   await expect(
     page.getByText(/No reports yet. Paste a Warcraft Logs link/),
   ).toBeVisible();
@@ -289,7 +262,7 @@ test("shows recorded report details and refreshes metadata without changing draf
       },
     });
   });
-  await officer(page, env);
+  await officer(page, emulator.environment);
   const row = (code: string) =>
     page
       .getByRole("row")

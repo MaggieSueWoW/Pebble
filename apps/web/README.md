@@ -215,6 +215,15 @@ keep these ports free. No worker is started. Editor tests assert zero run reques
 workflow tests create only their expected synthetic requests in this demo
 project. Failure traces stay in ignored `test-results/`.
 
+Shared browser helpers live in `e2e/support/`. Call `setupEmulator()` once at
+the top level of each spec, before scenario hooks: it loads the real rules,
+clears Firestore before each test, and cleans up SDK clients after the spec.
+Use its `admin` callback for fixture writes and `environment` for authenticated
+or anonymous rule checks. Keep scenario-specific documents and assertions in
+the spec. `fixtures.ts` provides version metadata and bot heartbeats;
+`officer.ts` signs in through the Google emulator popup and grants officer access.
+Tests run with one worker because they share the disposable emulator database.
+
 Auth coverage adds onboarding, session refresh, revocation during editing,
 re-grant without stale drafts, sign-out, popup blocked/cancelled recovery, and
 account switching through cancellation and an unsaved-draft guard. It

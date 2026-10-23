@@ -1,39 +1,22 @@
-import { test, expect, type Page } from "@playwright/test";
-import {
-  initializeTestEnvironment,
-  type RulesTestEnvironment,
-} from "@firebase/rules-unit-testing";
-import {
-  collection,
-  doc,
-  getDoc,
-  getDocs,
-  setDoc,
-  Timestamp,
-} from "firebase/firestore";
-import { readFileSync } from "node:fs";
-import { officer } from "./officer";
+import { expect, test, type Page } from "@playwright/test";
+import { collection, doc, getDoc, getDocs, setDoc } from "firebase/firestore";
+import { setupEmulator } from "./support/emulator";
+import { metadata, seedHeartbeat } from "./support/fixtures";
+import { officer } from "./support/officer";
 const season = "seasons/test-reports";
-let env: RulesTestEnvironment;
-const admin = (
-  fn: Parameters<RulesTestEnvironment["withSecurityRulesDisabled"]>[0],
-) => env.withSecurityRulesDisabled(fn);
-const meta = (version = 1) => ({
-  version,
-  updatedBy: "fixture",
-  updatedAt: Timestamp.now(),
-});
+const emulator = setupEmulator();
+const admin = emulator.admin;
 const alias = (version = 1, realm = "Example Realm") => ({
   name: "Étoile",
   realm,
   region: "us",
   playerId: "main",
-  ...meta(version),
+  ...metadata(version),
 });
 const save = (page: Page) =>
   page.getByRole("button", { name: "Save alt", exact: true });
 async function open(page: Page) {
-  await officer(page, env);
+  await officer(page, emulator.environment);
   await page
     .getByRole("navigation")
     .getByRole("button", { name: "Roster", exact: true })
@@ -50,21 +33,7 @@ async function addAltFor(page: Page, name: string) {
     .getByRole("button", { name: "Add alt", exact: true })
     .click();
 }
-test.beforeAll(async () => {
-  env = await initializeTestEnvironment({
-    projectId: "demo-pebble-reports",
-    firestore: {
-      host: "127.0.0.1",
-      port: 8180,
-      rules: readFileSync(
-        new URL("../../../firebase/firestore.rules", import.meta.url),
-        "utf8",
-      ),
-    },
-  });
-});
 test.beforeEach(async () => {
-  await env.clearFirestore();
   await admin(async (ctx) => {
     const db = ctx.firestore();
     for (const [id, name, active] of [
@@ -79,13 +48,10 @@ test.beforeEach(async () => {
         joinDate: "",
         leaveDate: "",
         notes: "Private roster baseline",
-        ...meta(),
+        ...metadata(),
       });
-    await setDoc(doc(db, "bot/status"), { lastHeartbeatAt: Timestamp.now() });
+    await seedHeartbeat(db);
   });
-});
-test.afterAll(async () => {
-  await env?.cleanup();
 });
 test.afterEach(async ({}, testInfo) => {
   await admin(async (ctx) => {

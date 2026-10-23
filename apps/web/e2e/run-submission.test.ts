@@ -1,8 +1,4 @@
-import { test, expect, type Page } from "@playwright/test";
-import {
-  initializeTestEnvironment,
-  type RulesTestEnvironment,
-} from "@firebase/rules-unit-testing";
+import { expect, test, type Page } from "@playwright/test";
 import {
   collection,
   doc,
@@ -12,16 +8,15 @@ import {
   Timestamp,
   writeBatch,
 } from "firebase/firestore";
-import { readFileSync } from "node:fs";
-import { officer } from "./officer";
+import { setupEmulator } from "./support/emulator";
+import { seedHeartbeat } from "./support/fixtures";
+import { officer } from "./support/officer";
 const season = "seasons/test-reports",
   report = "AAAAAAAAAAAAAAAA";
 const versions = { [`reports/${report}`]: 1, "players/player-a": 1 };
-let env: RulesTestEnvironment,
-  expectedRequests = 0;
-const admin = (
-  fn: Parameters<RulesTestEnvironment["withSecurityRulesDisabled"]>[0],
-) => env.withSecurityRulesDisabled(fn);
+const emulator = setupEmulator();
+let expectedRequests = 0;
+const admin = emulator.admin;
 const runStatus = (page: Page) =>
   page.getByRole("status", { name: "Run status" });
 const runButton = (page: Page) =>
@@ -81,22 +76,8 @@ async function previousResults(page: Page) {
     .click();
   await expect(page.getByText("Example Player", { exact: true })).toBeVisible();
 }
-test.beforeAll(async () => {
-  env = await initializeTestEnvironment({
-    projectId: "demo-pebble-reports",
-    firestore: {
-      host: "127.0.0.1",
-      port: 8180,
-      rules: readFileSync(
-        new URL("../../../firebase/firestore.rules", import.meta.url),
-        "utf8",
-      ),
-    },
-  });
-});
 test.beforeEach(async () => {
   expectedRequests = 0;
-  await env.clearFirestore();
   await admin(async (ctx) => {
     const db = ctx.firestore(),
       completedAt = Timestamp.fromMillis(Date.now() - 3600000);
@@ -166,14 +147,11 @@ test.afterEach(async () => {
     ).toBe(1);
   });
 });
-test.afterAll(async () => {
-  await env?.cleanup();
-});
 test("coalesces held clicks, announces offline queue/stages, and preserves results through failure", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await officer(page, env);
+  await officer(page, emulator.environment);
   await page
     .getByRole("textbox", { name: "Warcraft Logs reports" })
     .fill("Unsaved draft");
@@ -214,9 +192,7 @@ test("coalesces held clicks, announces offline queue/stages, and preserves resul
   const id = (await requests())[0].id;
   await previousResults(page);
   await admin(async (ctx) => {
-    await setDoc(doc(ctx.firestore(), "bot/status"), {
-      lastHeartbeatAt: Timestamp.now(),
-    });
+    await seedHeartbeat(ctx.firestore());
   });
   for (const stage of [
     "Validating inputs",
@@ -257,7 +233,7 @@ test("coalesces held clicks, announces offline queue/stages, and preserves resul
 test("retains the request ID after a denied submission and creates one request on retry", async ({
   page,
 }) => {
-  await officer(page, env);
+  await officer(page, emulator.environment);
   const calls = capture(page);
   await page.route(/\/documents:commit(?:\?|$)/, (route) =>
     route.fulfill({
@@ -287,7 +263,7 @@ test("retains the request ID after a denied submission and creates one request o
 test("observes an accepted request after a lost acknowledgement without resubmission", async ({
   page,
 }) => {
-  await officer(page, env);
+  await officer(page, emulator.environment);
   const calls = capture(page);
   let accepted = "";
   await page.route(/\/documents:commit(?:\?|$)/, async (route) => {
@@ -357,7 +333,7 @@ test("recovers old queued work after reload and in another officer session", asy
     requestedAt: Timestamp.fromMillis(Date.now() - 1800000),
   });
   await histories();
-  await officer(page, env);
+  await officer(page, emulator.environment);
   await expect(page.getByRole("button", { name: "Run queued" })).toBeDisabled();
   await expect(runStatus(page)).toContainText(
     "Queued · waiting for your local bot",
@@ -372,7 +348,7 @@ test("recovers old queued work after reload and in another officer session", asy
   });
   const other = await context.newPage();
   try {
-    await officer(other, env);
+    await officer(other, emulator.environment);
     await expect(
       other.getByRole("button", { name: "Run queued" }),
     ).toBeDisabled();

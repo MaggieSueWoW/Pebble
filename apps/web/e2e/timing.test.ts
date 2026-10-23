@@ -1,8 +1,4 @@
-import { test, expect, type Page } from "@playwright/test";
-import {
-  initializeTestEnvironment,
-  type RulesTestEnvironment,
-} from "@firebase/rules-unit-testing";
+import { expect, test, type Page } from "@playwright/test";
 import {
   collection,
   doc,
@@ -11,8 +7,9 @@ import {
   setDoc,
   Timestamp,
 } from "firebase/firestore";
-import { readFileSync } from "node:fs";
-import { officer } from "./officer";
+import { setupEmulator } from "./support/emulator";
+import { metadata, seedHeartbeat } from "./support/fixtures";
+import { officer } from "./support/officer";
 const season = "seasons/test-reports",
   night = "2026-10-14",
   other = "2026-10-15";
@@ -25,21 +22,14 @@ const detected = {
   breakEnd: `${night}T20:15`,
   end: `${night}T22:00`,
 };
-const meta = (version: number) => ({
-  version,
-  updatedBy: "fixture",
-  updatedAt: Timestamp.now(),
-});
-let env: RulesTestEnvironment;
-const admin = (
-  fn: Parameters<RulesTestEnvironment["withSecurityRulesDisabled"]>[0],
-) => env.withSecurityRulesDisabled(fn);
+const emulator = setupEmulator();
+const admin = emulator.admin;
 async function timing(notes: string, version = 4) {
   await admin(async (ctx) => {
     await setDoc(doc(ctx.firestore(), path), {
       ...blank,
       notes,
-      ...meta(version),
+      ...metadata(version),
     });
   });
 }
@@ -54,7 +44,7 @@ async function saved(page: Page) {
   await expect(save(page)).toBeDisabled();
 }
 async function open(page: Page) {
-  await officer(page, env);
+  await officer(page, emulator.environment);
   await page
     .getByRole("navigation")
     .getByRole("button", { name: "Overrides", exact: true })
@@ -67,33 +57,19 @@ async function open(page: Page) {
 }
 // Deliberately use a non-Pacific browser timezone: values must remain Pacific wall times.
 test.use({ timezoneId: "Asia/Tokyo" });
-test.beforeAll(async () => {
-  env = await initializeTestEnvironment({
-    projectId: "demo-pebble-reports",
-    firestore: {
-      host: "127.0.0.1",
-      port: 8180,
-      rules: readFileSync(
-        new URL("../../../firebase/firestore.rules", import.meta.url),
-        "utf8",
-      ),
-    },
-  });
-});
 test.beforeEach(async () => {
-  await env.clearFirestore();
   await timing("Timing baseline");
   await admin(async (ctx) => {
     const db = ctx.firestore();
     await setDoc(doc(db, `${season}/nightOverrides/${other}`), {
       ...blank,
       notes: "Other night",
-      ...meta(6),
+      ...metadata(6),
     });
     await setDoc(doc(db, `${season}/reports/AAAAAAAAAAAAAAAA`), {
       enabled: true,
       notes: "Report baseline",
-      ...meta(7),
+      ...metadata(7),
     });
     await setDoc(doc(db, `${season}/players/player-a`), {
       name: "Example Player",
@@ -102,7 +78,7 @@ test.beforeEach(async () => {
       active: true,
       joinDate: "",
       leaveDate: "",
-      ...meta(1),
+      ...metadata(1),
     });
     await setDoc(doc(db, `${season}/availabilityOverrides/${night}_player-a`), {
       nightId: night,
@@ -110,7 +86,7 @@ test.beforeEach(async () => {
       pre: { mode: "available" },
       post: { mode: "automatic" },
       notes: "Availability baseline",
-      ...meta(3),
+      ...metadata(3),
     });
     await setDoc(doc(db, `${season}/results/fixture`), {
       complete: true,
@@ -134,7 +110,7 @@ test.beforeEach(async () => {
     await setDoc(doc(db, "publicSeasons/test-reports"), {
       latestRunId: "fixture",
     });
-    await setDoc(doc(db, "bot/status"), { lastHeartbeatAt: Timestamp.now() });
+    await seedHeartbeat(db);
   });
 });
 test.afterEach(async () => {
@@ -155,9 +131,6 @@ test.afterEach(async () => {
     expect(availability.notes).toBe("Availability baseline");
     expect((await getDocs(collection(db, `${season}/runs`))).size).toBe(0);
   });
-});
-test.afterAll(async () => {
-  await env?.cleanup();
 });
 test("validates timing and preserves blank/detected semantics through save, cancel and reset", async ({
   page,

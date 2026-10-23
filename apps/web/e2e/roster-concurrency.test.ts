@@ -1,29 +1,25 @@
-import { test, expect, type Page } from "@playwright/test";
-import {
-  initializeTestEnvironment,
-  type RulesTestEnvironment,
-} from "@firebase/rules-unit-testing";
+import { expect, test, type Page } from "@playwright/test";
 import {
   collection,
   doc,
   getDoc,
   getDocs,
   query,
-  where,
   runTransaction,
   serverTimestamp,
   setDoc,
   Timestamp,
+  where,
 } from "firebase/firestore";
-import { readFileSync } from "node:fs";
-import { officer } from "./officer";
 import {
-  readLinkedPlayers,
   advanceLinkedPlayers,
+  readLinkedPlayers,
 } from "../src/data/firestore/linkedPlayers";
+import { setupEmulator } from "./support/emulator";
+import { officer } from "./support/officer";
 
 const season = "seasons/test-reports";
-let env: RulesTestEnvironment;
+const emulator = setupEmulator();
 const main = (name: string) => ({
   name,
   className: "Mage",
@@ -66,24 +62,8 @@ const actions = [
 ] as const;
 type Action = (typeof actions)[number];
 
-test.beforeAll(async () => {
-  env = await initializeTestEnvironment({
-    projectId: "demo-pebble-reports",
-    firestore: {
-      host: "127.0.0.1",
-      port: 8180,
-      rules: readFileSync(
-        new URL("../../../firebase/firestore.rules", import.meta.url),
-        "utf8",
-      ),
-    },
-  });
-});
-test.afterAll(async () => env?.cleanup());
-
 async function seed(action: Action) {
-  await env.clearFirestore();
-  await env.withSecurityRulesDisabled(async (ctx) => {
+  await emulator.admin(async (ctx) => {
     const db = ctx.firestore();
     await setDoc(doc(db, "officers/peer"), { enabled: true });
     await setDoc(doc(db, `${season}/players/alpha`), main("Alpha"));
@@ -109,7 +89,7 @@ async function concurrentChange(
   action: Action,
   afterReads?: () => Promise<void>,
 ) {
-  const db = env.authenticatedContext("peer").firestore();
+  const db = emulator.environment.authenticatedContext("peer").firestore();
   const path = action.includes("alt")
     ? "characters/linked"
     : "availabilityOverrides/2026-10-15_alpha";
@@ -167,7 +147,7 @@ for (const action of actions) {
       page,
     }) => {
       await seed(action);
-      await officer(page, env);
+      await officer(page, emulator.environment);
       await page
         .getByRole("navigation")
         .getByRole("button", { name: "Roster", exact: true })
@@ -212,7 +192,7 @@ for (const action of actions) {
         "This main or its linked data changed",
       );
       await page.unroute(endpoint);
-      await env.withSecurityRulesDisabled(async (ctx) => {
+      await emulator.admin(async (ctx) => {
         const db = ctx.firestore();
         expect(
           (await getDoc(doc(db, `${season}/players/alpha`))).data(),
@@ -246,7 +226,7 @@ for (const action of actions) {
       await expect(
         page.getByRole("button", { name: "Edit Alpha", exact: true }),
       ).toHaveCount(0);
-      await env.withSecurityRulesDisabled(async (ctx) => {
+      await emulator.admin(async (ctx) => {
         const db = ctx.firestore();
         expect(
           (await getDoc(doc(db, `${season}/players/alpha`))).exists(),
@@ -295,7 +275,7 @@ for (const action of [
     page,
   }) => {
     await seed(action);
-    await officer(page, env);
+    await officer(page, emulator.environment);
     await page
       .getByRole("navigation")
       .getByRole("button", { name: "Roster", exact: true })
@@ -328,7 +308,7 @@ for (const action of [
       release();
     }
     expect(await write).toBeTruthy();
-    await env.withSecurityRulesDisabled(async (ctx) => {
+    await emulator.admin(async (ctx) => {
       const db = ctx.firestore();
       expect((await getDoc(doc(db, `${season}/players/alpha`))).exists()).toBe(
         false,

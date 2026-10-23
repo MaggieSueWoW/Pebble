@@ -1,8 +1,4 @@
-import { test, expect, type Page } from "@playwright/test";
-import {
-  initializeTestEnvironment,
-  type RulesTestEnvironment,
-} from "@firebase/rules-unit-testing";
+import { expect, test, type Page } from "@playwright/test";
 import {
   collection,
   deleteDoc,
@@ -12,22 +8,15 @@ import {
   setDoc,
   Timestamp,
 } from "firebase/firestore";
-import { readFileSync } from "node:fs";
-import { officer } from "./officer";
-const projectId = "demo-pebble-reports",
-  season = "seasons/test-reports";
+import { setupEmulator } from "./support/emulator";
+import { metadata, seedHeartbeat } from "./support/fixtures";
+import { officer } from "./support/officer";
+const season = "seasons/test-reports";
 const first = "2026-10-14",
   second = "2026-10-15";
 const path = `${season}/availabilityOverrides/${first}_player-a`;
-let env: RulesTestEnvironment;
-const admin = (
-  fn: Parameters<RulesTestEnvironment["withSecurityRulesDisabled"]>[0],
-) => env.withSecurityRulesDisabled(fn);
-const meta = (version: number) => ({
-  version,
-  updatedBy: "fixture",
-  updatedAt: Timestamp.now(),
-});
+const emulator = setupEmulator();
+const admin = emulator.admin;
 async function override(notes: string, version = 1, pre = "automatic") {
   await admin(async (ctx) => {
     await setDoc(doc(ctx.firestore(), path), {
@@ -36,12 +25,12 @@ async function override(notes: string, version = 1, pre = "automatic") {
       pre: { mode: pre },
       post: { mode: "automatic" },
       notes,
-      ...meta(version),
+      ...metadata(version),
     });
   });
 }
 async function open(page: Page) {
-  await officer(page, env);
+  await officer(page, emulator.environment);
   await page
     .getByRole("navigation")
     .getByRole("button", { name: "Overrides", exact: true })
@@ -94,21 +83,7 @@ async function unchanged() {
     expect((await getDocs(collection(db, `${season}/runs`))).size).toBe(0);
   });
 }
-test.beforeAll(async () => {
-  env = await initializeTestEnvironment({
-    projectId,
-    firestore: {
-      host: "127.0.0.1",
-      port: 8180,
-      rules: readFileSync(
-        new URL("../../../firebase/firestore.rules", import.meta.url),
-        "utf8",
-      ),
-    },
-  });
-});
 test.beforeEach(async () => {
-  await env.clearFirestore();
   await override("Saved Alpha");
   await admin(async (ctx) => {
     const db = ctx.firestore();
@@ -123,13 +98,13 @@ test.beforeEach(async () => {
         active: true,
         joinDate: "",
         leaveDate: "",
-        ...meta(1),
+        ...metadata(1),
       });
     }
     await setDoc(doc(db, `${season}/reports/AAAAAAAAAAAAAAAA`), {
       enabled: true,
       notes: "Report baseline",
-      ...meta(7),
+      ...metadata(7),
     });
     await setDoc(doc(db, `${season}/nightOverrides/${first}`), {
       start: "",
@@ -137,7 +112,7 @@ test.beforeEach(async () => {
       breakEnd: "",
       end: "",
       notes: "Timing baseline",
-      ...meta(4),
+      ...metadata(4),
     });
     await setDoc(doc(db, `${season}/availabilityOverrides/${first}_player-b`), {
       nightId: first,
@@ -145,7 +120,7 @@ test.beforeEach(async () => {
       pre: { mode: "unavailable" },
       post: { mode: "available" },
       notes: "Other player",
-      ...meta(5),
+      ...metadata(5),
     });
     await setDoc(
       doc(db, `${season}/availabilityOverrides/${second}_player-a`),
@@ -155,7 +130,7 @@ test.beforeEach(async () => {
         pre: { mode: "available" },
         post: { mode: "automatic" },
         notes: "Other night",
-        ...meta(6),
+        ...metadata(6),
       },
     );
     await setDoc(doc(db, `${season}/results/fixture`), {
@@ -174,13 +149,10 @@ test.beforeEach(async () => {
     await setDoc(doc(db, "publicSeasons/test-reports"), {
       latestRunId: "fixture",
     });
-    await setDoc(doc(db, "bot/status"), { lastHeartbeatAt: Timestamp.now() });
+    await seedHeartbeat(db);
   });
 });
 test.afterEach(unchanged);
-test.afterAll(async () => {
-  await env?.cleanup();
-});
 test("validates modes/minutes and saves, cancels, and resets only the selected override", async ({
   page,
 }) => {
@@ -449,7 +421,7 @@ test("handles roster arrival, clean removal, search and unknown metadata", async
     await deleteDoc(doc(ctx.firestore(), `${season}/players/player-a`));
     await deleteDoc(doc(ctx.firestore(), `${season}/players/player-b`));
   });
-  await officer(page, env);
+  await officer(page, emulator.environment);
   await page
     .getByRole("navigation")
     .getByRole("button", { name: "Overrides", exact: true })
@@ -464,7 +436,7 @@ test("handles roster arrival, clean removal, search and unknown metadata", async
       className: "Mage",
       role: "Unknown",
       active: true,
-      ...meta(1),
+      ...metadata(1),
     });
   });
   const editor = page.getByRole("region", {
@@ -483,7 +455,7 @@ test("handles roster arrival, clean removal, search and unknown metadata", async
       className: "",
       role: "Healer",
       active: true,
-      ...meta(1),
+      ...metadata(1),
     });
   });
   const search = page.getByRole("textbox", { name: "Search players" });
@@ -547,7 +519,7 @@ test("preserves a removed player's draft and recovers after cancel without writi
       className: "Mage",
       role: "Damage",
       active: true,
-      ...meta(1),
+      ...metadata(1),
     });
   });
   await expect(notes(page)).toHaveValue("Retained roster draft");

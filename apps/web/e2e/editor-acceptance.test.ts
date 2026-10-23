@@ -1,5 +1,4 @@
-import { test, expect } from "@playwright/test";
-import { initializeTestEnvironment } from "@firebase/rules-unit-testing";
+import { expect, test } from "@playwright/test";
 import {
   collection,
   doc,
@@ -8,30 +7,21 @@ import {
   Timestamp,
   writeBatch,
 } from "firebase/firestore";
-import { readFileSync } from "node:fs";
-import { officer } from "./officer";
+import { setupEmulator } from "./support/emulator";
+import { metadata, seedHeartbeat } from "./support/fixtures";
+import { officer } from "./support/officer";
+
+const emulator = setupEmulator();
+const admin = emulator.admin;
 
 test("saved roster, mapping and settings feed one explicit run and remain stale until published results load", async ({
   page,
 }) => {
-  const env = await initializeTestEnvironment({
-    projectId: "demo-pebble-reports",
-    firestore: {
-      host: "127.0.0.1",
-      port: 8180,
-      rules: readFileSync(
-        new URL("../../../firebase/firestore.rules", import.meta.url),
-        "utf8",
-      ),
-    },
-  });
   const season = "seasons/test-reports",
     report = "AAAAAAAAAAAAAAAA";
-  const admin = (fn: Parameters<typeof env.withSecurityRulesDisabled>[0]) =>
-    env.withSecurityRulesDisabled(fn);
   const run = page.getByRole("button", { name: "Run Pebble", exact: true });
   const status = page.getByRole("status", { name: "Run status" });
-  const meta = { version: 1, updatedBy: "fixture", updatedAt: Timestamp.now() };
+  const meta = metadata();
   const resultRow = {
     id: "previous",
     name: "Previous",
@@ -47,7 +37,6 @@ test("saved roster, mapping and settings feed one explicit run and remain stale 
   };
   let release = () => {};
   try {
-    await env.clearFirestore();
     await admin(async (ctx) => {
       const db = ctx.firestore(),
         completedAt = Timestamp.fromMillis(Date.now() - 60000);
@@ -74,9 +63,9 @@ test("saved roster, mapping and settings feed one explicit run and remain stale 
       await setDoc(doc(db, "publicSeasons/test-reports"), {
         latestRunId: "baseline",
       });
-      await setDoc(doc(db, "bot/status"), { lastHeartbeatAt: Timestamp.now() });
+      await seedHeartbeat(db);
     });
-    await officer(page, env);
+    await officer(page, emulator.environment);
     await page
       .getByRole("navigation")
       .getByRole("button", { name: "Roster", exact: true })
@@ -256,6 +245,5 @@ test("saved roster, mapping and settings feed one explicit run and remain stale 
     });
   } finally {
     release();
-    await env.cleanup();
   }
 });

@@ -1,8 +1,4 @@
-import { test, expect, type Page } from "@playwright/test";
-import {
-  initializeTestEnvironment,
-  type RulesTestEnvironment,
-} from "@firebase/rules-unit-testing";
+import { expect, test, type Page } from "@playwright/test";
 import {
   collection,
   deleteDoc,
@@ -13,8 +9,13 @@ import {
   Timestamp,
   writeBatch,
 } from "firebase/firestore";
-import { readFileSync } from "node:fs";
-import { officer, signIn } from "./officer";
+import {
+  firestoreRules,
+  setEmulatorRules,
+  setupEmulator,
+} from "./support/emulator";
+import { seedHeartbeat } from "./support/fixtures";
+import { officer, signIn } from "./support/officer";
 const season = "seasons/test-reports",
   report = "AAAAAAAAAAAAAAAA";
 const captured = { [`reports/${report}`]: 1, "players/player-a": 1 };
@@ -23,13 +24,11 @@ const nights = {
   delayed: "2026-10-15",
   latest: "2026-10-16",
 };
-let env: RulesTestEnvironment,
-  expectedRequests = 0,
+const emulator = setupEmulator();
+let expectedRequests = 0,
   expectedReportVersion = 1;
 let releases: (() => void)[] = [];
-const admin = (
-  fn: Parameters<RulesTestEnvironment["withSecurityRulesDisabled"]>[0],
-) => env.withSecurityRulesDisabled(fn);
+const admin = emulator.admin;
 const status = (page: Page) => page.getByRole("status", { name: "Run status" });
 async function seedResult(
   id: string,
@@ -102,7 +101,7 @@ async function publish(id: string, inputVersions = captured) {
 }
 async function resultsPage(page: Page, signedIn = true) {
   if (signedIn) {
-    await officer(page, env);
+    await officer(page, emulator.environment);
     await page
       .getByRole("navigation")
       .getByRole("button", { name: /^Results/ })
@@ -138,24 +137,10 @@ async function holdReads(page: Page, id: string) {
   );
   return state;
 }
-test.beforeAll(async () => {
-  env = await initializeTestEnvironment({
-    projectId: "demo-pebble-reports",
-    firestore: {
-      host: "127.0.0.1",
-      port: 8180,
-      rules: readFileSync(
-        new URL("../../../firebase/firestore.rules", import.meta.url),
-        "utf8",
-      ),
-    },
-  });
-});
 test.beforeEach(async () => {
   releases = [];
   expectedRequests = 0;
   expectedReportVersion = 1;
-  await env.clearFirestore();
   await seedResult("baseline", "Baseline Player", nights.baseline, true, 1);
   await admin(async (ctx) => {
     const db = ctx.firestore(),
@@ -188,7 +173,7 @@ test.beforeEach(async () => {
     await setDoc(doc(db, "publicSeasons/test-reports"), {
       latestRunId: "baseline",
     });
-    await setDoc(doc(db, "bot/status"), { lastHeartbeatAt: Timestamp.now() });
+    await seedHeartbeat(db);
   });
 });
 test.afterEach(async () => {
@@ -208,9 +193,6 @@ test.afterEach(async () => {
       ).data()?.name,
     ).toBe("Baseline Player");
   });
-});
-test.afterAll(async () => {
-  await env?.cleanup();
 });
 test("retains the complete view during held reads and swaps rows, totals and nights together", async ({
   page,
@@ -342,7 +324,7 @@ test("a superseded delayed fetch never replaces the latest published view", asyn
 test("an edit saved during computation still needs another run after completion loads", async ({
   page,
 }) => {
-  await officer(page, env);
+  await officer(page, emulator.environment);
   expectedRequests = 1;
   await page.getByRole("button", { name: "Run Pebble", exact: true }).click();
   await expect(page.getByRole("button", { name: "Run queued" })).toBeDisabled();
@@ -539,7 +521,7 @@ const raidDate = (page: Page) =>
 const raidPicker = (page: Page) =>
   page.getByRole("combobox", { name: "Raid night", exact: true });
 async function overrides(page: Page) {
-  await officer(page, env);
+  await officer(page, emulator.environment);
   await page
     .getByRole("navigation")
     .getByRole("button", { name: "Overrides", exact: true })
@@ -1084,10 +1066,7 @@ test("keyboard details, validation and labelled discard work across narrow workf
 test("officer-access retry recovers heading focus after a denied membership listener", async ({
   page,
 }) => {
-  const original = readFileSync(
-    new URL("../../../firebase/firestore.rules", import.meta.url),
-    "utf8",
-  );
+  const original = firestoreRules;
   await resultsPage(page);
   await page
     .getByRole("combobox", { name: "Result period" })
@@ -1103,7 +1082,7 @@ test("officer-access retry recovers heading focus after a denied membership list
   );
   expect(denied).not.toBe(original);
   try {
-    await setDemoRules(denied);
+    await setEmulatorRules(denied);
     await admin(async (ctx) => {
       await setDoc(doc(ctx.firestore(), `officers/${uid}`), {
         enabled: true,
@@ -1116,7 +1095,7 @@ test("officer-access retry recovers heading focus after a denied membership list
     await expect(
       page.getByText("Baseline Player", { exact: true }),
     ).toBeVisible();
-    await setDemoRules(original);
+    await setEmulatorRules(original);
     await page.getByRole("button", { name: "Retry officer access" }).focus();
     await page.keyboard.press("Enter");
     await expect(page.getByRole("heading", { level: 1 })).toBeFocused();
@@ -1139,7 +1118,7 @@ test("officer-access retry recovers heading focus after a denied membership list
       page.getByRole("button", { name: "Retry officer access" }),
     ).toHaveCount(0);
   } finally {
-    await setDemoRules(original);
+    await setEmulatorRules(original);
   }
 });
 
@@ -1151,14 +1130,6 @@ async function adminUid() {
   });
   expect(uid).not.toBe("");
   return uid;
-}
-
-async function setDemoRules(rules: string) {
-  const temporary = await initializeTestEnvironment({
-    projectId: "demo-pebble-reports",
-    firestore: { host: "127.0.0.1", port: 8180, rules },
-  });
-  await temporary.cleanup();
 }
 
 for (const signedIn of [false, true]) {
