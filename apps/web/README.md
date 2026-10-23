@@ -68,7 +68,28 @@ Firestore/security (#3), and officer/public UX (#4).
   Sample-only timing validation and the sample report link are supplied explicitly
   to the shared UI. The existing sample storage key and schema are preserved.
 - `model.ts` contains shared types, input validation/parsing and formatting.
-  `useFirestore.ts` and `usePublicResults.ts` supply the connected data and writes.
+- `useFirestore.ts` is the connected-data facade. Its `LiveConnection` and
+  `Versions` exports remain the public contract used by the UI. `usePublicResults.ts`
+  independently loads the public publication; private implementation lives in
+  `data/firestore/`:
+  - `useOfficerAccess.ts` owns Auth, server-confirmed officer membership, access
+    generations and write authorization checks.
+  - `usePrivateState.ts` holds private buffers and the shared reset boundary.
+    Access invalidation stops guarded subscriptions and clears those buffers
+    before a new session can use them.
+  - `usePrivateSubscriptions.ts` watches inputs, recent history and bot heartbeat.
+    `useResultMetadata.ts` follows the displayed publication's private metadata.
+  - `useRunQueue.ts` owns active-queue observation, request submission and direct
+    tracking through terminal status. A retry after an uncertain acknowledgement
+    reuses the request ID; recent history is not the authority for queue state.
+  - `useWorkspaceData.ts` converts private snapshots to UI models. `documents.ts`
+    contains timestamp, metadata and ordering helpers.
+  - `useInputWrites.ts` handles input/settings transactions; `useRosterWrites.ts`
+    keeps main/alt writes and their linked-player conflict protocol together.
+
+Keep session assertions before and after asynchronous transaction reads. Stale
+callbacks must check the captured access generation before updating private state.
+The public-hook tests and browser workflows exercise these boundaries together.
 
 ## Current interface
 
