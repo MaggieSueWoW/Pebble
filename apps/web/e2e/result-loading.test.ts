@@ -327,7 +327,9 @@ test("an edit saved during computation still needs another run after completion 
   await officer(page, emulator.environment);
   expectedRequests = 1;
   await page.getByRole("button", { name: "Run Pebble", exact: true }).click();
-  await expect(page.getByRole("button", { name: "Run queued" })).toBeDisabled();
+  await expect(
+    page.getByRole("button", { name: "Run queued", exact: true }),
+  ).toBeDisabled();
   let id = "";
   await admin(async (ctx) => {
     id = (
@@ -428,6 +430,7 @@ test("keeps officer warnings with displayed rows during loading and clears them 
     );
   });
   await resultsPage(page);
+  await page.getByRole("button", { name: "Review night checks →" }).click();
   const region = page.getByRole("region", { name: "Result warnings" });
   await expect(
     region.getByRole("heading", { name: "Result warnings" }),
@@ -445,11 +448,13 @@ test("keeps officer warnings with displayed rows during loading and clears them 
     page.getByText("New source warning", { exact: true }),
   ).toHaveCount(0);
   held.release();
-  await expect(page.getByText("Delayed Player", { exact: true })).toBeVisible();
+  await expect(region).toContainText("New source warning");
   await expect(region.getByRole("listitem")).toHaveText(["New source warning"]);
   await seedResult("latest", "Latest Player", nights.latest);
   await publish("latest");
-  await expect(page.getByText("Latest Player", { exact: true })).toBeVisible();
+  await expect(
+    page.getByText("No warnings recorded for this night."),
+  ).toBeVisible();
   await expect(region).toHaveCount(0);
 });
 
@@ -811,7 +816,9 @@ test("officer empty periods and recent history keep progress visible and link to
   await expect(
     page.getByText(/Use Reports in the sidebar to review the included logs/),
   ).toBeVisible();
-  await expect(page.getByRole("button", { name: "Run queued" })).toBeDisabled();
+  await expect(
+    page.getByRole("button", { name: "Run queued", exact: true }),
+  ).toBeDisabled();
   const history = page.getByText("Run history", { exact: true });
   await history.click();
   await expect(
@@ -837,7 +844,9 @@ test("officer empty periods and recent history keep progress visible and link to
   await expect(
     page.getByRole("textbox", { name: "Warcraft Logs reports" }),
   ).toHaveValue("");
-  await expect(page.getByRole("button", { name: "Run queued" })).toBeDisabled();
+  await expect(
+    page.getByRole("button", { name: "Run queued", exact: true }),
+  ).toBeDisabled();
   await admin(async (ctx) => {
     const saved = (
       await getDoc(doc(ctx.firestore(), `${season}/reports/${report}`))
@@ -888,6 +897,7 @@ test("officer warning sources stay with displayed results instead of newer histo
     );
   });
   await resultsPage(page);
+  await page.getByRole("button", { name: "Review night checks →" }).click();
   const sources = page.getByRole("list", {
     name: "Source reports for this warning",
   });
@@ -929,7 +939,9 @@ test("officer warning sources stay with displayed results instead of newer histo
     sources.getByRole("link", { name: "BBBBBBBBBBBBBBBB" }),
   ).toHaveCount(0);
   held.release();
-  await expect(page.getByText("Delayed Player", { exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("region", { name: "Result warnings" }),
+  ).toContainText("New warning");
   await expect(
     sources.getByRole("link", { name: "BBBBBBBBBBBBBBBB" }),
   ).toHaveAttribute(
@@ -949,7 +961,7 @@ test("officer warning sources stay with displayed results instead of newer histo
     "Missing source metadata warning",
   ]);
   await publish("latest");
-  await expect(page.getByText("Latest Player", { exact: true })).toBeVisible();
+
   await expect(
     page.getByText("Missing source metadata warning", { exact: true }),
   ).toBeVisible();
@@ -1025,7 +1037,10 @@ test("keyboard details, validation and labelled discard work across narrow workf
   );
   await expect(page.locator("#availability-validation")).toBeVisible();
   await noOverflow();
-  await page.getByRole("tab", { name: "Raid timing" }).click();
+  await page
+    .getByRole("navigation", { name: "Main navigation" })
+    .getByRole("button", { name: "Review Night", exact: true })
+    .click();
   const dialog = page.getByRole("dialog", { name: "Keep your changes?" });
   await expect(dialog).toBeVisible();
   await expect(dialog).toHaveAttribute(
@@ -1039,9 +1054,12 @@ test("keyboard details, validation and labelled discard work across narrow workf
   await expect(dialog).toBeHidden();
   await expect(minutes).toHaveValue("0");
   await page.getByRole("button", { name: "Cancel", exact: true }).click();
-  await page.getByRole("tab", { name: "Raid timing" }).click();
+  await page
+    .getByRole("navigation", { name: "Main navigation" })
+    .getByRole("button", { name: "Review Night", exact: true })
+    .click();
   await expect(
-    page.getByRole("tabpanel", { name: "Raid timing" }),
+    page.getByRole("region", { name: "Raid timing editor" }),
   ).toBeVisible();
   await noOverflow();
   await page

@@ -5,6 +5,7 @@ import {
   ExternalLink,
   FileText,
   Info,
+  Trash2,
 } from "lucide-react";
 import { DataTable } from "../../components/DataTable";
 import { formatDate, type Report } from "../../shared/model";
@@ -18,13 +19,15 @@ export function ReportsPage({
   reports,
   editor,
   sampleReportLink,
+  nextAction,
 }: {
   reports: Report[];
   editor: ReportEditor;
   sampleReportLink?: string;
+  nextAction?: ReactNode;
 }) {
   const [direction, setDirection] = useState<"ascending" | "descending">(
-    "ascending",
+    "descending",
   );
   const sortedReports = [...reports].sort((a, b) => {
     const left = a.fetched ? a.night : "";
@@ -49,6 +52,7 @@ export function ReportsPage({
     add: addReports,
     reenable,
     toggle,
+    remove,
     cancelSelection,
     saveSelection: saveInclusion,
   } = editor;
@@ -156,6 +160,7 @@ export function ReportsPage({
           </div>
         </div>
       </section>
+      {nextAction}
       <section className="card reports-card" aria-busy={saving}>
         <DataTable className="reports-table">
           <thead>
@@ -174,12 +179,15 @@ export function ReportsPage({
               </th>
               <th>Status</th>
               <th className="align-right">Include</th>
+              <th>
+                <span className="sr-only">Delete</span>
+              </th>
             </tr>
           </thead>
           <tbody>
             {!reports.length && (
               <tr>
-                <td colSpan={4} className="empty-state">
+                <td colSpan={5} className="empty-state">
                   No reports yet. Paste a Warcraft Logs link or report code in
                   the field above.
                 </td>
@@ -279,6 +287,17 @@ export function ReportsPage({
                       onClick={() => toggle(r.code)}
                     >
                       <span />
+                    </button>
+                  </td>
+                  <td className="align-right">
+                    <button
+                      className="icon-button delete-report"
+                      aria-label={`Delete report ${r.code}`}
+                      title="Delete report"
+                      disabled={blocked}
+                      onClick={() => void remove(r.code)}
+                    >
+                      <Trash2 size={16} aria-hidden="true" />
                     </button>
                   </td>
                 </tr>

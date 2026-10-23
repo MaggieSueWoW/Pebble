@@ -91,10 +91,13 @@ class CharacterInput(InputDocument):
     name: Annotated[str, Field(min_length=1, max_length=32)]
     realm: Annotated[str, Field(max_length=100)]
     region: Literal["us", "eu", "kr", "tw", "cn"]
-    playerId: Annotated[str, Field(min_length=1, max_length=100)]
+    playerId: Annotated[str, Field(max_length=100)]
+    ignored: StrictBool = False
 
     @model_validator(mode="after")
     def check_name(self):
+        if self.ignored == bool(self.playerId):
+            raise ValueError("Choose a main mapping or ignore the character")
         if not self.name.isalpha() or self.realm != self.realm.strip():
             raise ValueError(
                 "Use a character name without a realm suffix and trim the realm"
@@ -195,6 +198,8 @@ def validate_snapshot(raw: dict) -> dict:
             raise ValueError("WCL report codes must contain 16 letters and numbers")
     aliases = {}
     for character in result["characters"].values():
+        if character.ignored:
+            continue
         if character.playerId not in result["players"]:
             raise ValueError("Character mapping references an unknown player")
         identity = (

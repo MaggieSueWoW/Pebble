@@ -41,7 +41,12 @@ export function useFirestore(): {
       saved: { inputs: data.inputs, results, history: queue.history },
       players: data.allPlayers,
       roster: data.rosterEntries,
-      characters: data.characterEntries,
+      characters: data.characterEntries.filter(
+        (character) => !character.ignored,
+      ),
+      ignoredCharacters: data.characterEntries.filter(
+        (character) => character.ignored,
+      ),
       calculation: data.calculation,
       ...inputWrites,
       ...rosterWrites,
@@ -71,6 +76,8 @@ export function useFirestore(): {
       resultDiagnostics:
         officer && consumed.run === resultRun ? consumed.diagnostics : {},
       resultsPending: publicResults.loading || queue.unseenSuccess,
+      resultMetadataPending:
+        officer && Boolean(resultRun) && consumed.run !== resultRun,
       resultsError: publicResults.error,
       retryResults: publicResults.retry,
       requestRun: queue.requestRun,

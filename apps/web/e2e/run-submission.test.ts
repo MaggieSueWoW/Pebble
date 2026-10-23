@@ -183,7 +183,9 @@ test("coalesces held clicks, announces offline queue/stages, and preserves resul
   expect(await requests()).toHaveLength(0);
   expectedRequests = 1;
   release();
-  await expect(page.getByRole("button", { name: "Run queued" })).toBeDisabled();
+  await expect(
+    page.getByRole("button", { name: "Run queued", exact: true }),
+  ).toBeDisabled();
   await expect(runStatus(page)).toContainText(
     "Queued · waiting for your local bot",
   );
@@ -203,7 +205,7 @@ test("coalesces held clicks, announces offline queue/stages, and preserves resul
     await setRun(id, { status: "running", stage });
     await expect(runStatus(page)).toContainText(`${stage}…`);
     await expect(
-      page.getByRole("button", { name: "Running Pebble" }),
+      page.getByRole("button", { name: "Running Pebble", exact: true }),
     ).toBeDisabled();
   }
   await setRun(id, {
@@ -227,7 +229,9 @@ test("coalesces held clicks, announces offline queue/stages, and preserves resul
   expectedRequests = 2;
   await runButton(page).focus();
   await page.keyboard.press("Enter");
-  await expect(page.getByRole("button", { name: "Run queued" })).toBeDisabled();
+  await expect(
+    page.getByRole("button", { name: "Run queued", exact: true }),
+  ).toBeDisabled();
   expect(new Set(calls.creates).size).toBe(2);
 });
 test("retains the request ID after a denied submission and creates one request on retry", async ({
@@ -255,7 +259,9 @@ test("retains the request ID after a denied submission and creates one request o
   await page.unroute(/\/documents:commit(?:\?|$)/);
   expectedRequests = 1;
   await runButton(page).click();
-  await expect(page.getByRole("button", { name: "Run queued" })).toBeDisabled();
+  await expect(
+    page.getByRole("button", { name: "Run queued", exact: true }),
+  ).toBeDisabled();
   expect(calls.creates).toHaveLength(2);
   expect(new Set(calls.creates).size).toBe(1);
   expect(new Set(calls.lookups).size).toBe(1);
@@ -298,7 +304,9 @@ test("observes an accepted request after a lost acknowledgement without resubmis
   expect((await requests())[0].id).toBe(accepted);
   await page.unroute(/\/documents:commit(?:\?|$)/);
   // The independent queue listener discovers the accepted request automatically.
-  await expect(page.getByRole("button", { name: "Run queued" })).toBeDisabled();
+  await expect(
+    page.getByRole("button", { name: "Run queued", exact: true }),
+  ).toBeDisabled();
   expect(new Set(calls.lookups)).toEqual(new Set([accepted]));
   expect(calls.creates).toEqual([accepted]);
   await setRun(accepted, { status: "running", stage: "Fetching reports" });
@@ -334,13 +342,17 @@ test("recovers old queued work after reload and in another officer session", asy
   });
   await histories();
   await officer(page, emulator.environment);
-  await expect(page.getByRole("button", { name: "Run queued" })).toBeDisabled();
+  await expect(
+    page.getByRole("button", { name: "Run queued", exact: true }),
+  ).toBeDisabled();
   await expect(runStatus(page)).toContainText(
     "Queued · waiting for your local bot",
   );
   await previousResults(page);
   await page.reload();
-  await expect(page.getByRole("button", { name: "Run queued" })).toBeDisabled();
+  await expect(
+    page.getByRole("button", { name: "Run queued", exact: true }),
+  ).toBeDisabled();
   await previousResults(page);
 
   const context = await browser.newContext({
@@ -350,7 +362,7 @@ test("recovers old queued work after reload and in another officer session", asy
   try {
     await officer(other, emulator.environment);
     await expect(
-      other.getByRole("button", { name: "Run queued" }),
+      other.getByRole("button", { name: "Run queued", exact: true }),
     ).toBeDisabled();
     await previousResults(other);
     for (const stage of ["Fetching reports", "Calculating results"]) {
@@ -358,7 +370,7 @@ test("recovers old queued work after reload and in another officer session", asy
       for (const view of [page, other]) {
         await expect(runStatus(view)).toContainText(`${stage}…`);
         await expect(
-          view.getByRole("button", { name: "Running Pebble" }),
+          view.getByRole("button", { name: "Running Pebble", exact: true }),
         ).toBeDisabled();
         await expect(
           view.getByText("Example Player", { exact: true }),

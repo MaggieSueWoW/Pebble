@@ -3,6 +3,7 @@ import type { Page } from "../shared/model";
 
 const titles: Record<Page, string> = {
   reports: "Reports",
+  review: "Review Night",
   overrides: "Overrides",
   results: "Results",
   roster: "Roster",

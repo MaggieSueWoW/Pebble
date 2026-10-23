@@ -256,7 +256,10 @@ test("preserves newer field edits through a held save and guards navigation and 
   await page
     .getByRole("combobox", { name: "Raid night", exact: true })
     .selectOption(second);
-  await page.getByRole("tab", { name: "Raid timing" }).click();
+  await page
+    .getByRole("navigation", { name: "Main navigation" })
+    .getByRole("button", { name: "Review Night", exact: true })
+    .click();
   await page
     .getByRole("navigation")
     .getByRole("button", { name: /^Reports/ })
@@ -380,7 +383,11 @@ test("protects player/night/tab/page drafts and supports keyboard navigation on 
       page
         .getByRole("combobox", { name: "Raid night", exact: true })
         .selectOption(second),
-    () => page.getByRole("tab", { name: "Raid timing" }).click(),
+    () =>
+      page
+        .getByRole("navigation", { name: "Main navigation" })
+        .getByRole("button", { name: "Review Night", exact: true })
+        .click(),
     () =>
       page
         .getByRole("navigation")

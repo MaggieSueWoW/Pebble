@@ -1,9 +1,10 @@
-import { CheckCheck, ExternalLink, FileText, Info, Link2 } from "lucide-react";
+import { CheckCheck, FileText, Link2 } from "lucide-react";
 import { Notice } from "../../components/Feedback";
 import { AttendanceDetails } from "./AttendanceDetails";
 import { DataTable } from "../../components/DataTable";
 import { formatDate, type Player, type Results } from "../../shared/model";
-import { NightDiagnostics } from "./NightDiagnostics";
+import { ResultWarnings } from "../review/ResultWarnings";
+import { warningsForNight } from "../review/warnings";
 import { ResultRow } from "./ResultRow";
 import { RunStatus } from "../../components/RunStatus";
 import { SelectControl } from "../../components/SelectControl";
@@ -19,9 +20,9 @@ export function ResultsPage({
   officer,
   demo,
   sources,
-  diagnostics,
   runStatusMessage,
   completedAt,
+  onReviewNight,
   onEditAvailability,
 }: {
   results: Results;
@@ -32,7 +33,7 @@ export function ResultsPage({
   officer: boolean;
   demo: boolean;
   sources: LiveConnection["resultSources"];
-  diagnostics: LiveConnection["resultDiagnostics"];
+  onReviewNight?: () => void;
   runStatusMessage: string;
   completedAt?: string;
   onEditAvailability: (id: string) => void;
@@ -61,50 +62,27 @@ export function ResultsPage({
         )}
       {hasResults && (
         <>
-          {Boolean(results.warnings?.length) && (
-            <section
-              className="notice amber"
-              aria-labelledby="result-warnings-title"
-            >
-              <Info size={16} aria-hidden="true" />
-              <div>
-                <h2 id="result-warnings-title">Result warnings</h2>
-                <p>From the displayed completed run.</p>
-                <ul>
-                  {results.warnings?.map((warning, index) => (
-                    <li key={index}>
-                      {warning}
-                      {officer &&
-                        sources.some((source) =>
-                          source.warningIndexes?.includes(index),
-                        ) && (
-                          <ul aria-label="Source reports for this warning">
-                            {sources
-                              .filter((source) =>
-                                source.warningIndexes?.includes(index),
-                              )
-                              .map((source) => (
-                                <li key={source.code}>
-                                  <a
-                                    href={`https://www.warcraftlogs.com/reports/${source.code}`}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                  >
-                                    {source.title}{" "}
-                                    <ExternalLink
-                                      size={12}
-                                      aria-hidden="true"
-                                    />
-                                  </a>
-                                </li>
-                              ))}
-                          </ul>
-                        )}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </section>
+          {officer && onReviewNight ? (
+            Boolean(
+              warningsForNight(
+                results.warnings,
+                visibleResultNight === "season"
+                  ? undefined
+                  : visibleResultNight,
+              ).length,
+            ) && (
+              <Notice tone="amber">
+                This completed run has warnings.{" "}
+                <button className="text-button" onClick={onReviewNight}>
+                  Review night checks →
+                </button>
+              </Notice>
+            )
+          ) : (
+            <ResultWarnings
+              warnings={warningsForNight(results.warnings)}
+              sources={officer ? sources : []}
+            />
           )}
           <section className="card results-card">
             <div className="results-toolbar toolbar">
@@ -138,12 +116,6 @@ export function ResultsPage({
                 <Link2 size={14} /> Copy result link
               </button>
             </div>
-            {officer && visibleResultNight !== "season" && (
-              <NightDiagnostics
-                night={visibleResultNight}
-                diagnostic={diagnostics[visibleResultNight]}
-              />
-            )}
             <DataTable className="results-table">
               <thead>
                 <tr>

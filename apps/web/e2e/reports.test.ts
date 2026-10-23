@@ -336,3 +336,37 @@ test("shows recorded report details and refreshes metadata without changing draf
     }
   });
 });
+
+test("deletes a report without excluding it, preserves other inputs, and allows adding it again", async ({
+  page,
+}) => {
+  await officer(page, emulator.environment);
+  const remove = page.getByRole("button", {
+    name: `Delete report ${a}`,
+    exact: true,
+  });
+  await expect(remove).toBeVisible();
+  await remove.click();
+  await expect(
+    page.getByRole("status", { name: "Report changes" }),
+  ).toContainText("Report deleted");
+  await expect(remove).toHaveCount(0);
+  await expect(
+    page.getByRole("switch", { name: `Include ${b}` }),
+  ).toHaveAttribute("aria-checked", "false");
+  await admin(async (ctx) => {
+    expect(
+      (await getDoc(doc(ctx.firestore(), `${season}/reports/${a}`))).exists(),
+    ).toBe(false);
+    expect(
+      (await getDoc(doc(ctx.firestore(), `${season}/reports/${b}`))).data()
+        ?.version,
+    ).toBe(1);
+  });
+  await page.getByRole("textbox", { name: "Warcraft Logs reports" }).fill(a);
+  await page.getByRole("button", { name: "Add report", exact: true }).click();
+  await expect(remove).toBeVisible();
+  await expect(
+    page.getByRole("switch", { name: `Include ${a}` }),
+  ).toHaveAttribute("aria-checked", "true");
+});

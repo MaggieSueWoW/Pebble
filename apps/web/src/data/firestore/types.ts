@@ -13,6 +13,11 @@ export type LiveConnection = {
   players: Player[];
   roster: RosterEntry[];
   characters: CharacterEntry[];
+  ignoredCharacters: CharacterEntry[];
+  ignoreCharacter: (
+    id: string,
+    value: Omit<CharacterValue, "playerId">,
+  ) => Promise<void>;
   saveCharacter: (
     id: string,
     value: CharacterValue,
@@ -57,8 +62,10 @@ export type LiveConnection = {
   resultSources: { code: string; title: string; warningIndexes?: number[] }[];
   resultDiagnostics: Record<string, RecordedNightDiagnostics>;
   resultsPending: boolean;
+  resultMetadataPending: boolean;
   resultsError: string;
   retryResults: () => void;
+  deleteReport: (code: string, expected: number) => Promise<void>;
   saveInputs: (next: Inputs, expected?: Versions) => Promise<Versions>;
   requestRun: () => Promise<void>;
   signIn: () => Promise<void>;

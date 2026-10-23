@@ -47,12 +47,11 @@ async function open(page: Page) {
   await officer(page, emulator.environment);
   await page
     .getByRole("navigation")
-    .getByRole("button", { name: "Overrides", exact: true })
+    .getByRole("button", { name: "Review Night", exact: true })
     .click();
   await page
     .getByRole("combobox", { name: "Raid night", exact: true })
     .selectOption(night);
-  await page.getByRole("tab", { name: "Raid timing" }).click();
   await expect(notes(page)).toHaveValue("Timing baseline");
 }
 // Deliberately use a non-Pacific browser timezone: values must remain Pacific wall times.
@@ -186,7 +185,7 @@ test("validates timing and preserves blank/detected semantics through save, canc
     expect(value.version).toBe(6);
   });
 });
-test("holds saves, retains newer fields and guards night/tab/page navigation", async ({
+test("holds saves, retains newer fields and guards night/page navigation", async ({
   page,
 }) => {
   await open(page);
@@ -218,7 +217,10 @@ test("holds saves, retains newer fields and guards night/tab/page navigation", a
   await page
     .getByRole("combobox", { name: "Raid night", exact: true })
     .selectOption(other);
-  await page.getByRole("tab", { name: "Player availability" }).click();
+  await page
+    .getByRole("navigation", { name: "Main navigation" })
+    .getByRole("button", { name: "Overrides", exact: true })
+    .click();
   await page
     .getByRole("navigation")
     .getByRole("button", { name: /^Reports/ })
@@ -320,7 +322,11 @@ test("handles unknown detection, Pacific DST validation, and keyboard draft prot
       page
         .getByRole("combobox", { name: "Raid night", exact: true })
         .selectOption(night),
-    () => page.getByRole("tab", { name: "Player availability" }).click(),
+    () =>
+      page
+        .getByRole("navigation", { name: "Main navigation" })
+        .getByRole("button", { name: "Overrides", exact: true })
+        .click(),
     () =>
       page
         .getByRole("navigation")
@@ -352,9 +358,8 @@ test("keeps timing edits working in standalone sample mode", async ({
   await page.goto("/?demo=1");
   await page
     .getByRole("navigation")
-    .getByRole("button", { name: "Overrides", exact: true })
+    .getByRole("button", { name: "Review Night", exact: true })
     .click();
-  await page.getByRole("tab", { name: "Raid timing" }).click();
   await notes(page).fill("Sample timing notes");
   await save(page).click();
   await saved(page);
@@ -365,55 +370,31 @@ test("keeps timing edits working in standalone sample mode", async ({
   await expect(page.getByRole("dialog")).not.toBeVisible();
   await page
     .getByRole("navigation")
-    .getByRole("button", { name: "Overrides", exact: true })
+    .getByRole("button", { name: "Review Night", exact: true })
     .click();
   await expect(notes(page)).toHaveValue("Sample timing notes");
 });
 
-test("manually activates keyboard-focused tabs and preserves dialog focus and drafts", async ({
+test("guards keyboard navigation from night review to overrides at narrow width", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await open(page);
-  const timing = page.getByRole("tab", { name: "Raid timing" });
-  const availability = page.getByRole("tab", { name: "Player availability" });
-  const panel = page.getByRole("tabpanel", { name: "Raid timing" });
-  await timing.focus();
-  await page.keyboard.press("ArrowRight");
-  await expect(availability).toBeFocused();
-  await expect(panel).toBeVisible();
-  await expect(availability).toHaveAttribute("aria-selected", "false");
-  await expect(availability).toHaveAttribute("tabindex", "0");
-  await expect(timing).toHaveAttribute("tabindex", "-1");
-  await page.keyboard.press("End");
-  await expect(timing).toBeFocused();
-  await page.keyboard.press("Home");
-  await expect(availability).toBeFocused();
-  await page.keyboard.press("ArrowLeft");
-  await expect(timing).toBeFocused();
   await notes(page).fill("Retained keyboard draft");
-  await timing.focus();
-  await page.keyboard.press("ArrowLeft");
-  await expect(availability).toBeFocused();
-  await expect(page.getByRole("dialog")).not.toBeVisible();
+  const availability = page
+    .getByRole("navigation", { name: "Main navigation" })
+    .getByRole("button", { name: "Overrides", exact: true });
+  await availability.focus();
   await page.keyboard.press("Enter");
   await expect(page.getByRole("dialog")).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(availability).toBeFocused();
-  await expect(panel).toBeVisible();
   await expect(notes(page)).toHaveValue("Retained keyboard draft");
   await page.keyboard.press("Space");
   await page.getByRole("button", { name: "Discard edits" }).click();
-  await expect(availability).toBeFocused();
   await expect(
-    page.getByRole("tabpanel", { name: "Player availability" }),
+    page.getByRole("region", { name: "Player availability editor" }),
   ).toBeVisible();
-  await expect(availability).toHaveAttribute("aria-selected", "true");
-  await expect(availability).toHaveAttribute("aria-controls", "override-panel");
-  await expect(page.getByRole("tabpanel")).toHaveAttribute(
-    "aria-labelledby",
-    (await availability.getAttribute("id")) as string,
-  );
   expect(
     await page.evaluate(
       () => document.documentElement.scrollWidth <= window.innerWidth,
@@ -421,11 +402,11 @@ test("manually activates keyboard-focused tabs and preserves dialog focus and dr
   ).toBe(true);
 });
 
-test("keeps the current panel during a save and activates the focused tab after acknowledgement", async ({
+test("keeps the current panel during a save and activates the focused page after acknowledgement", async ({
   page,
 }) => {
   await open(page);
-  await notes(page).fill("Saved before switching tabs");
+  await notes(page).fill("Saved before switching pages");
   let release!: () => void, intercept!: () => void;
   const gate = new Promise<void>((resolve) => {
     release = resolve;
@@ -441,16 +422,17 @@ test("keeps the current panel during a save and activates the focused tab after 
   await save(page).click();
   await requested;
   try {
-    await page.getByRole("tab", { name: "Raid timing" }).focus();
-    await page.keyboard.press("ArrowLeft");
-    const availability = page.getByRole("tab", { name: "Player availability" });
+    const availability = page
+      .getByRole("navigation", { name: "Main navigation" })
+      .getByRole("button", { name: "Overrides", exact: true });
+    await availability.focus();
     await expect(availability).toBeFocused();
     await page.keyboard.press("Enter");
     await expect(
       page.getByText("Wait for the save to finish.", { exact: true }),
     ).toBeVisible();
     await expect(
-      page.getByRole("tabpanel", { name: "Raid timing" }),
+      page.getByRole("region", { name: "Raid timing editor" }),
     ).toBeVisible();
     await expect(page.getByRole("dialog")).not.toBeVisible();
     release();
@@ -458,7 +440,7 @@ test("keeps the current panel during a save and activates the focused tab after 
     await expect(availability).toBeFocused();
     await page.keyboard.press("Enter");
     await expect(
-      page.getByRole("tabpanel", { name: "Player availability" }),
+      page.getByRole("region", { name: "Player availability editor" }),
     ).toBeVisible();
   } finally {
     release();

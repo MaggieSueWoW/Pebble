@@ -43,7 +43,10 @@ function connection(players: Player[] = []): LiveConnection {
     players,
     roster: [],
     characters: [],
+    ignoredCharacters: [],
+    ignoreCharacter: vi.fn().mockResolvedValue(undefined),
     saveCharacter: vi.fn(),
+    deleteReport: vi.fn().mockResolvedValue(undefined),
 
     calculation: defaultCalculation(),
     saveCalculation: vi.fn(async (_value, version) => version + 1),
@@ -72,6 +75,7 @@ function connection(players: Player[] = []): LiveConnection {
     resultSources: [],
     resultDiagnostics: {},
     resultsPending: false,
+    resultMetadataPending: false,
     resultsError: "",
     retryResults: vi.fn(),
     saveInputs: vi.fn().mockResolvedValue({}),
@@ -216,6 +220,7 @@ it.each([true, false])(
   (officer) => {
     const c = connection();
     c.officer = officer;
+    c.nights = ["2026-10-14", "2026-10-15"];
     c.hasResults = true;
     const warning = "2026-10-14: unknown characters: <Example>";
     c.saved.results.warnings = [
@@ -225,9 +230,19 @@ it.each([true, false])(
     const { rerender } = render(<App connection={c} />);
     if (officer)
       fireEvent.click(screen.getByRole("button", { name: /^Results/ }));
+    if (officer) {
+      fireEvent.click(
+        screen.getByRole("button", { name: "Review night checks →" }),
+      );
+      fireEvent.change(screen.getByRole("combobox", { name: "Raid night" }), {
+        target: { value: "2026-10-14" },
+      });
+    }
     const region = screen.getByRole("region", { name: "Result warnings" });
-    expect(region.querySelectorAll("li")).toHaveLength(2);
-    expect(region.textContent).toContain(warning);
+    expect(region.querySelectorAll("li")).toHaveLength(officer ? 1 : 2);
+    expect(region.textContent).toContain(
+      officer ? "Unknown players: <Example>" : warning,
+    );
     expect(region.querySelector("example")).toBeNull();
     rerender(
       <App
@@ -505,7 +520,9 @@ it.each([true, false])(
     ).toBeTruthy();
     if (officer) {
       fireEvent.click(
-        within(screen.getByRole("navigation")).getByRole("button", {
+        within(
+          screen.getByRole("navigation", { name: "Main navigation" }),
+        ).getByRole("button", {
           name: /^Reports/,
         }),
       );
@@ -557,20 +574,21 @@ it("explains empty recent history without hiding active progress or previous res
   expect(screen.getByText("Completed fixture")).toBeTruthy();
 });
 
-it("labels the visible override panel from its selected tab and links both controls", () => {
+it("places timing review on Review Night and availability on Overrides", () => {
   render(<App connection={connection([alpha])} />);
   overrides();
-  const availability = screen.getByRole("tab", { name: "Player availability" });
-  const timing = screen.getByRole("tab", { name: "Raid timing" });
-  expect(screen.getByRole("tabpanel", { name: "Player availability" }).id).toBe(
-    availability.getAttribute("aria-controls"),
-  );
-  fireEvent.click(timing);
-  expect(screen.getByRole("tabpanel", { name: "Raid timing" }).id).toBe(
-    timing.getAttribute("aria-controls"),
-  );
   expect(
-    screen.queryByRole("tabpanel", { name: "Player availability" }),
+    screen.getByRole("region", { name: "Player availability editor" }),
+  ).toBeTruthy();
+  expect(
+    screen.queryByRole("region", { name: "Raid timing editor" }),
+  ).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "Review Night" }));
+  expect(
+    screen.getByRole("region", { name: "Raid timing editor" }),
+  ).toBeTruthy();
+  expect(
+    screen.queryByRole("region", { name: "Player availability editor" }),
   ).toBeNull();
 });
 
@@ -596,6 +614,10 @@ it.each([true, false])(
     const { rerender } = render(<App connection={c} />);
     if (officer)
       fireEvent.click(screen.getByRole("button", { name: /^Results/ }));
+    if (officer)
+      fireEvent.click(
+        screen.getByRole("button", { name: "Review night checks →" }),
+      );
     expect(
       screen.getByRole("region", { name: "Result warnings" }),
     ).toBeTruthy();
@@ -1223,3 +1245,339 @@ it("guards roster navigation, sign-out and reload during a pending mutation", ()
     screen.getByRole("heading", { name: "Results", level: 1 }),
   ).toBeTruthy();
 });
+
+it("walks through four numbered steps and carries the reviewed night to results", async () => {
+  const c = dates(
+    connection([alpha]),
+    ["2026-10-15", "2026-10-14"],
+    ["2026-10-15"],
+  );
+  c.hasResults = true;
+  c.saved.results.nights = ["2026-10-15", "2026-10-14"].map((night) => ({
+    night,
+    duration: 180,
+    reports: 1,
+    timing: { start: "", end: "", breakStart: "", breakEnd: "", notes: "" },
+    players: [],
+  }));
+  const { rerender } = render(<App connection={c} />);
+  const flow = screen.getByRole("navigation", { name: "Process a raid night" });
+  expect(within(flow).getAllByRole("listitem")).toHaveLength(4);
+  expect(screen.queryByText(/Selected raid night:/)).toBeNull();
+  await act(async () =>
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Next: Run Pebble and go to Review Night",
+      }),
+    ),
+  );
+  expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Reports");
+  rerender(
+    <App
+      connection={{
+        ...c,
+        saved: {
+          ...c.saved,
+          results: { ...c.saved.results, completedAt: "2026-10-23T06:00:00Z" },
+        },
+      }}
+    />,
+  );
+  await waitFor(() =>
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe(
+      "Review Night",
+    ),
+  );
+  fireEvent.change(raidPicker(), { target: { value: "2026-10-14" } });
+  fireEvent.click(screen.getByRole("button", { name: "Update roster →" }));
+  expect(
+    screen.getByRole("navigation", { name: "Main navigation" }),
+  ).toBeTruthy();
+  fireEvent.click(
+    screen.getByRole("button", { name: "← Return to night review" }),
+  );
+  expect(raidPicker().value).toBe("2026-10-14");
+  fireEvent.click(
+    screen.getByRole("button", { name: "Next: Review overrides →" }),
+  );
+  expect(raidPicker().value).toBe("2026-10-14");
+  fireEvent.click(screen.getByRole("button", { name: "View results →" }));
+  expect(
+    (
+      screen.getByRole("combobox", {
+        name: "Result period",
+      }) as HTMLSelectElement
+    ).value,
+  ).toBe("2026-10-14");
+  expect(
+    screen.getByText(
+      "You’ve reached the results. Night processing is complete.",
+    ),
+  ).toBeTruthy();
+  expect(c.requestRun).toHaveBeenCalledOnce();
+});
+
+it("recalculates saved changes before advancing and stays on review after a failure", async () => {
+  const c = dates(connection([alpha]), ["2026-10-15"]);
+  c.hasResults = true;
+  c.unprocessed = true;
+  const { rerender } = render(<App connection={c} />);
+  fireEvent.click(screen.getByRole("button", { name: "Review Night" }));
+  await act(async () =>
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Recalculate and review overrides →",
+      }),
+    ),
+  );
+  expect(c.requestRun).toHaveBeenCalledOnce();
+  expect(screen.getByRole("heading", { level: 1 }).textContent).toBe(
+    "Review Night",
+  );
+  rerender(
+    <App
+      connection={{ ...c, active: { id: "new", status: "running", stage: 1 } }}
+    />,
+  );
+  rerender(
+    <App
+      connection={{
+        ...c,
+        saved: {
+          ...c.saved,
+          history: [
+            {
+              id: "new",
+              status: "failed",
+              at: new Date().toISOString(),
+              message: "Failure fixture",
+            },
+          ],
+        },
+      }}
+    />,
+  );
+  expect(screen.getByRole("heading", { level: 1 }).textContent).toBe(
+    "Review Night",
+  );
+  expect(
+    screen.getByText("The run failed. Review the run history and try again."),
+  ).toBeTruthy();
+  await act(async () =>
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Recalculate and review overrides →",
+      }),
+    ),
+  );
+  const finished = {
+    ...c,
+    unprocessed: false,
+    saved: {
+      ...c.saved,
+      results: { ...c.saved.results, completedAt: "2026-10-23T05:00:00Z" },
+    },
+  };
+  rerender(<App connection={{ ...finished, resultMetadataPending: true }} />);
+  expect(screen.getByRole("heading", { level: 1 }).textContent).toBe(
+    "Review Night",
+  );
+  rerender(<App connection={finished} />);
+  await waitFor(() =>
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe(
+      "Overrides",
+    ),
+  );
+});
+
+it("stays on Reports through a queued run and result loading, then reviews the newly added report's night", async () => {
+  const c = dates(connection([alpha]), ["2026-09-30"], [""]);
+  c.hasResults = true;
+  c.unprocessed = true;
+  const { rerender } = render(<App connection={c} />);
+  expect(screen.queryByText(/Selected raid night:/)).toBeNull();
+  await act(async () =>
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Next: Run Pebble and go to Review Night",
+      }),
+    ),
+  );
+  rerender(
+    <App
+      connection={{
+        ...c,
+        online: false,
+        active: { id: "new", status: "queued", stage: 0 },
+      }}
+    />,
+  );
+  expect(
+    screen.getByRole("status", { name: "Run status" }).textContent,
+  ).toContain("waiting for your local bot");
+  expect(
+    (screen.getByRole("button", { name: "Run queued…" }) as HTMLButtonElement)
+      .disabled,
+  ).toBe(true);
+  const finished = dates(
+    c,
+    ["2026-10-22", "2026-10-21", "2026-09-30"],
+    ["2026-10-21"],
+  );
+  finished.unprocessed = false;
+  finished.saved.results = {
+    ...finished.saved.results,
+    completedAt: "2026-10-23T06:30:00Z",
+  };
+  rerender(<App connection={{ ...finished, resultsPending: true }} />);
+  expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Reports");
+  rerender(<App connection={{ ...finished, resultMetadataPending: true }} />);
+  expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Reports");
+  rerender(<App connection={finished} />);
+  await waitFor(() => expect(raidPicker().value).toBe("2026-10-21"));
+  expect(c.requestRun).toHaveBeenCalledOnce();
+});
+
+it("keeps Reports available for retry after submission rejection or worker failure", async () => {
+  const c = dates(connection([alpha]), ["2026-09-30"], [""]);
+  c.requestRun = vi
+    .fn()
+    .mockRejectedValueOnce(new Error("Submission unavailable"))
+    .mockResolvedValue(undefined);
+  const { rerender } = render(<App connection={c} />);
+  const next = () =>
+    screen.getByRole("button", {
+      name: "Next: Run Pebble and go to Review Night",
+    });
+  await act(async () => fireEvent.click(next()));
+  expect(screen.getByText("Submission unavailable")).toBeTruthy();
+  expect((next() as HTMLButtonElement).disabled).toBe(false);
+  await act(async () => fireEvent.click(next()));
+  rerender(
+    <App
+      connection={{
+        ...c,
+        saved: {
+          ...c.saved,
+          history: [
+            {
+              id: "failed",
+              status: "failed",
+              at: "2026-10-23T06:30:00Z",
+              message: "Worker cannot access report",
+            },
+          ],
+        },
+      }}
+    />,
+  );
+  expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Reports");
+  expect(
+    screen.getByText("The run failed. Review the run history and try again."),
+  ).toBeTruthy();
+  expect((next() as HTMLButtonElement).disabled).toBe(false);
+});
+
+it.each(["main", "alt", "ignore"] as const)(
+  "resolves a missing player inline as %s",
+  async (mode) => {
+    const c = dates(connection([alpha]), ["2026-10-21"]);
+    c.hasResults = true;
+    c.roster = [
+      { ...blankPlayer(), id: alpha.id, name: alpha.name, version: 1 },
+    ];
+    c.resultDiagnostics = {
+      "2026-10-21": {
+        reportCount: 1,
+        mythicFights: 2,
+        unmappedCharacters: 1,
+        breakMinutes: 10,
+        timing: { start: "detected", end: "detected", break: "detected" },
+        missingPlayers: [
+          {
+            name: "Extra",
+            realm: "Azjol-Nerub",
+            region: "eu",
+            className: "DeathKnight",
+          },
+        ],
+      },
+    };
+    c.saved.results.nights = [
+      {
+        night: "2026-10-21",
+        duration: 170,
+        reports: 1,
+        players: [],
+        timing: {
+          start: "2026-10-21T19:00",
+          end: "2026-10-21T22:00",
+          breakStart: "2026-10-21T20:30",
+          breakEnd: "2026-10-21T20:40",
+          notes: "",
+        },
+      },
+    ];
+    render(<App connection={c} />);
+    fireEvent.click(screen.getByRole("button", { name: "Review Night" }));
+    expect(screen.getByText("7:00 PM")).toBeTruthy();
+    expect(screen.getByText("8:30 PM – 8:40 PM (10 min)")).toBeTruthy();
+    const row = screen.getByRole("article", { name: "Missing player Extra" });
+    await act(async () =>
+      fireEvent.click(
+        within(row).getByRole("button", {
+          name:
+            mode === "main"
+              ? "Add main"
+              : mode === "alt"
+                ? "Add alt"
+                : "Ignore forever",
+        }),
+      ),
+    );
+    if (mode === "main") {
+      expect(screen.getByText("Join date: 2026-10-21")).toBeTruthy();
+      await act(async () =>
+        fireEvent.click(screen.getByRole("button", { name: "Save main" })),
+      );
+      expect(c.savePlayer).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          name: "Extra",
+          joinDate: "2026-10-21",
+          active: true,
+          className: "Death Knight",
+        }),
+        0,
+      );
+    } else if (mode === "alt") {
+      fireEvent.change(
+        screen.getByRole("combobox", { name: "Main for Extra" }),
+        { target: { value: alpha.id } },
+      );
+      await act(async () =>
+        fireEvent.click(screen.getByRole("button", { name: "Save alt" })),
+      );
+      expect(c.saveCharacter).toHaveBeenCalledWith(
+        expect.any(String),
+        {
+          name: "Extra",
+          realm: "Azjol-Nerub",
+          region: "eu",
+          playerId: alpha.id,
+        },
+        0,
+      );
+    } else {
+      expect(c.ignoreCharacter).toHaveBeenCalledWith(expect.any(String), {
+        name: "Extra",
+        realm: "Azjol-Nerub",
+        region: "eu",
+      });
+    }
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe(
+      "Review Night",
+    );
+    expect(c.requestRun).not.toHaveBeenCalled();
+  },
+);

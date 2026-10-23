@@ -198,3 +198,69 @@ def test_oversized_private_diagnostics_fail_before_metadata_upload_and_preserve_
         == previous.id
     )
     assert previous.get().to_dict()["nightDiagnostics"] == prior_diagnostics
+
+
+def test_missing_identity_actions_keep_exact_realms_and_ignore_only_the_chosen_character(
+    config, wcl, monkeypatch
+):
+    from pebble.web_worker import WCLClient
+
+    fetch = WCLClient.fetch_report_bundle
+
+    def bundle(client, code):
+        value = fetch(client, code)
+        value["region"] = {"compactName": "EU"}
+        value["masterData"]["actors"].append(
+            {
+                "id": 99,
+                "name": "Extra",
+                "server": "Azjol-Nerub",
+                "type": "Player",
+                "subType": "Mage",
+            }
+        )
+        for fight in value["fights"]:
+            fight["friendlyPlayers"] = [*fight.get("friendlyPlayers", []), 99]
+        return value
+
+    monkeypatch.setattr(WCLClient, "fetch_report_bundle", bundle)
+    raw = fixtures.snapshot()
+    raw["reports"][fixtures.CODES[1]]["enabled"] = False
+    db = mongomock.MongoClient().working
+    first = calculate_snapshot(config, db, raw)
+    assert first["nightDiagnostics"]["2026-10-15"]["missingPlayers"] == [
+        {"name": "Extra", "realm": "Azjol-Nerub", "region": "eu", "className": "Mage"}
+    ]
+    raw["characters"] = {
+        "ignore-extra": fixtures.meta(
+            name="Extra", realm="Azjol-Nerub", region="eu", playerId="", ignored=True
+        )
+    }
+    ignored = calculate_snapshot(config, db, raw)
+    assert ignored["warnings"] == []
+    assert ignored["nightDiagnostics"]["2026-10-15"]["missingPlayers"] == []
+    assert ignored["nights"] == first["nights"]
+    del raw["characters"]
+    raw["players"]["extra"] = fixtures.meta(
+        name="Extra",
+        className="Mage",
+        role="Damage",
+        active=True,
+        joinDate="2026-10-15",
+        leaveDate="",
+    )
+    added = calculate_snapshot(config, db, raw)
+    assert added["warnings"] == []
+    assert any(
+        row["name"] == "Extra" and row["played"] > 0
+        for row in added["nights"][0]["players"]
+    )
+    del raw["players"]["extra"]
+    raw["characters"] = {
+        "alt-extra": fixtures.meta(
+            name="Extra", realm="Azjol-Nerub", region="eu", playerId="maggie"
+        )
+    }
+    mapped = calculate_snapshot(config, db, raw)
+    assert mapped["warnings"] == []
+    assert mapped["nightDiagnostics"]["2026-10-15"]["missingPlayers"] == []

@@ -210,6 +210,7 @@ def calculate_snapshot(
     )
     summaries = {}
     report_participants = {}
+    missing_candidates = {}
     try:
         for code in enabled:
             try:
@@ -263,6 +264,26 @@ def calculate_snapshot(
                 for actor_id in fight.get("friendlyPlayers") or []
                 if actor_id in actor_names
             }
+            # Keep exact WCL identities private, rather than parsing display warnings.
+            original_actors = {
+                actor["id"]: actor
+                for actor in (bundle.get("masterData") or {}).get("actors", [])
+            }
+            region_data = (
+                bundle.get("region")
+                or ((bundle.get("guild") or {}).get("server") or {}).get("region")
+                or {}
+            )
+            for actor in (actors_bundle.get("masterData") or {}).get("actors", []):
+                if actor.get("name") not in report_participants[code]:
+                    continue
+                original = original_actors[actor["id"]]
+                missing_candidates.setdefault(night, {})[actor["name"]] = {
+                    "name": str(original.get("name", "")),
+                    "realm": str(original.get("server") or ""),
+                    "region": str(region_data.get("compactName", "")).lower(),
+                    "className": str(original.get("subType") or "Unknown"),
+                }
             persist_report_fights(db, code, actors_bundle, start, night)
             summaries[code] = {
                 "title": doc["title"],
@@ -379,7 +400,14 @@ def calculate_snapshot(
                     recorded[row["name"]],
                     inputs["availabilityOverrides"].get(f"{night}_{row['id']}"),
                 )
-        diagnostics[night] = night_diagnostics(q, inputs["nightOverrides"].get(night))
+        diagnostics[night] = {
+            **night_diagnostics(q, inputs["nightOverrides"].get(night)),
+            "missingPlayers": [
+                missing_candidates.get(night, {})[name]
+                for name in q["not_on_roster_mains"]
+                if name in missing_candidates.get(night, {})
+            ],
+        }
         nights.append(
             {
                 "night": night,

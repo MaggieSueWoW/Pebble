@@ -107,6 +107,7 @@ export function useWorkspaceData(
       realm: data.realm,
       region: data.region,
       playerId: data.playerId,
+      ...(data.ignored ? { ignored: true } : {}),
       version: data.version,
     }))
     .sort(

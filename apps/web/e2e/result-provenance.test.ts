@@ -108,6 +108,10 @@ test("public recorded explanations and officer-only diagnostics survive selectio
   await page
     .getByRole("combobox", { name: "Result period" })
     .selectOption(night);
+  await page
+    .getByRole("navigation", { name: "Main navigation" })
+    .getByRole("button", { name: "Review Night", exact: true })
+    .click();
   const diagnostics = page.getByLabel("Officer night diagnostics", {
     exact: true,
   });
@@ -124,12 +128,14 @@ test("public recorded explanations and officer-only diagnostics survive selectio
     ),
   ).toBe(true);
   await page
-    .getByRole("combobox", { name: "Result period" })
-    .selectOption("season");
+    .getByRole("navigation", { name: "Main navigation" })
+    .getByRole("button", { name: "Results", exact: true })
+    .click();
   await expect(diagnostics).toHaveCount(0);
   await page
-    .getByRole("combobox", { name: "Result period" })
-    .selectOption(night);
+    .getByRole("navigation", { name: "Main navigation" })
+    .getByRole("button", { name: "Review Night", exact: true })
+    .click();
   await expect(diagnostics).toBeVisible();
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.getByRole("button", { name: "Sign out", exact: true }).click();

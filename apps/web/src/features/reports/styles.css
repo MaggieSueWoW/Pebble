@@ -72,6 +72,12 @@
   .excluded-row {
     opacity: 0.6;
   }
+  .delete-report {
+    color: var(--color-muted);
+  }
+  .delete-report:hover:not(:disabled) {
+    color: var(--color-danger);
+  }
   .switch {
     display: inline-flex;
     align-items: center;

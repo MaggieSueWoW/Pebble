@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import {
   Sparkles,
+  ClipboardCheck,
   FileText,
   SlidersHorizontal,
   BarChart3,
@@ -77,6 +78,7 @@ export function Sidebar({
         {(
           [
             { id: "reports", name: "Reports", icon: FileText },
+            { id: "review", name: "Review Night", icon: ClipboardCheck },
             { id: "overrides", name: "Overrides", icon: SlidersHorizontal },
             { id: "results", name: "Results", icon: BarChart3 },
             ...(connection?.officer
