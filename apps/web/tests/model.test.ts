@@ -1,13 +1,15 @@
+import {
+  calculate,
+  demoCode,
+  freshState,
+  timingSpans,
+} from "../src/demo/model";
 import { describe, expect, it } from "vitest";
 import {
   adjustmentKey,
-  calculate,
-  demoCode,
   emptyAdjustment,
-  freshState,
   parseReports,
   stableJSON,
-  timingSpans,
   validateAdjustment,
 } from "../src/model";
 

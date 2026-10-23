@@ -11,7 +11,8 @@ import {
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import App from "../src/App";
 import { blankPlayer } from "../src/roster";
-import { freshState, type Player } from "../src/model";
+import { freshState } from "../src/demo/model";
+import type { Player } from "../src/model";
 import { defaultCalculation } from "../src/calculation";
 import type { LiveConnection } from "../src/useFirestore";
 
@@ -85,6 +86,23 @@ const notes = () =>
   }) as HTMLTextAreaElement;
 const editor = () =>
   screen.getByRole("region", { name: "Player availability editor" });
+
+it("keeps connected sessions out of sample storage and submits runs through the live connection", async () => {
+  const live = connection();
+  const read = vi.spyOn(Storage.prototype, "getItem");
+  const write = vi.spyOn(Storage.prototype, "setItem");
+  render(<App connection={live} />);
+  expect(screen.queryByText("Prototype controls")).toBeNull();
+  await act(async () => {
+    fireEvent.click(
+      screen.getByRole("button", { name: "Run Pebble" }),
+    );
+  });
+  expect(live.requestRun).toHaveBeenCalledOnce();
+  expect(read).not.toHaveBeenCalled();
+  expect(write).not.toHaveBeenCalled();
+});
+
 function overrides() {
   fireEvent.click(screen.getByRole("button", { name: "Overrides" }));
 }

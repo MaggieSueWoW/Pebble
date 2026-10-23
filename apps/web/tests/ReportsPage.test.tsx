@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
-import { ReportsPanel } from "../src/ReportsPanel";
+import { ReportsPage } from "../src/pages/ReportsPage";
 import { useReportEditor } from "../src/useReportEditor";
 import type { Report } from "../src/model";
 const code = "AAAAAAAAAAAAAAAA";
@@ -15,7 +15,13 @@ const report: Report = {
 const save = vi.fn().mockResolvedValue(undefined);
 function Panel({ reports }: { reports: Report[] }) {
   const editor = useReportEditor(reports, {}, save);
-  return <ReportsPanel reports={reports} editor={editor} demo={false} />;
+  return (
+    <ReportsPage
+      reports={reports}
+      editor={editor}
+      sampleReportLink={undefined}
+    />
+  );
 }
 afterEach(() => {
   cleanup();

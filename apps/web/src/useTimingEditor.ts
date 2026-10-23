@@ -1,4 +1,4 @@
-import { timingSpans, type Timing } from "./model";
+import type { Timing } from "./model";
 import { blankTiming, validateTiming } from "./timing";
 import { useVersionedEditor } from "./useVersionedEditor";
 export function useTimingEditor(
@@ -12,7 +12,7 @@ export function useTimingEditor(
     expected: number,
   ) => Promise<number>,
   busy = false,
-  demo = false,
+  validateSample?: (night: string, value: Timing) => void,
 ) {
   return useVersionedEditor({
     key: night,
@@ -20,9 +20,9 @@ export function useTimingEditor(
     version,
     validate: (value) => {
       const error = validateTiming(value, detected);
-      if (error || !demo) return error;
+      if (error || !validateSample) return error;
       try {
-        timingSpans(night, value);
+        validateSample(night, value);
         return null;
       } catch (cause) {
         return (cause as Error).message;

@@ -6,22 +6,22 @@ import {
   FileText,
   Info,
 } from "lucide-react";
-import { DataTable } from "./DataTable";
-import { demoCode, formatDate, type Report } from "./model";
-import type { ReportEditor } from "./useReportEditor";
+import { DataTable } from "../DataTable";
+import { formatDate, type Report } from "../model";
+import type { ReportEditor } from "../useReportEditor";
 import { useState, type ReactNode } from "react";
-import { SortButton } from "./SortButton";
+import { SortButton } from "../SortButton";
 function Badge({ children, tone }: { children: ReactNode; tone: string }) {
   return <span className={`badge ${tone}`}>{children}</span>;
 }
-export function ReportsPanel({
+export function ReportsPage({
   reports,
   editor,
-  demo,
+  sampleReportLink,
 }: {
   reports: Report[];
   editor: ReportEditor;
-  demo: boolean;
+  sampleReportLink?: string;
 }) {
   const [direction, setDirection] = useState<"ascending" | "descending">(
     "ascending",
@@ -143,13 +143,11 @@ export function ReportsPanel({
             won’t start the bot.
           </span>
           <div className="button-row">
-            {demo && (
+            {sampleReportLink && (
               <button
                 className="text-button"
                 onClick={() => {
-                  setReportText(
-                    `https://www.warcraftlogs.com/reports/${demoCode}`,
-                  );
+                  setReportText(sampleReportLink);
                 }}
               >
                 Try a sample link <ArrowUpRight size={13} />

@@ -1,10 +1,6 @@
-import { calculationFields } from "./calculationFields";
-import type { CalculationEditorState } from "./useCalculationEditor";
-export function CalculationEditor({
-  editor,
-}: {
-  editor: CalculationEditorState;
-}) {
+import { calculationFields } from "../calculationFields";
+import type { CalculationEditorState } from "../useCalculationEditor";
+export function SettingsPage({ editor }: { editor: CalculationEditorState }) {
   const {
     value,
     change,

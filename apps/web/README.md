@@ -49,6 +49,27 @@ The web rollout tracker (#14) contains the implementation backlog
 and acceptance status. Architecture references cover stack/workflow (#2),
 Firestore/security (#3), and officer/public UX (#4).
 
+## Code map
+
+- `Root.tsx` handles Firebase setup/loading and officer-access remounts. `App.tsx`
+  selects the connected workspace or the sample app.
+- `app/Workspace.tsx` coordinates navigation, editor hooks, draft guards, account
+  actions and run submission. Editors stay mounted here across page changes so
+  switching pages cannot silently discard a draft. `pages/useResultsView.ts`
+  similarly keeps result sorting and link selection alive across navigation.
+- `app/AppShell.tsx`, `Sidebar.tsx`, `ConnectionNotices.tsx`, `RunHistory.tsx` and
+  `Feedback.tsx` own the shared layout and feedback presentation.
+- `pages/` contains the five page views. They receive typed data, editor state and
+  callbacks; saves and guarded transitions go through the workspace. Shared table,
+  form and player-detail components remain in `src/`.
+- `demo/` owns sample fixtures, illustrative calculations, browser persistence,
+  simulated runs and prototype controls. Only `DemoApp` mounts `useDemoSession`;
+  the connected workspace never starts sample timers or reads sample storage.
+  Sample-only timing validation and the sample report link are supplied explicitly
+  to the shared UI. The existing sample storage key and schema are preserved.
+- `model.ts` contains shared types, input validation/parsing and formatting.
+  `useFirestore.ts` and `usePublicResults.ts` supply the connected data and writes.
+
 ## Current interface
 
 The sidebar holds navigation, the season, Run Pebble, bot status and account actions.

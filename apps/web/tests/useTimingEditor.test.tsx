@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { act, cleanup, renderHook } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
+import { timingSpans } from "../src/demo/model";
 import { blankTiming } from "../src/timing";
 import type { Timing } from "../src/model";
 import { useTimingEditor } from "../src/useTimingEditor";
@@ -103,7 +104,7 @@ it("does not write invalid or busy drafts and keeps demo timing validation", asy
         blankTiming(),
         write,
         busy,
-        demo,
+        demo ? timingSpans : undefined,
       ),
     { initialProps: { busy: false, demo: false } },
   );
