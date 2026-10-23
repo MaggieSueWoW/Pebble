@@ -6,7 +6,11 @@ export type CharacterValue = {
   region: string;
   playerId: string;
 };
-export type CharacterEntry = CharacterValue & { id: string; version: number };
+export type CharacterEntry = CharacterValue & {
+  id: string;
+  version: number;
+  ignored?: boolean;
+};
 export const blankCharacter = (): CharacterValue => ({
   name: "",
   realm: "",
@@ -62,6 +66,7 @@ export function validateCharacter(
     characters.some(
       (character) =>
         character.id !== id &&
+        !character.ignored &&
         characterIdentity(character) === characterIdentity(value),
     )
   )

@@ -1,3 +1,4 @@
+import { useState, type ReactNode } from "react";
 import { Clock3, Search, Info, ChevronRight } from "lucide-react";
 import {
   adjustmentKey,
@@ -5,38 +6,31 @@ import {
   type Inputs,
   type Player,
   type NightResult,
-  type Timing,
 } from "../../shared/model";
 import { Notice, Badge } from "../../components/Feedback";
 import { SelectControl } from "../../components/SelectControl";
 import { RunStatus } from "../../components/RunStatus";
-import { OverrideTabs } from "./OverrideTabs";
 import { PanelHeader } from "../../components/PanelHeader";
 import { SortButton } from "../../components/SortButton";
 import { AvailabilityEditor } from "./AvailabilityEditor";
-import { TimingEditor } from "./TimingEditor";
 import type { AvailabilityEditorState } from "./useAvailabilityEditor";
-import type { TimingEditorState } from "./useTimingEditor";
 export type OverrideSort = {
-  key: "name" | "preBench" | "postBench" | "prePlayed" | "postPlayed";
+  key: "name" | "preBench" | "postBench" | "bench";
   direction: "ascending" | "descending";
 };
 export function OverridesPage({
   nightSelection,
   status,
-  tab: overrideTab,
-  onTabChange,
   availability,
-  timing,
+  nextAction,
 }: {
+  nextAction?: ReactNode;
   nightSelection: {
     value: string;
     options: string[];
     onChange: (night: string) => void;
   };
   status: { message: string; completedAt?: string; retryQueue?: () => void };
-  tab: "availability" | "timing";
-  onTabChange: (tab: "availability" | "timing") => void;
   availability: {
     players: Player[];
     visiblePlayers: Player[];
@@ -52,7 +46,6 @@ export function OverridesPage({
     editor: AvailabilityEditorState;
     span: { pre: number; post: number };
   };
-  timing: { detected: Timing; editor: TimingEditorState };
 }) {
   const {
     value: night,
@@ -75,7 +68,24 @@ export function OverridesPage({
     editor: availabilityEditor,
     span,
   } = availability;
-  const { detected: detectedTiming, editor: timingEditor } = timing;
+  const [overridesOnly, setOverridesOnly] = useState(false);
+  function isOverridden(id: string) {
+    const adjustment = inputs.adjustments[adjustmentKey(night, id)];
+    if (adjustment)
+      return (
+        adjustment.pre.mode !== "automatic" ||
+        adjustment.post.mode !== "automatic"
+      );
+    return (
+      latestNight?.players.find((row) => row.id === id)?.overridden ?? false
+    );
+  }
+  const adjustedCount = players.filter((player) =>
+    isOverridden(player.id),
+  ).length;
+  const shownPlayers = overridesOnly
+    ? visiblePlayers.filter((player) => isOverridden(player.id))
+    : visiblePlayers;
   return (
     <>
       {!nightOptions.length && (
@@ -108,176 +118,156 @@ export function OverridesPage({
                 Retry run queue
               </button>
             )}
+            <div className="override-next">{nextAction}</div>
           </div>
-          <OverrideTabs value={overrideTab} onChange={onTabChange} />
-          {overrideTab === "availability" ? (
-            <div
-              className="override-grid"
-              id="override-panel"
-              role="tabpanel"
-              aria-labelledby="override-tab-availability"
-            >
-              <section className="card player-card">
-                <PanelHeader
-                  title="Who was available?"
-                  description="Select a player to adjust their availability."
+          <div className="override-grid" id="override-panel">
+            <section className="card player-card">
+              <PanelHeader
+                title="Who was available?"
+                actions={
+                  <Badge>
+                    {adjustedCount} {adjustedCount === 1 ? "player" : "players"}{" "}
+                    adjusted
+                  </Badge>
+                }
+              />
+              <label className="search-field">
+                <Search size={16} />
+                <input
+                  aria-label="Search players"
+                  placeholder="Find a player or class…"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
                 />
-                <label className="search-field">
-                  <Search size={16} />
-                  <input
-                    aria-label="Search players"
-                    placeholder="Find a player or class…"
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                  />
-                </label>
-                <div className="player-list">
-                  <div className="override-player-columns">
-                    {(
+              </label>
+              <label className="override-filter">
+                <input
+                  type="checkbox"
+                  checked={overridesOnly}
+                  onChange={(event) => setOverridesOnly(event.target.checked)}
+                />
+                Overrides only
+              </label>
+              <div className="player-list">
+                <div className="override-player-columns">
+                  {(
+                    [
+                      ["Player", [["name", "Player"]]],
                       [
-                        ["Player", [["name", "Player"]]],
+                        "Bench",
                         [
-                          "Bench",
-                          [
-                            ["preBench", "Before"],
-                            ["postBench", "After"],
-                          ],
+                          ["preBench", "Before"],
+                          ["postBench", "After"],
+                          ["bench", "Total"],
                         ],
-                        [
-                          "Played",
-                          [
-                            ["prePlayed", "Before"],
-                            ["postPlayed", "After"],
-                          ],
-                        ],
-                      ] as const
-                    ).map(([group, columns]) => (
-                      <span key={group}>
-                        {group !== "Player" && group}
-                        <span
-                          className={
-                            group === "Player"
-                              ? undefined
-                              : "override-sort-halves"
-                          }
-                        >
-                          {columns.map(([key, label]) => (
-                            <SortButton
-                              key={key}
-                              label={label}
-                              direction={
-                                overrideSort.key === key
-                                  ? overrideSort.direction
-                                  : undefined
-                              }
-                              aria-pressed={overrideSort.key === key}
-                              aria-label={`Sort by ${group === "Player" ? "Player" : `${group} ${label.toLowerCase()} break`}${overrideSort.key === key ? `, ${overrideSort.direction}` : ""}`}
-                              onClick={() => changeOverrideSort(key)}
-                            />
-                          ))}
-                        </span>
-                      </span>
-                    ))}
-                  </div>
-                  {visiblePlayers.map((player) => {
-                    const a =
-                      inputs.adjustments[adjustmentKey(night, player.id)];
-                    const overridden =
-                      a &&
-                      (a.pre.mode !== "automatic" ||
-                        a.post.mode !== "automatic");
-                    const row = latestNight?.players.find(
-                      (r) => r.id === player.id,
-                    );
-                    const preOverride =
-                      (row?.availability?.pre.mode ??
-                        a?.pre.mode ??
-                        "automatic") !== "automatic";
-                    const postOverride =
-                      (row?.availability?.post.mode ??
-                        a?.post.mode ??
-                        "automatic") !== "automatic";
-                    return (
-                      <button
-                        key={player.id}
-                        className={`player-item override-player-row ${selected === player.id ? "selected" : ""}`}
-                        onClick={() => choosePlayer(player.id)}
-                        aria-pressed={selected === player.id}
+                      ],
+                    ] as const
+                  ).map(([group, columns]) => (
+                    <span key={group}>
+                      {group !== "Player" && group}
+                      <span
+                        className={
+                          group === "Player"
+                            ? undefined
+                            : "override-sort-halves"
+                        }
                       >
-                        <span className="player-description">
-                          <strong style={{ color: player.color }}>
-                            {player.name}
-                          </strong>
-                        </span>
-                        {(overridden || row?.overridden) && (
-                          <Badge tone="purple">Override</Badge>
-                        )}
-                        {(
-                          [
-                            ["Bench before break", row?.preBench, preOverride],
-                            ["Bench after break", row?.postBench, postOverride],
-                            [
-                              "Played before break",
-                              row?.prePlayed,
-                              preOverride,
-                            ],
-                            [
-                              "Played after break",
-                              row?.postPlayed,
-                              postOverride,
-                            ],
-                          ] as const
-                        ).map(([label, minutes, affected], index) => (
-                          <span
-                            key={label}
-                            style={{ gridColumn: index + 3 }}
-                            className={`override-minute ${affected ? "override-affected" : ""}`}
-                            aria-label={`${label}: ${minutes == null ? "not recorded" : `${minutes} minutes`}${affected ? ", availability override" : ""}`}
-                            title={`${label}${affected ? " · Availability override" : ""}`}
-                          >
-                            {minutes == null
-                              ? "—"
-                              : minutes === 0
-                                ? "-"
-                                : minutes}
-                          </span>
+                        {columns.map(([key, label]) => (
+                          <SortButton
+                            key={key}
+                            label={label}
+                            direction={
+                              overrideSort.key === key
+                                ? overrideSort.direction
+                                : undefined
+                            }
+                            aria-pressed={overrideSort.key === key}
+                            aria-label={`Sort by ${group === "Player" ? "Player" : key === "bench" ? "Total bench" : `${group} ${label.toLowerCase()} break`}${overrideSort.key === key ? `, ${overrideSort.direction}` : ""}`}
+                            onClick={() => changeOverrideSort(key)}
+                          />
                         ))}
-                        <ChevronRight size={14} />
-                      </button>
-                    );
-                  })}
-                  {!visiblePlayers.length && (
-                    <p className="empty-state" role="status">
-                      {players.length
-                        ? "No matching players. Try another search."
-                        : "No players in the roster yet."}
-                    </p>
-                  )}
+                      </span>
+                    </span>
+                  ))}
                 </div>
-                <div className="table-footnote">
-                  <Info size={14} /> Minutes from the last completed run.
-                  Highlighted values have an availability override.
-                </div>
-              </section>
-              <AvailabilityEditor
-                player={selectedPlayer}
-                editor={availabilityEditor}
-                span={span}
-              />
-            </div>
-          ) : (
-            <div
-              id="override-panel"
-              role="tabpanel"
-              aria-labelledby="override-tab-timing"
-            >
-              <TimingEditor
-                night={night}
-                detected={detectedTiming}
-                editor={timingEditor}
-              />
-            </div>
-          )}
+                {shownPlayers.map((player) => {
+                  const a = inputs.adjustments[adjustmentKey(night, player.id)];
+                  const overridden = isOverridden(player.id);
+                  const row = latestNight?.players.find(
+                    (r) => r.id === player.id,
+                  );
+                  const preOverride =
+                    (a?.pre.mode ??
+                      row?.availability?.pre.mode ??
+                      "automatic") !== "automatic";
+                  const postOverride =
+                    (a?.post.mode ??
+                      row?.availability?.post.mode ??
+                      "automatic") !== "automatic";
+                  return (
+                    <button
+                      key={player.id}
+                      className={`player-item override-player-row ${selected === player.id ? "selected" : ""}`}
+                      onClick={() => choosePlayer(player.id)}
+                      aria-pressed={selected === player.id}
+                    >
+                      <span className="player-description">
+                        <strong style={{ color: player.color }}>
+                          {player.name}
+                        </strong>
+                      </span>
+                      {overridden && <Badge tone="purple">Override</Badge>}
+                      {(
+                        [
+                          ["Bench before break", row?.preBench, preOverride],
+                          ["Bench after break", row?.postBench, postOverride],
+                          [
+                            "Total bench",
+                            row?.bench,
+                            preOverride || postOverride,
+                          ],
+                        ] as const
+                      ).map(([label, minutes, affected], index) => (
+                        <span
+                          key={label}
+                          style={{ gridColumn: index + 3 }}
+                          className={`override-minute ${affected ? "override-affected" : ""}`}
+                          aria-label={`${label}: ${minutes == null ? "not recorded" : `${minutes} minutes`}${affected ? ", availability override" : ""}`}
+                          title={`${label}${affected ? " · Availability override" : ""}`}
+                        >
+                          {minutes == null
+                            ? "—"
+                            : minutes === 0
+                              ? "-"
+                              : minutes}
+                        </span>
+                      ))}
+                      <ChevronRight size={14} />
+                    </button>
+                  );
+                })}
+                {!shownPlayers.length && (
+                  <p className="empty-state" role="status">
+                    {players.length
+                      ? overridesOnly
+                        ? "No matching availability overrides."
+                        : "No matching players. Try another search."
+                      : "No players in the roster yet."}
+                  </p>
+                )}
+              </div>
+              <div className="table-footnote">
+                <Info size={14} /> Minutes from the last completed run.
+                Highlighted values have an availability override.
+              </div>
+            </section>
+            <AvailabilityEditor
+              player={selectedPlayer}
+              editor={availabilityEditor}
+              span={span}
+              recorded={latestNight?.players.find((row) => row.id === selected)}
+            />
+          </div>
         </>
       )}
     </>

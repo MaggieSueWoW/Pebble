@@ -1,58 +1,27 @@
 import type { Mode } from "../../shared/model";
 import type { RecordedAvailability } from "./resultProvenance";
-const modes: Record<Mode, string> = {
-  automatic: "Automatic",
-  available: "Available",
-  unavailable: "Unavailable",
-  partial: "Partial availability",
-  unavailableFor: "Timed unavailability",
+
+const reasons: Record<Exclude<Mode, "automatic">, string> = {
+  available: "Available throughout",
+  unavailable: "Unavailable throughout",
+  partial: "Available for part of the period",
+  unavailableFor: "Unavailable for part of the period",
 };
-const sources: Record<RecordedAvailability["source"], string> = {
-  override: "Officer adjustment",
-  last_fight: "Last non-Mythic boss participation",
-  blocks: "Recorded participation",
-  none: "No inferred participation",
-};
+/** Explain only the recorded half; the overall source cannot identify its cause. */
 export function AvailabilityExplanation({
   availability,
+  half,
 }: {
   availability?: RecordedAvailability;
+  half: "pre" | "post";
 }) {
-  if (!availability)
-    return <p>Availability source not recorded for this result.</p>;
+  const value = availability?.[half];
+  if (!value) return <>Not recorded</>;
   return (
-    <section
-      className="availability-explanation"
-      aria-label="Recorded availability explanation"
-    >
-      <h3>Recorded availability</h3>
-      <dl className="metadata-grid">
-        {(
-          [
-            ["pre", "Before break"],
-            ["post", "After break"],
-          ] as const
-        ).map(([half, label]) => (
-          <div key={half}>
-            <dt>{label}</dt>
-            <dd>
-              {availability[half].available
-                ? "Recorded available"
-                : "Recorded unavailable"}{" "}
-              · Input: {modes[availability[half].mode]}
-            </dd>
-          </div>
-        ))}
-        <div>
-          <dt>Overall source</dt>
-          <dd>{sources[availability.source]}</dd>
-        </div>
-      </dl>
-      <p>
-        Recorded availability can cover part of the half. Played and bench
-        minutes show the recorded totals. The overall source describes the row,
-        not each half.
-      </p>
-    </section>
+    <>
+      {value.mode === "automatic"
+        ? `${value.available ? "Available" : "Unavailable"} · Detected`
+        : reasons[value.mode]}
+    </>
   );
 }

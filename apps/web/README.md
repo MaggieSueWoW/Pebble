@@ -1,7 +1,7 @@
 # Pebble web app
 
-React + TypeScript frontend for Reports, Overrides, Results, Roster and Settings.
-Run Pebble is available in the sidebar on every officer page. Google officer login and Firestore are the only hosted services;
+React + TypeScript frontend for Reports, Review Night, Overrides, Results, Roster and Settings.
+Run Pebble is available in the sidebar throughout the officer flow. Reports also offers a Next action that runs Pebble and opens Review Night after success. Google officer login and Firestore are the only hosted services;
 the Python bot continues running locally. Successful runs automatically update
 public results. There is no approval or publish step.
 
@@ -271,10 +271,69 @@ reloads, another officer session and terminal details outside recent history. Te
 and heartbeat; they never start or contact a worker. Previous completed results
 and unrelated input versions are checked throughout these cases.
 
-Published result warnings appear on Results for officers and public readers. They
-stay with the displayed completed run during loading or failure, change with a
-successful result replacement, and disappear when the new result has no warnings.
-Warning text is shown as recorded, without new source fetches.
+Officers follow a four-step guide: Add report → Review Night → Overrides →
+Results. The numbered navigation and next-step buttons sit alongside
+free sidebar navigation. The run step happens inline on Reports; its Next button
+sits below the add-report form and above the list, which defaults to newest raid
+night first. Reports does not show a selected night until the logs have been
+processed. Successful guided runs open the newly fetched report’s night for review.
+Failed submissions/runs stay on Reports, and an offline worker leaves the request
+queued with visible status. Review Night groups timing checks/corrections, missing-player
+warnings, source links and private night diagnostics for the selected raid night.
+Review Night places the night selector, update status, and Next on one toolbar
+row above a compact summary of start/end/break times, raid duration, report count,
+and encounter count.
+Timing sources appear under each time; durations round to whole minutes.
+Timing overrides are collapsed by default behind “Times look wrong? Adjust timing”
+in the summary box, with an Unsaved badge when there is a timing draft. Times
+use Pacific, as in the timing editor. Terse warnings and compact
+per-character action rows follow. Officers can
+ignore a character for this season, add a main with the reviewed night as its join
+date, or map an alt to an existing main without leaving the page. Character
+identities come from private completed-run diagnostics, preserving exact names,
+realms and regions. Older runs require a new worker run before inline actions are
+available. Player forms share the workspace draft and save guards. Main creation
+uses the logged class as its default without asking for a role. Ignore requires
+an inline confirmation; Cancel leaves the character unchanged. Player actions
+keep one row per character, with horizontal scrolling on narrow screens.
+
+Overrides keeps the player list and editor side by side, with Next beside the raid night selector above both.
+The list shows sortable before/after-break and total bench minutes; played minutes appear in
+the selected player's details. The “Overrides only” filter and adjusted-player
+count use current saved availability modes, including resets before a rerun.
+Available includes time spent benched. Before/after-break choices sit together,
+optional private notes start collapsed, and Save availability, Cancel, and Reset
+to detected share one action group. Saved changes recalculate through the top
+Next button before Results opens.
+
+Results keeps the main table with Bench, Played, and Played %; displayed durations
+round to whole minutes while sorting and percentages retain published precision.
+Adjusted badges appear only for a selected night. Its period breakdown marks
+adjusted times and includes per-period reasons directly in the table; missing
+provenance stays unknown. Season player details have no nested disclosures or
+adjustment tags: attendance shows the published percentage alongside eligible
+played/bench/possible time, followed by a compact weekly table using full status
+words. Attendance details remain season-only. The top toolbar groups the period picker,
+update status, and Copy result link. Reports remains available in the sidebar. Officers see a persistent Nights to review sidebar list, grouped newest first
+by date with a warning count and direct navigation to that night. General warnings
+appear once under Other warnings. The list follows the displayed completed run,
+remains during pending/failed updates, and clears when a clean run loads. Public
+readers retain the published warning text. Results has no extra readiness line;
+its existing run status still reports loading, failures, and stale inputs.
+
+Ignores use versioned character inputs with `ignored: true` and an empty `playerId`.
+They use the existing character subscription and input-version freshness checks.
+The worker removes ignored actors from participation while retaining fight times;
+explicit main/alt mappings take precedence over ignores. Main and alt actors mapped
+to the same main count once per fight. Browser rules keep decisions officer-only;
+new ignore inputs require the matching worker and rules release. Overrides focuses
+on player availability. Saved changes are recalculated before advancing from review
+to overrides or from overrides to the selected night's results; failed runs leave
+the officer on the current step. Results retains a compact link back to review
+when warnings remain. Public readers continue to see recorded warning text without
+private source links or officer navigation. Warning text is rendered from the
+completed publication, and source links/diagnostics use its existing private
+metadata subscription, with no additional service reads.
 
 Result-loading coverage holds result reads, rejects incomplete output for officers
 and public readers, exercises retry (including first-load errors), and supersedes
@@ -297,14 +356,12 @@ Reports in the sidebar to review inputs without a write or run request. Empty re
 history has an explicit message while queued progress and previous results remain
 available. Loading and result errors retain their separate states.
 
-Overrides tabs use Left/Right and Home/End to move focus without changing editors.
-Enter/Space or a click activates the focused tab through the existing draft/save
-guards. Both tabs link to the visible, labelled tab panel; only one tab is in the
-keyboard tab order. Acceptance checks keyboard focus, Escape/discard restoration,
-pending-save activation, panel relationships and narrow layout.
+Review and overrides use the same workspace draft/save guards as the sidebar,
+numbered steps and browser history. Keyboard and narrow-layout acceptance checks
+exercise page navigation, dialog focus restoration and pending saves.
 
-When a completed result has warnings, officers can follow Source reports for this
-run links using that run's recorded titles and report codes. The existing private
+When a completed result has warnings, officers can follow source report
+links on Review Night using that run's recorded titles and report codes. The existing private
 run-metadata listener supplies them; newer input/history metadata cannot relabel
 an older displayed result. Missing titles fall back to codes and missing metadata
 omits the list. Public readers retain warning text without private source links.
@@ -326,7 +383,7 @@ keyboard behavior. Actual screen-reader listening remains part of final acceptan
 Results offers season totals and individual raid nights. The toolbar shows the
 completion time for the displayed results and the season's raid-night count.
 Loading and retry preserve the previous completed results and their timestamp.
-Run Pebble is available in the sidebar on every officer page. Older weekly result links fall back to season
+Run Pebble is available in the sidebar throughout the officer flow. Reports also offers a Next action that runs Pebble and opens Review Night after success. Older weekly result links fall back to season
 totals; stored weekly projections remain part of the published data schema.
 
 Season and nightly result details show the worker's recorded pre/post played
@@ -341,7 +398,7 @@ public/officer visibility, period changes, keyboard details and narrow
 layout. The illustrative sample calculation supplies its own played halves only
 in sample mode. Published attendance, possible time and weekly P/B/O appear in
 season details; explanation and weekly tables use disclosures. Safe availability
-explanations, private officer diagnostics and shareable links are implemented
+explanations, private officer diagnostics on Review Night and shareable links are implemented
 and accepted in #11.
 
 Officer Settings edits the existing calculation parameters in Pacific time. Missing

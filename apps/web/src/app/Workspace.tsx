@@ -1,7 +1,15 @@
+import { useMissingPlayerEditor } from "../features/review/useMissingPlayerEditor";
+import { NightFlow } from "./NightFlow";
+import { ReviewNightPage } from "../features/review/ReviewNightPage";
 import { Check, CircleAlert, LoaderCircle, Play, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { authMessage } from "./authMessages";
-import { adjustmentKey, emptyAdjustment, type Page } from "../shared/model";
+import {
+  adjustmentKey,
+  emptyAdjustment,
+  formatDate,
+  type Page,
+} from "../shared/model";
 import type { LiveConnection } from "../data/useFirestore";
 
 import { RunStatus } from "../components/RunStatus";
@@ -74,6 +82,10 @@ export function Workspace({
             ...new Set(
               [
                 ...knownNights,
+                ...(results.warnings ?? []).flatMap((warning) => {
+                  const date = warning.match(/^(\d{4}-\d{2}-\d{2}):/);
+                  return date ? [date[1]] : [];
+                }),
                 ...reports
                   .filter((report) => report.fetched)
                   .map((report) => report.night),
@@ -83,7 +95,7 @@ export function Workspace({
             .sort()
             .reverse()
         : knownNights,
-    [connected, knownNights, reports],
+    [connected, knownNights, reports, results.warnings],
   );
   const defaultNight = nightOptions[0] ?? "";
   const firstPlayer =
@@ -96,6 +108,7 @@ export function Workspace({
     (action) => guard(action),
   );
   const page = navigation.page;
+  const navigate = navigation.navigate;
   const [overrideSort, setOverrideSort] = useState<OverrideSort>({
     key: "name",
     direction: "ascending",
@@ -108,17 +121,20 @@ export function Workspace({
           ? current.direction === "ascending"
             ? "descending"
             : "ascending"
-          : key === "prePlayed" || key === "postPlayed"
-            ? "descending"
-            : "ascending",
+          : "ascending",
     }));
   }
-  const setPage = (page: Page) => navigation.navigate({ page });
+  const setPage = (page: Page) => navigate({ page });
   const [night, setNight] = useState(defaultNight);
   const nightChosen = useRef(false);
-  const [overrideTab, setOverrideTab] = useState<"availability" | "timing">(
-    "availability",
-  );
+  const [returnToReview, setReturnToReview] = useState(false);
+  const [pendingFlow, setPendingFlow] = useState<{
+    page: "review" | "overrides" | "results";
+    from: Page;
+    reportCodes?: string[];
+    completedAt: string;
+    historyId?: string;
+  } | null>(null);
   const [selected, setSelected] = useState(firstPlayer);
   const [search, setSearch] = useState("");
   const online = connection?.online ?? demo!.online;
@@ -130,12 +146,19 @@ export function Workspace({
   const toastTimer = useRef<ReturnType<typeof setTimeout> | undefined>(
     undefined,
   );
+  const recentlyAddedReports = useRef<string[]>([]);
   const reportEditor = useReportEditor(
     inputs.reports,
     connection?.versions ?? {},
     async (reports, expected) => {
       await saveInputs({ reports, adjustments: {}, timings: {} }, expected);
+      const added = reports.filter(
+        (report) => expected[`reports/${report.code}`] === 0,
+      );
+      if (added.length)
+        recentlyAddedReports.current = added.map((report) => report.code);
     },
+    connection?.deleteReport ?? demo!.deleteReport,
     Boolean(connection?.busy),
     connection ? "" : defaultNight,
   );
@@ -245,7 +268,10 @@ export function Workspace({
     Boolean(connection?.busy),
     Boolean(connection?.officer),
   );
+  const missingPlayerEditor = useMissingPlayerEditor(connection);
   const unsaved =
+    missingPlayerEditor.dirty ||
+    missingPlayerEditor.saving ||
     characterEditor.dirty ||
     characterEditor.saving ||
     calculationEditor.dirty ||
@@ -323,6 +349,7 @@ export function Workspace({
   }, [unsaved, connection?.busy]);
 
   function clearEdits() {
+    missingPlayerEditor.cancel();
     reportEditor.reset();
     availabilityEditor.cancel();
     timingEditor.cancel();
@@ -333,6 +360,7 @@ export function Workspace({
   function guard(action: () => void) {
     if (
       connection?.busy ||
+      missingPlayerEditor.saving ||
       characterEditor.saving ||
       calculationEditor.saving ||
       rosterEditor.saving ||
@@ -369,6 +397,12 @@ export function Workspace({
   }
   async function startRun() {
     if (active || unsaved || !canManage) return;
+    // Newly added logs can identify a newer night only after processing.
+    if (
+      page === "reports" &&
+      reports.some((report) => report.enabled && !report.fetched)
+    )
+      nightChosen.current = false;
     try {
       await (connection ? connection.requestRun() : demo!.requestRun());
     } catch (error) {
@@ -419,6 +453,112 @@ export function Workspace({
     notify,
   });
   const { setResultNight, visibleResultNight } = resultsView;
+  function showFlowResults() {
+    navigate({
+      page: "results",
+      period: night || "season",
+      player: null,
+    });
+  }
+  async function advanceFlow(target: "review" | "overrides" | "results") {
+    if (unsaved || active || connection?.busy || connection?.submitting) return;
+    if (target === "review" || unprocessed) {
+      if (target === "review") nightChosen.current = false;
+      setPendingFlow({
+        page: target,
+        from: page,
+        ...(target === "review"
+          ? {
+              reportCodes: reports
+                .filter(
+                  (report) =>
+                    report.enabled &&
+                    (!report.fetched ||
+                      recentlyAddedReports.current.includes(report.code)),
+                )
+                .map((report) => report.code),
+            }
+          : {}),
+        completedAt: results.completedAt,
+        historyId: history[0]?.id,
+      });
+      try {
+        await (connection ? connection.requestRun() : demo!.requestRun());
+      } catch (error) {
+        setPendingFlow(null);
+        notify((error as Error).message, true);
+      }
+    } else if (target === "results") showFlowResults();
+    else go(target);
+  }
+  useEffect(() => {
+    if (pendingFlow && (unsaved || page !== pendingFlow.from)) {
+      setPendingFlow(null);
+      return;
+    }
+    if (!pendingFlow || active || connection?.submitting) return;
+    if (
+      history[0]?.id !== pendingFlow.historyId &&
+      history[0]?.status === "failed"
+    ) {
+      setPendingFlow(null);
+      notify("The run failed. Review the run history and try again.", true);
+      return;
+    }
+    if (
+      connection?.resultsPending ||
+      connection?.resultMetadataPending ||
+      connection?.resultsError
+    )
+      return;
+    if (results.completedAt !== pendingFlow.completedAt) {
+      setPendingFlow(null);
+      if (unprocessed) {
+        notify(
+          "Inputs changed during the run. Run Pebble again before continuing.",
+          true,
+        );
+      } else {
+        if (pendingFlow.page === "review") {
+          const reportedNight = reports
+            .filter(
+              (report) =>
+                pendingFlow.reportCodes?.includes(report.code) &&
+                report.fetched &&
+                report.night,
+            )
+            .map((report) => report.night)
+            .sort()
+            .reverse()[0];
+          recentlyAddedReports.current = [];
+          nightChosen.current = true;
+          setNight(reportedNight ?? defaultNight);
+        }
+        navigate({
+          page: pendingFlow.page,
+          ...(pendingFlow.page === "results"
+            ? { period: night || "season", player: null }
+            : {}),
+        });
+      }
+    }
+  }, [
+    pendingFlow,
+    reports,
+    defaultNight,
+    active,
+    connection?.submitting,
+    connection?.resultsPending,
+    connection?.resultsError,
+    connection?.resultMetadataPending,
+    page,
+    unsaved,
+    history,
+    results.completedAt,
+    unprocessed,
+    navigate,
+    night,
+  ]);
   const lastFailed = history[0]?.status === "failed";
   const runStatusMessage = active
     ? active.status === "queued" && !online
@@ -434,19 +574,126 @@ export function Workspace({
           ? "Latest results are unavailable"
           : connection?.resultsPending
             ? "Loading latest results…"
-            : lastFailed
-              ? "Last run didn’t finish"
-              : unsaved
-                ? "You have unsaved edits"
-                : unprocessed
-                  ? "Changes ready for the next run"
-                  : "";
+            : connection?.resultMetadataPending
+              ? "Loading night checks…"
+              : lastFailed
+                ? "Last run didn’t finish"
+                : unsaved
+                  ? "You have unsaved edits"
+                  : unprocessed
+                    ? "Changes ready for the next run"
+                    : "";
   const waitingForResults = Boolean(
-    connection?.submitting || connection?.resultsPending,
+    connection?.submitting ||
+    connection?.resultsPending ||
+    connection?.resultMetadataPending,
   );
   const resultLoadFailed = Boolean(connection?.resultsError);
   const completedAt =
     !connection || connection.hasResults ? results.completedAt : undefined;
+  const reportNextAction = (
+    <div className="flow-actions">
+      <p className="muted">
+        {pendingFlow
+          ? "Review Night will open after the run and its night checks finish loading."
+          : "Pebble identifies raid nights from the logs when it runs."}
+      </p>
+      <button
+        className="button primary"
+        disabled={
+          unsaved ||
+          Boolean(active) ||
+          Boolean(pendingFlow) ||
+          Boolean(connection?.busy) ||
+          Boolean(connection?.submitting) ||
+          Boolean(connection && !connection.queueReady) ||
+          waitingForResults ||
+          !reports.some((report) => report.enabled)
+        }
+        onClick={() => void advanceFlow("review")}
+      >
+        {active
+          ? active.status === "queued"
+            ? "Run queued…"
+            : "Running Pebble…"
+          : pendingFlow || connection?.submitting
+            ? "Waiting for updated results…"
+            : "Next: Run Pebble and go to Review Night"}
+      </button>
+    </div>
+  );
+  const reviewNextAction = (
+    <div className="flow-actions">
+      {(page === "review" || page === "overrides") && (
+        <>
+          {(unsaved || pendingFlow) && (
+            <p className="muted">
+              {unsaved
+                ? "Save or discard your edits to continue."
+                : pendingFlow
+                  ? "Updating results before continuing…"
+                  : unprocessed
+                    ? "Saved changes will be recalculated before continuing."
+                    : "Continue when you’ve finished reviewing this night."}
+            </p>
+          )}
+          <button
+            className="button primary"
+            disabled={
+              unsaved ||
+              Boolean(active) ||
+              Boolean(pendingFlow) ||
+              waitingForResults ||
+              Boolean(connection?.busy) ||
+              Boolean(connection?.resultsError) ||
+              Boolean(connection && !connection.hasResults) ||
+              !nightOptions.length
+            }
+            onClick={() =>
+              void advanceFlow(page === "review" ? "overrides" : "results")
+            }
+          >
+            {page === "review"
+              ? unprocessed
+                ? "Recalculate and review overrides →"
+                : "Next: Review overrides →"
+              : unprocessed
+                ? "Recalculate and view Results →"
+                : "Next: Results →"}
+          </button>
+        </>
+      )}
+    </div>
+  );
+  const workspaceStatus = (
+    <>
+      <RunStatus
+        message={runStatusMessage}
+        completedAt={
+          !connection || connection.hasResults ? results.completedAt : undefined
+        }
+        detail={
+          connection?.submitting
+            ? "Waiting for the server to confirm your request."
+            : active
+              ? "Your last completed results stay visible while Pebble works."
+              : unsaved
+                ? "Save or discard your edits before running Pebble."
+                : unprocessed
+                  ? "Saved inputs have changed. Run Pebble to update the results."
+                  : undefined
+        }
+      />
+      {connection?.officer && connection.queueError && (
+        <button
+          className="text-button"
+          onClick={() => retryWithFocus(connection.retryQueue)}
+        >
+          Retry run queue
+        </button>
+      )}
+    </>
+  );
   return (
     <AppShell
       page={page}
@@ -454,6 +701,16 @@ export function Workspace({
         <Sidebar
           connection={connection}
           canManage={canManage}
+          warnings={results.warnings}
+          reviewWarnings={(warningNight) =>
+            guard(() => {
+              if (warningNight && nightOptions.includes(warningNight)) {
+                nightChosen.current = true;
+                setNight(warningNight);
+              }
+              setPage("review");
+            })
+          }
           page={page}
           go={go}
           reportCount={inputs.reports.length}
@@ -518,37 +775,21 @@ export function Workspace({
         </>
       }
     >
-      {page !== "results" && page !== "overrides" && (
+      {canManage && (
+        <>
+          <NightFlow page={page} go={go} />
+          {night && ["roster"].includes(page) && (
+            <p className="muted">
+              Selected raid night: {formatDate(night, true)}
+            </p>
+          )}
+        </>
+      )}
+      {page !== "results" && page !== "overrides" && page !== "review" && (
         <div
           className={`reports-status toolbar ${active || connection?.submitting || waitingForResults ? "is-running" : ""} ${(lastFailed || resultLoadFailed) && !active && !connection?.submitting ? "has-error" : ""}`}
         >
-          <RunStatus
-            message={runStatusMessage}
-            completedAt={
-              !connection || connection.hasResults
-                ? results.completedAt
-                : undefined
-            }
-            detail={
-              connection?.submitting
-                ? "Waiting for the server to confirm your request."
-                : active
-                  ? "Your last completed results stay visible while Pebble works."
-                  : unsaved
-                    ? "Save or discard your edits before running Pebble."
-                    : unprocessed
-                      ? "Saved inputs have changed. Run Pebble to update the results."
-                      : undefined
-            }
-          />
-          {connection?.officer && connection.queueError && (
-            <button
-              className="text-button"
-              onClick={() => retryWithFocus(connection.retryQueue)}
-            >
-              Retry run queue
-            </button>
-          )}
+          {workspaceStatus}
         </div>
       )}
       {demo?.storageError && (
@@ -562,8 +803,53 @@ export function Workspace({
         <ReportsPage
           reports={inputs.reports}
           editor={reportEditor}
+          nextAction={reportNextAction}
           sampleReportLink={demo?.sampleReportLink}
         />
+      )}
+      {page === "review" && (
+        <ReviewNightPage
+          status={workspaceStatus}
+          night={night}
+          nights={nightOptions}
+          chooseNight={chooseNight}
+          results={results}
+          hasResults={!connection || connection.hasResults}
+          sources={connection?.resultSources ?? []}
+          diagnostics={connection?.resultDiagnostics ?? {}}
+          detected={detectedTiming}
+          editor={timingEditor}
+          connection={connection}
+          playerEditor={missingPlayerEditor}
+          nextAction={canManage ? reviewNextAction : undefined}
+          onPlayerAction={(player, mode) =>
+            guard(() => missingPlayerEditor.open(player, night, mode))
+          }
+          onRoster={
+            connection?.officer
+              ? () =>
+                  guard(() => {
+                    setReturnToReview(true);
+                    setPage("roster");
+                  })
+              : undefined
+          }
+        />
+      )}
+      {page === "roster" && returnToReview && (
+        <div className="flow-actions">
+          <button
+            className="button secondary"
+            onClick={() =>
+              guard(() => {
+                setReturnToReview(false);
+                setPage("review");
+              })
+            }
+          >
+            ← Return to night review
+          </button>
+        </div>
       )}
       {page === "settings" && connection?.officer && (
         <SettingsPage editor={calculationEditor} />
@@ -582,6 +868,7 @@ export function Workspace({
       )}
       {page === "overrides" && (
         <OverridesPage
+          nextAction={canManage ? reviewNextAction : undefined}
           nightSelection={{
             value: night,
             options: nightOptions,
@@ -595,8 +882,6 @@ export function Workspace({
                 ? () => retryWithFocus(connection.retryQueue)
                 : undefined,
           }}
-          tab={overrideTab}
-          onTabChange={(next) => guard(() => setOverrideTab(next))}
           availability={{
             players,
             visiblePlayers,
@@ -612,7 +897,6 @@ export function Workspace({
             editor: availabilityEditor,
             span,
           }}
-          timing={{ detected: detectedTiming, editor: timingEditor }}
         />
       )}
       {page === "results" && (
@@ -622,10 +906,7 @@ export function Workspace({
           view={resultsView}
           hasResults={!connection || connection.hasResults}
           canManage={canManage}
-          officer={Boolean(connection?.officer)}
           demo={Boolean(demo)}
-          sources={connection?.resultSources ?? []}
-          diagnostics={connection?.resultDiagnostics ?? {}}
           runStatusMessage={runStatusMessage}
           completedAt={completedAt}
           onEditAvailability={(id) =>
@@ -637,12 +918,12 @@ export function Workspace({
               nightChosen.current = true;
               setNight(n);
               setSelected(id);
-              setOverrideTab("availability");
               setPage("overrides");
             })
           }
         />
       )}
+
       {canManage && (
         <RunHistory history={history} connected={Boolean(connection)} />
       )}

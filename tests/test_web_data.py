@@ -383,3 +383,46 @@ def test_long_player_ids_keep_valid_availability_identity(db):
     }
     with pytest.raises(ValueError):
         Availability(mode="automatic", minutes=None)
+
+
+def test_ignored_characters_are_season_inputs_and_do_not_remove_fights():
+    raw = {
+        "characters": {
+            "ignored": meta(
+                name="Extra",
+                realm="Azjol-Nerub",
+                region="eu",
+                playerId="",
+                ignored=True,
+            )
+        },
+    }
+    inputs = validate_snapshot(raw)
+    bundle = {
+        "region": {"compactName": "EU"},
+        "masterData": {
+            "actors": [
+                {"id": 1, "name": "Extra", "server": "Azjol-Nerub", "type": "Player"},
+                {"id": 2, "name": "Other", "server": "Azjol-Nerub", "type": "Player"},
+            ]
+        },
+        "fights": [
+            {"id": 1, "startTime": 100, "endTime": 200, "friendlyPlayers": [1, 2]}
+        ],
+    }
+    mapped = mapped_bundle(bundle, inputs)
+    assert [actor["id"] for actor in mapped["masterData"]["actors"]] == [2]
+    assert mapped["fights"][0] == {
+        "id": 1,
+        "startTime": 100,
+        "endTime": 200,
+        "friendlyPlayers": [2],
+    }
+    assert bundle["fights"][0]["friendlyPlayers"] == [1, 2]
+    other_season = mapped_bundle(bundle, validate_snapshot({}))
+    assert len(other_season["masterData"]["actors"]) == 2
+    bundle["region"]["compactName"] = "US"
+    assert len(mapped_bundle(bundle, inputs)["masterData"]["actors"]) == 2
+    raw["characters"]["ignored"]["playerId"] = "some-main"
+    with pytest.raises(ValueError, match="main mapping or ignore"):
+        validate_snapshot(raw)

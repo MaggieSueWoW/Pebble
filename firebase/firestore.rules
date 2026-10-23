@@ -44,6 +44,7 @@ service cloud.firestore {
       allow read: if officer();
       match /reports/{code} {
         allow read: if officer();
+        allow delete: if officer() && validId(season) && code.matches('^[A-Za-z0-9]{16}$');
         allow create, update: if officer() && validId(season) && versioned() && code.matches('^[A-Za-z0-9]{16}$')
           && fields(request.resource.data, ['enabled'], ['notes']) && request.resource.data.enabled is bool && notes(request.resource.data);
       }
@@ -62,16 +63,18 @@ service cloud.firestore {
       match /characters/{id} {
         allow read: if officer();
         allow delete: if officer() && validId(season) && validId(id)
-          && (!existsAfter(/databases/$(database)/documents/seasons/$(season)/players/$(resource.data.playerId))
+          && (resource.data.playerId == '' || !existsAfter(/databases/$(database)/documents/seasons/$(season)/players/$(resource.data.playerId))
             || playerAdvanced(season, resource.data.playerId));
         allow create, update: if officer() && validId(season) && versioned()
-          && validId(id) && fields(request.resource.data, ['name','realm','region','playerId'], [])
+          && validId(id) && fields(request.resource.data, ['name','realm','region','playerId'], ['ignored'])
           && text(request.resource.data.name, 32) && request.resource.data.name.size() > 0
           && text(request.resource.data.realm, 100)
           && request.resource.data.region in ['us','eu','kr','tw','cn']
-          && validId(request.resource.data.playerId)
-          && playerAdvanced(season, request.resource.data.playerId)
-          && (resource == null || resource.data.playerId == request.resource.data.playerId
+          && (!('ignored' in request.resource.data) || request.resource.data.ignored is bool)
+          && ((request.resource.data.get('ignored', false) == true && request.resource.data.playerId == '')
+            || (request.resource.data.get('ignored', false) == false && validId(request.resource.data.playerId)
+              && playerAdvanced(season, request.resource.data.playerId)))
+          && (resource == null || resource.data.playerId == '' || resource.data.playerId == request.resource.data.playerId
             || playerAdvanced(season, resource.data.playerId));
       }
       match /nightOverrides/{night} {

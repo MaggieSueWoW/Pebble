@@ -1,62 +1,72 @@
+import type { NightResult } from "../../shared/model";
+import { minutes, wallTime } from "../../shared/model";
 import type { RecordedNightDiagnostics } from "./resultProvenance";
+
 const sources = {
-  override: "Officer timing override",
-  configured: "Configured default",
-  detected: "Detected from logs",
-  none: "No break recorded",
+  override: "Overridden",
+  configured: "Configured",
+  detected: "Detected",
+  none: "",
 };
 /** The caller must supply only officer metadata for the displayed completed run. */
 export function NightDiagnostics({
   night,
+  recorded,
   diagnostic,
 }: {
   night: string;
+  recorded?: NightResult;
   diagnostic?: RecordedNightDiagnostics;
 }) {
+  const timing = recorded?.timing;
+  const source = (key: keyof RecordedNightDiagnostics["timing"]) =>
+    diagnostic ? sources[diagnostic.timing[key]] : "Source not recorded";
   return (
-    <details
-      className="card night-diagnostics"
-      aria-label="Officer night diagnostics"
+    <dl
+      className="raid-time-summary"
+      aria-label={`Night details for ${night}`}
+      title="Times shown in Pacific"
     >
-      <summary>Officer night diagnostics · {night}</summary>
-      {!diagnostic ? (
-        <p>No recorded diagnostics for this night.</p>
-      ) : (
-        <dl className="metadata-grid">
-          <div>
-            <dt>Source reports</dt>
-            <dd>{diagnostic.reportCount}</dd>
-          </div>
-          <div>
-            <dt>Mythic encounters</dt>
-            <dd>{diagnostic.mythicFights}</dd>
-          </div>
-          <div>
-            <dt>Unmapped characters</dt>
-            <dd>{diagnostic.unmappedCharacters}</dd>
-          </div>
-          <div>
-            <dt>Recorded break</dt>
-            <dd>
-              {diagnostic.breakMinutes == null
-                ? "No break recorded"
-                : `${diagnostic.breakMinutes} min`}
-            </dd>
-          </div>
-          <div>
-            <dt>Raid start source</dt>
-            <dd>{sources[diagnostic.timing.start]}</dd>
-          </div>
-          <div>
-            <dt>Raid end source</dt>
-            <dd>{sources[diagnostic.timing.end]}</dd>
-          </div>
-          <div>
-            <dt>Break source</dt>
-            <dd>{sources[diagnostic.timing.break]}</dd>
-          </div>
-        </dl>
-      )}
-    </details>
+      <div>
+        <dt>Start</dt>
+        <dd>
+          {wallTime(timing?.start ?? "")}
+          <span>{source("start")}</span>
+        </dd>
+      </div>
+      <div>
+        <dt>End</dt>
+        <dd>
+          {wallTime(timing?.end ?? "")}
+          <span>{source("end")}</span>
+        </dd>
+      </div>
+      <div>
+        <dt>Break</dt>
+        <dd>
+          {timing?.breakStart && timing.breakEnd
+            ? `${wallTime(timing.breakStart)} – ${wallTime(timing.breakEnd)}${diagnostic?.breakMinutes != null ? ` (${Math.round(diagnostic.breakMinutes)} min)` : ""}`
+            : "No break recorded"}
+          <span>{source("break")}</span>
+        </dd>
+      </div>
+      <div>
+        <dt>Raid time</dt>
+        <dd>
+          {recorded ? minutes(Math.round(recorded.duration)) : "Not recorded"}
+          <span>Excluding break</span>
+        </dd>
+      </div>
+      <div>
+        <dt>Source reports</dt>
+        <dd>
+          {diagnostic?.reportCount ?? recorded?.reports ?? "Not recorded"}
+        </dd>
+      </div>
+      <div>
+        <dt>Mythic encounters</dt>
+        <dd>{diagnostic?.mythicFights ?? "Not recorded"}</dd>
+      </div>
+    </dl>
   );
 }

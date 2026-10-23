@@ -49,12 +49,16 @@ async function open(page: Page) {
   ).toBeVisible();
   await expect(
     page.getByRole("textbox", { name: "Availability notes" }),
+  ).toBeHidden();
+  await page.locator(".availability-notes > summary").click();
+  await expect(
+    page.getByRole("textbox", { name: "Availability notes" }),
   ).toHaveValue("Saved Alpha");
 }
 const notes = (page: Page) =>
   page.getByRole("textbox", { name: "Availability notes" });
 const saveButton = (page: Page) =>
-  page.getByRole("button", { name: "Save adjustment", exact: true });
+  page.getByRole("button", { name: "Save availability", exact: true });
 const status = (page: Page) =>
   page.getByRole("status", { name: "Availability changes" });
 async function unchanged() {
@@ -153,6 +157,130 @@ test.beforeEach(async () => {
   });
 });
 test.afterEach(unchanged);
+test("keeps the next step prominent and filters current saved overrides without losing the editor", async ({
+  page,
+}) => {
+  await admin(async (ctx) => {
+    await setDoc(
+      doc(ctx.firestore(), `${season}/results/fixture/nights/${first}`),
+      {
+        players: [
+          {
+            id: "player-b",
+            played: 80,
+            bench: 20,
+            preBench: 20,
+            postBench: 0,
+            prePlayed: 30,
+            postPlayed: 50,
+            overridden: true,
+            nights: 1,
+          },
+        ],
+      },
+      { merge: true },
+    );
+  });
+  await officer(page, emulator.environment);
+  await page
+    .getByRole("navigation")
+    .getByRole("button", { name: "Overrides", exact: true })
+    .click();
+  await page
+    .getByRole("combobox", { name: "Raid night", exact: true })
+    .selectOption(first);
+  await expect(notes(page)).toBeHidden();
+  await expect(
+    page.getByText("1 player adjusted", { exact: true }),
+  ).toBeVisible();
+  await expect(page.getByText(/Selected raid night:/)).toHaveCount(0);
+  const next = page.getByRole("button", {
+    name: /^(Next: Results|Recalculate and view Results) →$/,
+  });
+  await expect(next).toHaveCount(1);
+  const nextBox = (await next.boundingBox())!;
+  const pickerBox = (await page
+    .getByRole("combobox", { name: "Raid night", exact: true })
+    .boundingBox())!;
+  expect(
+    Math.abs(
+      nextBox.y + nextBox.height / 2 - (pickerBox.y + pickerBox.height / 2),
+    ),
+  ).toBeLessThan(3);
+  await expect(
+    page.getByText(/Correct availability for late arrivals/),
+  ).toHaveCount(0);
+  await page
+    .getByRole("button", { name: "Sort by Total bench", exact: true })
+    .click();
+  await expect(
+    page.getByRole("button", {
+      name: "Sort by Total bench, ascending",
+      exact: true,
+    }),
+  ).toHaveAttribute("aria-pressed", "true");
+  await expect(
+    page.getByLabel(/^Total bench: 20 minutes(?:, availability override)?$/),
+  ).toBeVisible();
+  const listBox = (await page
+    .getByRole("heading", { name: "Who was available?" })
+    .boundingBox())!;
+  expect(nextBox.y + nextBox.height).toBeLessThanOrEqual(listBox.y);
+  await expect(
+    page.getByRole("button", { name: /Sort by Played/ }),
+  ).toHaveCount(0);
+  await page.getByRole("checkbox", { name: "Overrides only" }).check();
+  await expect(page.getByRole("button", { name: /Example Alpha/ })).toHaveCount(
+    0,
+  );
+  await expect(
+    page.getByRole("heading", { name: "Example Alpha", exact: true }),
+  ).toBeVisible();
+  await page.getByRole("textbox", { name: "Search players" }).fill("Alpha");
+  await expect(
+    page.getByText("No matching availability overrides."),
+  ).toBeVisible();
+  await page.getByRole("textbox", { name: "Search players" }).fill("");
+  await page.getByRole("button", { name: /Example Beta/ }).click();
+  const editor = page.getByRole("region", {
+    name: "Player availability editor",
+  });
+  await expect(editor).toContainText("Played before break");
+  await expect(editor).toContainText("30m");
+  await expect(editor).toContainText("Available includes time spent benched.");
+  await page.getByRole("checkbox", { name: "Overrides only" }).uncheck();
+  await page.getByRole("button", { name: /Example Alpha/ }).click();
+  await page
+    .getByRole("combobox", { name: "Before break", exact: true })
+    .selectOption("available");
+  await saveButton(page).click();
+  await expect(
+    page.getByText("2 players adjusted", { exact: true }),
+  ).toBeVisible();
+  await page.getByRole("checkbox", { name: "Overrides only" }).check();
+  await page.getByRole("button", { name: "Reset to detected" }).click();
+  await saveButton(page).click();
+  await expect(
+    page.getByText("1 player adjusted", { exact: true }),
+  ).toBeVisible();
+  await expect(page.getByRole("button", { name: /Example Alpha/ })).toHaveCount(
+    0,
+  );
+  await expect(
+    page.getByRole("heading", { name: "Example Alpha", exact: true }),
+  ).toBeVisible();
+  await page.getByRole("checkbox", { name: "Overrides only" }).uncheck();
+  await expect(
+    page.getByRole("button", { name: /Example Alpha/ }),
+  ).toBeVisible();
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth,
+    ),
+  ).toBe(true);
+});
+
 test("validates modes/minutes and saves, cancels, and resets only the selected override", async ({
   page,
 }) => {
@@ -196,7 +324,7 @@ test("validates modes/minutes and saves, cancels, and resets only the selected o
   await notes(page).fill("Discard me");
   await page.getByRole("button", { name: "Cancel", exact: true }).click();
   await expect(notes(page)).toHaveValue("Saved partial availability");
-  await page.getByRole("button", { name: "Reset to automatic" }).click();
+  await page.getByRole("button", { name: "Reset to detected" }).click();
   await expect(
     page.getByRole("combobox", { name: "Before break", exact: true }),
   ).toHaveValue("automatic");
@@ -208,7 +336,7 @@ test("validates modes/minutes and saves, cancels, and resets only the selected o
   });
   await page.getByRole("button", { name: "Cancel", exact: true }).click();
   await expect(minutes).toHaveValue("60");
-  await page.getByRole("button", { name: "Reset to automatic" }).click();
+  await page.getByRole("button", { name: "Reset to detected" }).click();
   await saveButton(page).click();
   await expect(status(page)).toContainText("Availability saved");
   await expect(saveButton(page)).toBeDisabled();
@@ -246,7 +374,7 @@ test("preserves newer field edits through a held save and guards navigation and 
     page.getByRole("button", { name: "Cancel", exact: true }),
   ).toBeDisabled();
   await expect(
-    page.getByRole("button", { name: "Reset to automatic" }),
+    page.getByRole("button", { name: "Reset to detected" }),
   ).toBeDisabled();
   await notes(page).fill("Newer notes");
   await page
@@ -256,7 +384,10 @@ test("preserves newer field edits through a held save and guards navigation and 
   await page
     .getByRole("combobox", { name: "Raid night", exact: true })
     .selectOption(second);
-  await page.getByRole("tab", { name: "Raid timing" }).click();
+  await page
+    .getByRole("navigation", { name: "Main navigation" })
+    .getByRole("button", { name: "Review Night", exact: true })
+    .click();
   await page
     .getByRole("navigation")
     .getByRole("button", { name: /^Reports/ })
@@ -380,7 +511,11 @@ test("protects player/night/tab/page drafts and supports keyboard navigation on 
       page
         .getByRole("combobox", { name: "Raid night", exact: true })
         .selectOption(second),
-    () => page.getByRole("tab", { name: "Raid timing" }).click(),
+    () =>
+      page
+        .getByRole("navigation", { name: "Main navigation" })
+        .getByRole("button", { name: "Review Night", exact: true })
+        .click(),
     () =>
       page
         .getByRole("navigation")
@@ -428,7 +563,7 @@ test("handles roster arrival, clean removal, search and unknown metadata", async
     .click();
   await expect(page.getByText("No players in the roster yet.")).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "Save adjustment" }),
+    page.getByRole("button", { name: "Save availability" }),
   ).toHaveCount(0);
   await admin(async (ctx) => {
     await setDoc(doc(ctx.firestore(), `${season}/players/player-a`), {
@@ -522,6 +657,10 @@ test("preserves a removed player's draft and recovers after cancel without writi
       ...metadata(1),
     });
   });
+  await expect(
+    page.getByRole("heading", { name: "Example Alpha", exact: true }),
+  ).toBeVisible();
+  await page.locator(".availability-notes > summary").click();
   await expect(notes(page)).toHaveValue("Retained roster draft");
   await removeAlpha();
   await page.getByRole("button", { name: "Cancel edits", exact: true }).focus();
@@ -529,6 +668,7 @@ test("preserves a removed player's draft and recovers after cancel without writi
   await expect(
     page.getByRole("heading", { name: "Example Beta", exact: true }),
   ).toBeVisible();
+  await page.locator(".availability-notes > summary").click();
   await expect(notes(page)).toHaveValue("Other player");
   await admin(async (ctx) => {
     expect((await getDoc(doc(ctx.firestore(), path))).data()?.notes).toBe(

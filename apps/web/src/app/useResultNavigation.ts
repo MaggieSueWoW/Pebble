@@ -6,7 +6,14 @@ export type ResultLocation = {
   period: string;
   player: string | null;
 };
-const pages: Page[] = ["reports", "overrides", "results", "roster", "settings"];
+const pages: Page[] = [
+  "reports",
+  "review",
+  "overrides",
+  "results",
+  "roster",
+  "settings",
+];
 const entry = () =>
   history.state?.pebbleNavigation as { index: number; page?: Page } | undefined;
 

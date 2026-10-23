@@ -194,6 +194,98 @@ test.afterEach(async () => {
     ).toBe("Baseline Player");
   });
 });
+test("makes completion and officer actions obvious while keeping details and adjustments compact", async ({
+  page,
+}) => {
+  await admin(async (ctx) => {
+    const ref = doc(
+      ctx.firestore(),
+      `${season}/results/baseline/nights/${nights.baseline}`,
+    );
+    const night = (await getDoc(ref)).data()!;
+    await setDoc(
+      ref,
+      {
+        players: [
+          {
+            ...night.players[0],
+            bench: 30.4,
+            played: 90.6,
+            preBench: 10.2,
+            postBench: 20.2,
+            prePlayed: 40.4,
+            postPlayed: 50.2,
+            overridden: true,
+          },
+        ],
+      },
+      { merge: true },
+    );
+  });
+  await resultsPage(page);
+  await expect(
+    page.getByRole("status", { name: "Night completion" }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Played %", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Time Played", exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Process another night" }),
+  ).toHaveCount(0);
+  await page
+    .getByRole("combobox", { name: "Result period" })
+    .selectOption(nights.baseline);
+  const row = page.locator(".result-player-row");
+  await expect(row.getByText("Adjusted", { exact: true })).toBeVisible();
+  await expect(row.getByText("30m", { exact: true })).toBeVisible();
+  await expect(row.getByText("1h 31m", { exact: true })).toBeVisible();
+  await page
+    .getByRole("button", { name: "Details for Baseline Player" })
+    .click();
+  const breakdown = page.getByRole("region", {
+    name: "Availability breakdown for Baseline Player",
+  });
+  await expect(breakdown.getByRole("row")).toHaveText([
+    "PeriodBenchPlayedReason",
+    "Before break10m40mNot recorded",
+    "After break20m50mNot recorded",
+  ]);
+  await expect(
+    breakdown.getByRole("region", { name: "Attendance", exact: true }),
+  ).toHaveCount(0);
+  await expect(breakdown.locator("details")).toHaveCount(0);
+  await seedResult("warnings", "Baseline Player", nights.baseline, true, 1, [
+    `${nights.baseline}: First warning`,
+    `${nights.baseline}: Second warning`,
+  ]);
+  await publish("warnings");
+  await expect(
+    page.getByRole("region", { name: "Nights to review" }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: /^Review warnings for/ }).click();
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText(
+    "Review Night",
+  );
+  await page
+    .getByRole("navigation", { name: "Main navigation" })
+    .getByRole("button", { name: "Results", exact: true })
+    .click();
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth,
+    ),
+  ).toBe(true);
+  await page
+    .getByRole("navigation", { name: "Main navigation" })
+    .getByRole("button", { name: /^Reports/ })
+    .click();
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Reports");
+});
+
 test("retains the complete view during held reads and swaps rows, totals and nights together", async ({
   page,
 }) => {
@@ -224,9 +316,6 @@ test("retains the complete view during held reads and swaps rows, totals and nig
   await expect(
     page.getByRole("combobox", { name: "Result period" }).locator("option"),
   ).toHaveText(["Season to date", "Thursday, October 15"]);
-  await expect(
-    page.getByText("1 raid night this season", { exact: true }),
-  ).toBeVisible();
   await expect(status(page)).toContainText("Updated");
 });
 test("public read denial preserves prior results and keyboard retry recovers on a narrow screen", async ({
@@ -327,7 +416,9 @@ test("an edit saved during computation still needs another run after completion 
   await officer(page, emulator.environment);
   expectedRequests = 1;
   await page.getByRole("button", { name: "Run Pebble", exact: true }).click();
-  await expect(page.getByRole("button", { name: "Run queued" })).toBeDisabled();
+  await expect(
+    page.getByRole("button", { name: "Run queued", exact: true }),
+  ).toBeDisabled();
   let id = "";
   await admin(async (ctx) => {
     id = (
@@ -428,6 +519,11 @@ test("keeps officer warnings with displayed rows during loading and clears them 
     );
   });
   await resultsPage(page);
+  await page
+    .getByRole("region", { name: "Nights to review" })
+    .getByRole("button")
+    .first()
+    .click();
   const region = page.getByRole("region", { name: "Result warnings" });
   await expect(
     region.getByRole("heading", { name: "Result warnings" }),
@@ -445,11 +541,13 @@ test("keeps officer warnings with displayed rows during loading and clears them 
     page.getByText("New source warning", { exact: true }),
   ).toHaveCount(0);
   held.release();
-  await expect(page.getByText("Delayed Player", { exact: true })).toBeVisible();
+  await expect(region).toContainText("New source warning");
   await expect(region.getByRole("listitem")).toHaveText(["New source warning"]);
   await seedResult("latest", "Latest Player", nights.latest);
   await publish("latest");
-  await expect(page.getByText("Latest Player", { exact: true })).toBeVisible();
+  await expect(
+    page.getByText("No warnings recorded for this night."),
+  ).toBeVisible();
   await expect(region).toHaveCount(0);
 });
 
@@ -563,6 +661,7 @@ test("defaults to report-only dates, follows late metadata and retains explicit 
   await expect(raidDate(page)).toHaveValue("2026-10-15");
   await loggedNight("2026-10-16");
   await expect(raidDate(page)).toHaveValue("2026-10-16");
+  await page.locator(".availability-notes > summary").click();
   const notes = page.getByRole("textbox", { name: "Availability notes" });
   await notes.fill("Keep this night draft");
   await loggedNight("2026-10-17");
@@ -606,6 +705,7 @@ test("keeps the default night during a held save and preserves its acknowledged 
 }) => {
   await overrides(page);
   await expect(raidDate(page)).toHaveValue(nights.baseline);
+  await page.locator(".availability-notes > summary").click();
   const notes = page.getByRole("textbox", { name: "Availability notes" });
   await notes.fill("Saved for the original night");
   await reportNight(nights.latest);
@@ -627,7 +727,7 @@ test("keeps the default night during a held save and preserves its acknowledged 
     await route.continue();
   });
   await page
-    .getByRole("button", { name: "Save adjustment", exact: true })
+    .getByRole("button", { name: "Save availability", exact: true })
     .click();
   await requested;
   // The SDK may defer incoming snapshots until this held commit completes.
@@ -811,7 +911,9 @@ test("officer empty periods and recent history keep progress visible and link to
   await expect(
     page.getByText(/Use Reports in the sidebar to review the included logs/),
   ).toBeVisible();
-  await expect(page.getByRole("button", { name: "Run queued" })).toBeDisabled();
+  await expect(
+    page.getByRole("button", { name: "Run queued", exact: true }),
+  ).toBeDisabled();
   const history = page.getByText("Run history", { exact: true });
   await history.click();
   await expect(
@@ -837,7 +939,9 @@ test("officer empty periods and recent history keep progress visible and link to
   await expect(
     page.getByRole("textbox", { name: "Warcraft Logs reports" }),
   ).toHaveValue("");
-  await expect(page.getByRole("button", { name: "Run queued" })).toBeDisabled();
+  await expect(
+    page.getByRole("button", { name: "Run queued", exact: true }),
+  ).toBeDisabled();
   await admin(async (ctx) => {
     const saved = (
       await getDoc(doc(ctx.firestore(), `${season}/reports/${report}`))
@@ -888,6 +992,11 @@ test("officer warning sources stay with displayed results instead of newer histo
     );
   });
   await resultsPage(page);
+  await page
+    .getByRole("region", { name: "Nights to review" })
+    .getByRole("button")
+    .first()
+    .click();
   const sources = page.getByRole("list", {
     name: "Source reports for this warning",
   });
@@ -929,7 +1038,9 @@ test("officer warning sources stay with displayed results instead of newer histo
     sources.getByRole("link", { name: "BBBBBBBBBBBBBBBB" }),
   ).toHaveCount(0);
   held.release();
-  await expect(page.getByText("Delayed Player", { exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("region", { name: "Result warnings" }),
+  ).toContainText("New warning");
   await expect(
     sources.getByRole("link", { name: "BBBBBBBBBBBBBBBB" }),
   ).toHaveAttribute(
@@ -949,7 +1060,7 @@ test("officer warning sources stay with displayed results instead of newer histo
     "Missing source metadata warning",
   ]);
   await publish("latest");
-  await expect(page.getByText("Latest Player", { exact: true })).toBeVisible();
+
   await expect(
     page.getByText("Missing source metadata warning", { exact: true }),
   ).toBeVisible();
@@ -1025,7 +1136,10 @@ test("keyboard details, validation and labelled discard work across narrow workf
   );
   await expect(page.locator("#availability-validation")).toBeVisible();
   await noOverflow();
-  await page.getByRole("tab", { name: "Raid timing" }).click();
+  await page
+    .getByRole("navigation", { name: "Main navigation" })
+    .getByRole("button", { name: "Review Night", exact: true })
+    .click();
   const dialog = page.getByRole("dialog", { name: "Keep your changes?" });
   await expect(dialog).toBeVisible();
   await expect(dialog).toHaveAttribute(
@@ -1039,9 +1153,18 @@ test("keyboard details, validation and labelled discard work across narrow workf
   await expect(dialog).toBeHidden();
   await expect(minutes).toHaveValue("0");
   await page.getByRole("button", { name: "Cancel", exact: true }).click();
-  await page.getByRole("tab", { name: "Raid timing" }).click();
+  await page
+    .getByRole("navigation", { name: "Main navigation" })
+    .getByRole("button", { name: "Review Night", exact: true })
+    .click();
   await expect(
-    page.getByRole("tabpanel", { name: "Raid timing" }),
+    page.getByRole("region", { name: "Raid timing editor" }),
+  ).toBeHidden();
+  await page
+    .getByText("Times look wrong? Adjust timing", { exact: true })
+    .click();
+  await expect(
+    page.getByRole("region", { name: "Raid timing editor" }),
   ).toBeVisible();
   await noOverflow();
   await page
@@ -1225,8 +1348,8 @@ for (const signedIn of [false, true]) {
       breakdown.getByRole("table", { name: "Time by break" }).getByRole("row"),
     ).toHaveText([
       "PeriodBenchPlayed",
-      "Before break10 min13 min",
-      "After break20 min47 min",
+      "Before break10m13m",
+      "After break20m47m",
     ]);
     await expect(
       breakdown.getByRole("button", { name: "Edit availability" }),
@@ -1240,14 +1363,12 @@ for (const signedIn of [false, true]) {
     await expect(
       breakdown.getByRole("table", { name: "Time by break" }).getByRole("row"),
     ).toHaveText([
-      "PeriodBenchPlayed",
-      "Before break10 min-",
-      "After break20 min60 min",
+      "PeriodBenchPlayedReason",
+      "Before break10m-Not recorded",
+      "After break20m1h 00mNot recorded",
     ]);
-    await breakdown
-      .getByText("Availability explanation", { exact: true })
-      .click();
-    await expect(breakdown).toContainText("Officer adjustment applied");
+    await expect(breakdown.locator("details")).toHaveCount(0);
+    await expect(page.getByText("Adjusted", { exact: true })).toBeVisible();
     await expect(breakdown).not.toContainText("undefined");
     expect(
       await page.evaluate(

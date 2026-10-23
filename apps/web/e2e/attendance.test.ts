@@ -121,28 +121,18 @@ test("presents published season attendance separately, orders P/B/O weeks and do
   await page.keyboard.press("Enter");
   const details = page.getByRole("region", { name: "Attendance", exact: true });
   await expect(details.getByText("50%", { exact: true })).toBeVisible();
-  await expect(details.locator("details[open]")).toHaveCount(0);
-  await details.getByText("Attendance explanation", { exact: true }).click();
-  await details
-    .locator("summary")
-    .filter({ hasText: "Weekly attendance" })
-    .click();
-  await expect(
-    details.getByText("Possible minutes", { exact: true }),
-  ).toBeVisible();
-  await expect(details.getByText("160 min", { exact: true })).toBeVisible();
-  await expect(details.getByText("60 min", { exact: true })).toBeVisible();
-  await expect(details.getByText("20 min", { exact: true })).toBeVisible();
+  await expect(details.locator("details")).toHaveCount(0);
+  await expect(details).toContainText(
+    "(1h 00m eligible played + 20m eligible bench) / 2h 40m possible",
+  );
   await expect(page.getByText("75%", { exact: true })).toHaveCount(3);
   const weeks = details
     .getByRole("table", { name: "Weekly attendance" })
     .getByRole("row");
   await expect(weeks.nth(1)).toContainText("October 6");
-  await expect(weeks.nth(2).getByLabel("played, benched, out")).toHaveText(
-    "PBO",
-  );
+  await expect(weeks.nth(2)).toContainText("played, benched, out");
   await expect(weeks.nth(3)).toContainText("No applicable event");
-  await expect(details.getByText(/P = played/)).toContainText("O = out");
+  await expect(details.getByText(/P = played/)).toHaveCount(0);
   expect(resultReads.length).toBe(initialReads);
   await page.setViewportSize({ width: 390, height: 844 });
   expect(
@@ -173,7 +163,7 @@ test("keeps old publications and zero denominators unavailable without fabricati
     .getByRole("button", { name: "Details for Earlier", exact: true })
     .click();
   let details = page.getByRole("region", { name: "Attendance", exact: true });
-  await expect(details).toContainText("Attendance unavailable");
+  await expect(details).toContainText("Attendance not recorded");
   await expect(details).not.toContainText("0%");
   await expect(details).not.toContainText("ineligible");
   await page
@@ -181,8 +171,10 @@ test("keeps old publications and zero denominators unavailable without fabricati
     .click();
   details = page.getByRole("region", { name: "Attendance", exact: true });
   await expect(details.getByText("Unavailable", { exact: true })).toBeVisible();
-  await expect(details.getByText("0 min", { exact: true })).toHaveCount(3);
-  await expect(details).toContainText("No possible time was recorded");
+  await expect(details).toContainText(
+    "(0m eligible played + 0m eligible bench) / 0m possible",
+  );
+  await expect(details).toContainText("No possible time recorded");
   await expect(details).not.toContainText("0%");
 });
 
@@ -204,13 +196,8 @@ test("makes fully absent published attendance reachable outside the fairness ran
     exact: true,
   });
   await expect(details.getByText("0%", { exact: true })).toBeVisible();
-  await details.getByText("Attendance explanation", { exact: true }).click();
-  await details
-    .locator("summary")
-    .filter({ hasText: "Weekly attendance" })
-    .click();
-  await expect(details.getByText("160 min", { exact: true })).toBeVisible();
-  await expect(details.getByLabel("out", { exact: true })).toHaveText("O");
+  await expect(details.getByText("2h 40m", { exact: true })).toBeVisible();
+  await expect(details.getByText("out", { exact: true })).toHaveText("out");
   await expect(page).toHaveURL(/player=absent/);
   await page.reload();
   await expect(details.getByText("0%", { exact: true })).toBeVisible();

@@ -38,7 +38,7 @@ test('only officers may save reports, with strict fields and attribution', async
   await assertSucceeds(updateDoc(ref, { enabled: false, ...meta('officer', 2) }));
   await assertFails(updateDoc(ref, { title: 'Spoofed derived field', ...meta('officer', 3) }));
   await assertFails(updateDoc(ref, { ...meta('someone-else', 3) }));
-  await assertFails(deleteDoc(ref));
+  await assertSucceeds(deleteDoc(ref));
   await assertFails(setDoc(doc(env.unauthenticatedContext().firestore(), `${season}/reports/${code}`), { enabled: true, ...meta() }));
   await assertFails(setDoc(doc(env.authenticatedContext('member').firestore(), `${season}/reports/${code}`), { enabled: true, ...meta('member') }));
 });
@@ -138,15 +138,17 @@ for (const [family, [id, domain]] of Object.entries(families)) {
       await assertFails(write('update', change));
     }
     await assertSucceeds(write('update', meta('officer', 2)));
-    if (family === 'players' || family === 'characters') await assertSucceeds(write('delete'));
+    if (['reports', 'players', 'characters'].includes(family)) await assertSucceeds(write('delete'));
     else await assertFails(deleteDoc(ref));
     for (const reader of [env.unauthenticatedContext().firestore(), env.authenticatedContext('member').firestore()]) {
       await assertFails(getDocFromServer(doc(reader, `${season}/${family}/${id}`)));
       await assertFails(getDocsFromServer(collection(reader, `${season}/${family}`)));
+      await assertFails(deleteDoc(doc(reader, `${season}/${family}/${id}`)));
       await assertFails(setDoc(doc(reader, `${season}/${family}/${id}`), { ...domain, ...meta('member', 3) }));
     }
     await env.withSecurityRulesDisabled(ctx => setDoc(doc(ctx.firestore(), 'officers/officer'), { enabled: false }));
     await assertFails(updateDoc(ref, meta('officer', 3)));
+    await assertFails(deleteDoc(ref));
     await assertFails(getDocFromServer(ref));
   });
 }
@@ -286,4 +288,17 @@ test('a main cannot disappear in the same commit that adds or reassigns a surviv
   await assertSucceeds(deleteDoc(doc(db, `${season}/players/p1`)));
   await assertFails(setDoc(doc(db, `${season}/characters/late`), {name:'Late', realm:'', region:'us', playerId:'p1', ...meta()}));
   await assertFails(setDoc(doc(db, `${season}/availabilityOverrides/2026-10-15_p1`), {nightId:'2026-10-15', playerId:'p1', pre:{mode:'automatic'}, post:{mode:'available'}, ...meta()}));
+});
+
+test('officers can persist season ignores without a main; public, forged and linked bypasses fail', async () => {
+  const db = env.authenticatedContext('officer').firestore();
+  const ref = doc(db, `${season}/characters/ignore-extra`);
+  const value = { name: 'Extra', realm: 'Azjol-Nerub', region: 'eu', playerId: '', ignored: true, ...meta() };
+  for (const reader of [env.unauthenticatedContext().firestore(), env.authenticatedContext('member').firestore()]) await assertFails(setDoc(doc(reader, `${season}/characters/ignore-extra`), { ...value, ...meta('member') }));
+  await assertSucceeds(setDoc(ref, value));
+  await assertFails(updateDoc(ref, { playerId: 'p1', ...meta('officer', 2) }));
+  await assertFails(updateDoc(ref, { ignored: false, playerId: 'p1', ...meta('officer', 2) }));
+  await assertSucceeds(deleteDoc(ref));
+  await assertSucceeds(linkedWrite(db, ref, 'set', { name: 'Extra', realm: '', region: 'us', playerId: 'p1', ...meta() }));
+  await assertFails(updateDoc(ref, { ignored: true, playerId: '', ...meta('officer', 2) }));
 });

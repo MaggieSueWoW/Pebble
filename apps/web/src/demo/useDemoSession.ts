@@ -166,6 +166,15 @@ export function useDemoSession() {
       Object.entries(expected).map(([path, version]) => [path, version + 1]),
     );
   }
+  async function deleteReport(code: string) {
+    setSaved((old) => ({
+      ...old,
+      inputs: {
+        ...old.inputs,
+        reports: old.inputs.reports.filter((report) => report.code !== code),
+      },
+    }));
+  }
   async function requestRun() {
     setStage(0);
     setActive({ id: crypto.randomUUID(), status: "queued" });
@@ -188,6 +197,7 @@ export function useDemoSession() {
     notification,
     saveInputs,
     requestRun,
+    deleteReport,
     reset,
     unprocessed: saved.results.signature !== signature(saved.inputs),
     detectedTiming: defaultTiming,

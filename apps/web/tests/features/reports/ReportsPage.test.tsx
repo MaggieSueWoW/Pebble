@@ -14,7 +14,7 @@ const report: Report = {
 };
 const save = vi.fn().mockResolvedValue(undefined);
 function Panel({ reports }: { reports: Report[] }) {
-  const editor = useReportEditor(reports, {}, save);
+  const editor = useReportEditor(reports, {}, save, vi.fn());
   return (
     <ReportsPage
       reports={reports}
@@ -85,14 +85,6 @@ it("sorts raid nights oldest first, reverses on click and keeps unfetched report
       .getAllByRole("switch")
       .map((button) => button.getAttribute("aria-label"));
   const header = screen.getByRole("columnheader", { name: "Raid night (PT)" });
-  expect(header.getAttribute("aria-sort")).toBe("ascending");
-  expect(order()).toEqual([
-    "Include AAAAAAAAAAAAAAAA",
-    "Include DDDDDDDDDDDDDDDD",
-    "Include CCCCCCCCCCCCCCCC",
-    "Include BBBBBBBBBBBBBBBB",
-  ]);
-  fireEvent.click(screen.getByRole("button", { name: "Raid night (PT)" }));
   expect(header.getAttribute("aria-sort")).toBe("descending");
   expect(order()).toEqual([
     "Include CCCCCCCCCCCCCCCC",
@@ -102,5 +94,13 @@ it("sorts raid nights oldest first, reverses on click and keeps unfetched report
   ]);
   fireEvent.click(screen.getByRole("button", { name: "Raid night (PT)" }));
   expect(header.getAttribute("aria-sort")).toBe("ascending");
+  expect(order()).toEqual([
+    "Include AAAAAAAAAAAAAAAA",
+    "Include DDDDDDDDDDDDDDDD",
+    "Include CCCCCCCCCCCCCCCC",
+    "Include BBBBBBBBBBBBBBBB",
+  ]);
+  fireEvent.click(screen.getByRole("button", { name: "Raid night (PT)" }));
+  expect(header.getAttribute("aria-sort")).toBe("descending");
   expect(save).not.toHaveBeenCalled();
 });

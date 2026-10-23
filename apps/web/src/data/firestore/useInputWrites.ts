@@ -121,6 +121,31 @@ export function useInputWrites(
       setError,
     ],
   );
+  async function deleteReport(code: string, expected: number) {
+    assertAccess();
+    if (!/^[A-Za-z0-9]{16}$/.test(code))
+      throw new Error("Invalid report code.");
+    setBusy(true);
+    setError("");
+    try {
+      await runTransaction(db!, async (transaction) => {
+        assertAccess();
+        const ref = doc(db!, "seasons", seasonId, "reports", code);
+        const snapshot = await transaction.get(ref);
+        assertAccess();
+        if (!snapshot.exists() || snapshot.data()?.version !== expected)
+          throw new Error(
+            "Another officer changed this report. Review the latest details before deleting.",
+          );
+        transaction.delete(ref);
+      });
+    } catch (cause) {
+      if (accessSession === session.current) fail(cause as Error);
+      throw cause;
+    } finally {
+      if (accessSession === session.current) setBusy(false);
+    }
+  }
   async function saveCalculation(value: CalculationSettings, expected: number) {
     assertAccess();
     const invalid = validateCalculation(value);
@@ -153,5 +178,5 @@ export function useInputWrites(
       if (accessSession === session.current) setBusy(false);
     }
   }
-  return { saveInputs, saveCalculation };
+  return { saveInputs, saveCalculation, deleteReport };
 }

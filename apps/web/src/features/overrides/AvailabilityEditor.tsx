@@ -1,7 +1,13 @@
-import { Check, CircleAlert, Info, RotateCcw } from "lucide-react";
+import { Check, CircleAlert, RotateCcw } from "lucide-react";
 import { SelectControl } from "../../components/SelectControl";
 import { PanelHeader } from "../../components/PanelHeader";
-import { type Player, type Availability, type Mode } from "../../shared/model";
+import {
+  minutes,
+  type PlayerResult,
+  type Player,
+  type Availability,
+  type Mode,
+} from "../../shared/model";
 import type { AvailabilityEditorState } from "./useAvailabilityEditor";
 function AvailabilityField({
   label,
@@ -34,10 +40,10 @@ function AvailabilityField({
             )
           }
         >
-          <option value="automatic">Automatic</option>
-          <option value="available">Available</option>
-          <option value="unavailable">Unavailable</option>
-          <option value="partial">Partial availability…</option>
+          <option value="automatic">Use detected</option>
+          <option value="available">Available throughout</option>
+          <option value="unavailable">Unavailable throughout</option>
+          <option value="partial">Available for…</option>
           <option value="unavailableFor">Unavailable for…</option>
         </SelectControl>
       </label>
@@ -77,7 +83,9 @@ export function AvailabilityEditor({
   player,
   editor,
   span,
+  recorded,
 }: {
+  recorded?: PlayerResult;
   player: Player | undefined;
   editor: AvailabilityEditorState;
   span: { pre: number; post: number };
@@ -144,39 +152,70 @@ export function AvailabilityEditor({
         actions={editDirty && <span className="badge amber">Unsaved</span>}
       />
       <p className="editor-intro">
-        Tell Pebble when this player was available. Automatic uses the bot’s
-        normal inference.
+        Available includes time spent benched. Use detected availability unless
+        you need to correct it.
       </p>
-      <AvailabilityField
-        label="Before break"
-        value={edit.pre}
-        max={span.pre}
-        onChange={(pre) => setEdit((old) => ({ ...old, pre }))}
-      />
-      <AvailabilityField
-        label="After break"
-        value={edit.post}
-        max={span.post}
-        onChange={(post) => setEdit((old) => ({ ...old, post }))}
-      />
-      <div className="field">
-        <label>
-          Notes <span className="optional">optional · private</span>
-          <textarea
-            rows={2}
-            maxLength={500}
-            placeholder="Anything helpful to remember…"
-            aria-label="Availability notes"
-            value={edit.notes}
-            onChange={(e) =>
-              setEdit((old) => ({
-                ...old,
-                notes: e.target.value,
-              }))
-            }
-          />
-        </label>
+      <dl
+        className="availability-played"
+        aria-label="Played time from last completed run"
+      >
+        <div>
+          <dt>Played before break</dt>
+          <dd>
+            {recorded?.prePlayed == null
+              ? "Not recorded"
+              : minutes(Math.round(recorded.prePlayed))}
+          </dd>
+        </div>
+        <div>
+          <dt>Played after break</dt>
+          <dd>
+            {recorded?.postPlayed == null
+              ? "Not recorded"
+              : minutes(Math.round(recorded.postPlayed))}
+          </dd>
+        </div>
+      </dl>
+      <div className="availability-halves">
+        <AvailabilityField
+          label="Before break"
+          value={edit.pre}
+          max={span.pre}
+          onChange={(pre) => setEdit((old) => ({ ...old, pre }))}
+        />
+        <AvailabilityField
+          label="After break"
+          value={edit.post}
+          max={span.post}
+          onChange={(post) => setEdit((old) => ({ ...old, post }))}
+        />
       </div>
+      <details className="availability-notes">
+        <summary>
+          Notes{" "}
+          <span className="optional">
+            optional · private{edit.notes ? " · Added" : ""}
+          </span>
+        </summary>
+        <div className="field">
+          <label>
+            <span className="sr-only">Availability notes</span>
+            <textarea
+              rows={2}
+              maxLength={500}
+              placeholder="Anything helpful to remember…"
+              aria-label="Availability notes"
+              value={edit.notes}
+              onChange={(e) =>
+                setEdit((old) => ({
+                  ...old,
+                  notes: e.target.value,
+                }))
+              }
+            />
+          </label>
+        </div>
+      </details>
       {adjustmentError && (
         <p id="availability-validation" role="alert" className="field-error">
           <CircleAlert size={14} />
@@ -189,7 +228,7 @@ export function AvailabilityEditor({
           onClick={save}
           disabled={!editDirty || Boolean(adjustmentError) || blocked}
         >
-          <Check size={15} /> Save adjustment
+          <Check size={15} /> Save availability
         </button>
         <button
           className="button secondary"
@@ -198,20 +237,13 @@ export function AvailabilityEditor({
         >
           Cancel
         </button>
-      </div>
-      <button
-        className="text-button reset-link"
-        disabled={blocked}
-        onClick={reset}
-      >
-        <RotateCcw size={13} /> Reset to automatic
-      </button>
-      <div className="notice">
-        <Info size={16} />
-        <span>
-          Save first, then Run Pebble. Current results stay the same until the
-          run completes.
-        </span>
+        <button
+          className="text-button reset-link"
+          disabled={blocked}
+          onClick={reset}
+        >
+          <RotateCcw size={13} /> Reset to detected
+        </button>
       </div>
     </section>
   );

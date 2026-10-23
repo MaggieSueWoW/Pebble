@@ -236,3 +236,17 @@ Hosting serves only the frontend. The local worker must still run to process
 requests. Published results remain readable while it is offline. Officer notes,
 raw input records, private run errors, credentials, and UIDs are excluded from
 public result documents.
+
+
+## Season character ignores
+
+Review Night stores persistent season ignores in the existing `characters`
+collection: `{name, realm, region, playerId: "", ignored: true}` plus standard
+version/attribution metadata. Normal alt mappings omit `ignored` (or use false)
+and still require an existing main and its atomic version advance. Ignoring a
+character does not alter fight times or other participants. An explicit mapping
+or matching main takes precedence over an ignore. Backup/import and captured input
+versions include these records through the existing input collection contract.
+Deploy the matching worker and reviewed browser rules before saving ignores.
+The next successful run adds exact missing-player identities to private night
+diagnostics; these fields are never copied into public result documents.

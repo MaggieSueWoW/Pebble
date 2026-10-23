@@ -25,7 +25,7 @@ function deferred() {
 it("coalesces repeated saves and preserves text entered during a pending add", async () => {
   const wait = deferred(),
     save = vi.fn((_changes: Report[], _expected: Versions) => wait.promise);
-  const { result } = renderHook(() => useReportEditor([], {}, save));
+  const { result } = renderHook(() => useReportEditor([], {}, save, vi.fn()));
   act(() => result.current.setText(a));
   let done!: Promise<void>;
   act(() => {
@@ -48,7 +48,7 @@ it("keeps failed adds for retry and clears only acknowledged drafts", async () =
     .fn()
     .mockRejectedValueOnce(new Error("Save unavailable"))
     .mockResolvedValue(undefined);
-  const { result } = renderHook(() => useReportEditor([], {}, save));
+  const { result } = renderHook(() => useReportEditor([], {}, save, vi.fn()));
   act(() => result.current.setText(a));
   await act(() => result.current.add());
   expect(result.current.error).toBe("Save unavailable");
@@ -59,7 +59,7 @@ it("keeps failed adds for retry and clears only acknowledged drafts", async () =
 });
 it("rejects invalid batches and deduplicates URLs and codes", async () => {
   const save = vi.fn().mockResolvedValue(undefined);
-  const { result } = renderHook(() => useReportEditor([], {}, save));
+  const { result } = renderHook(() => useReportEditor([], {}, save, vi.fn()));
   act(() => result.current.setText(`${a}\nbad`));
   await act(() => result.current.add());
   expect(save).not.toHaveBeenCalled();
@@ -75,7 +75,7 @@ it("freezes each edited row's version and retains conflicting selections", async
   const rows = [report(a), report(b)];
   const { result, rerender } = renderHook(
     ({ versions }: { versions: Versions }) =>
-      useReportEditor(rows, versions, save),
+      useReportEditor(rows, versions, save, vi.fn()),
     {
       initialProps: { versions: { [`reports/${a}`]: 1, [`reports/${b}`]: 1 } },
     },
@@ -100,7 +100,7 @@ it("locks selection controls during saves and writes only edited rows", async ()
   const wait = deferred(),
     save = vi.fn((_changes: Report[], _expected: Versions) => wait.promise);
   const { result } = renderHook(() =>
-    useReportEditor([report(a), report(b)], {}, save),
+    useReportEditor([report(a), report(b)], {}, save, vi.fn()),
   );
   act(() => result.current.toggle(a));
   let done!: Promise<void>;
@@ -127,6 +127,7 @@ it("re-enables one report, preserving newer text and unrelated selections", asyn
       [report(a, false), report(b)],
       { [`reports/${a}`]: 4 },
       save,
+      vi.fn(),
     ),
   );
   act(() => {
@@ -151,7 +152,7 @@ it("re-enables one report, preserving newer text and unrelated selections", asyn
 it("blocks writes while another input save is busy", async () => {
   const save = vi.fn();
   const { result } = renderHook(() =>
-    useReportEditor([report(a, false)], {}, save, true),
+    useReportEditor([report(a, false)], {}, save, vi.fn(), true),
   );
   act(() => {
     result.current.setText(b);
@@ -162,5 +163,55 @@ it("blocks writes while another input save is busy", async () => {
     await result.current.reenable(a);
   });
   expect(save).not.toHaveBeenCalled();
+  expect(result.current.edits).toEqual({});
+});
+
+it("deletes once with the current version and clears only that report's selection draft", async () => {
+  const wait = deferred();
+  const remove = vi.fn(() => wait.promise);
+  const save = vi.fn();
+  const { result } = renderHook(() =>
+    useReportEditor(
+      [report(a), report(b)],
+      { [`reports/${a}`]: 4 },
+      save,
+      remove,
+    ),
+  );
+  act(() => {
+    result.current.toggle(a);
+    result.current.toggle(b);
+    result.current.setText(c);
+  });
+  let done!: Promise<void>;
+  act(() => {
+    done = result.current.remove(a);
+    void result.current.remove(a);
+  });
+  expect(remove).toHaveBeenCalledExactlyOnceWith(a, 4);
+  expect(result.current.saving).toBe(true);
+  await act(async () => {
+    wait.resolve();
+    await done;
+  });
+  expect(result.current.edits).toEqual({ [b]: false });
+  expect(result.current.text).toBe(c);
+  expect(result.current.message).toContain("Report deleted");
+  expect(save).not.toHaveBeenCalled();
+});
+it("keeps selection drafts when deletion fails and allows retry", async () => {
+  const remove = vi
+    .fn()
+    .mockRejectedValueOnce(new Error("Another officer changed this report"))
+    .mockResolvedValue(undefined);
+  const { result } = renderHook(() =>
+    useReportEditor([report(a)], {}, vi.fn(), remove),
+  );
+  act(() => result.current.toggle(a));
+  await act(() => result.current.remove(a));
+  expect(result.current.error).toContain("Another officer");
+  expect(result.current.edits).toEqual({ [a]: false });
+  await act(() => result.current.remove(a));
+  expect(result.current.error).toBe("");
   expect(result.current.edits).toEqual({});
 });

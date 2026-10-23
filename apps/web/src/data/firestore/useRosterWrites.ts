@@ -15,6 +15,8 @@ import {
   type RosterValue,
 } from "../../features/roster/roster";
 import {
+  characterIdentity,
+  regions,
   normalizeCharacter,
   validateCharacter,
   type CharacterEntry,
@@ -314,5 +316,62 @@ export function useRosterWrites(
       if (accessSession === session.current) setBusy(false);
     }
   }
-  return { savePlayer, deletePlayer, deleteCharacter, swapMain, saveCharacter };
+  async function ignoreCharacter(
+    id: string,
+    raw: Omit<CharacterValue, "playerId">,
+  ) {
+    assertAccess();
+    const value = normalizeCharacter({ ...raw, playerId: "" });
+    if (
+      !/^[A-Za-z0-9_-]{1,100}$/.test(id) ||
+      !/^\p{L}{1,32}$/u.test(value.name) ||
+      value.realm.length > 100 ||
+      !regions.includes(value.region as (typeof regions)[number])
+    )
+      throw new Error(
+        "A valid character name, realm and report region are required.",
+      );
+    const existing = characterEntries.find(
+      (entry) => characterIdentity(entry) === characterIdentity(value),
+    );
+    if (existing?.ignored) return;
+    if (existing)
+      throw new Error(
+        "This character already has a main mapping. Run Pebble to refresh the review.",
+      );
+    setBusy(true);
+    setError("");
+    try {
+      await runTransaction(db!, async (transaction) => {
+        assertAccess();
+        const ref = doc(db!, "seasons", seasonId, "characters", id);
+        const snapshot = await transaction.get(ref);
+        assertAccess();
+        if (snapshot.exists())
+          throw new Error(
+            "This decision was already saved. Run Pebble to refresh the review.",
+          );
+        transaction.set(ref, {
+          ...value,
+          ignored: true,
+          version: 1,
+          updatedBy: user!.uid,
+          updatedAt: serverTimestamp(),
+        });
+      });
+    } catch (cause) {
+      if (accessSession === session.current) fail(cause as Error);
+      throw cause;
+    } finally {
+      if (accessSession === session.current) setBusy(false);
+    }
+  }
+  return {
+    savePlayer,
+    deletePlayer,
+    deleteCharacter,
+    swapMain,
+    saveCharacter,
+    ignoreCharacter,
+  };
 }

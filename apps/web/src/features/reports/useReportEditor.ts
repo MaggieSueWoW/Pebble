@@ -7,6 +7,7 @@ export function useReportEditor(
   reports: Report[],
   versions: Versions,
   save: (changes: Report[], expected: Versions) => Promise<void>,
+  deleteReport: (code: string, expected: number) => Promise<void>,
   busy = false,
   demoNight = "",
 ) {
@@ -44,6 +45,7 @@ export function useReportEditor(
     baseline: Versions,
     done: () => void,
     success: string,
+    operation = () => save(changes, baseline),
   ) {
     if (pending.current || busy || !changes.length) return;
     pending.current = true;
@@ -51,7 +53,7 @@ export function useReportEditor(
     setError("");
     setMessage("");
     try {
-      await save(changes, baseline);
+      await operation();
       if (alive.current) {
         done();
         setMessage(success);
@@ -142,6 +144,24 @@ export function useReportEditor(
       "Report selection saved. Run Pebble to update results.",
     );
   }
+  function remove(code: string) {
+    const report = reports.find((item) => item.code === code);
+    if (!report) return Promise.resolve();
+    return commit(
+      [report],
+      {},
+      () => {
+        setEdits((old) => {
+          const next = { ...old };
+          delete next[code];
+          return next;
+        });
+        delete expected.current[`reports/${code}`];
+      },
+      "Report deleted. Run Pebble to update results.",
+      () => deleteReport(code, versions[`reports/${code}`] ?? 0),
+    );
+  }
   function reset() {
     if (pending.current) return;
     setText("");
@@ -159,6 +179,7 @@ export function useReportEditor(
     message,
     dirty: Boolean(text.trim()) || Object.keys(edits).length > 0,
     add,
+    remove,
     reenable,
     toggle,
     cancelSelection,
