@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
-import { orderResultRows, sortResultRows } from "./resultRanking";
-import { ResultRow } from "./ResultRow";
-import type { PlayerResult } from "./model";
+import { orderResultRows, sortResultRows } from "../src/resultRanking";
+import { ResultRow } from "../src/ResultRow";
+import type { PlayerResult } from "../src/model";
 
 const row = (id: string, bench: number, played = 100): PlayerResult => ({
   id,

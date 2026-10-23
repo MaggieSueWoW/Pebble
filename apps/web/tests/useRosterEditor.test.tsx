@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 import { act, renderHook, cleanup, waitFor } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
-import { useRosterEditor } from "./useRosterEditor";
-import { blankPlayer, type RosterEntry } from "./roster";
+import { useRosterEditor } from "../src/useRosterEditor";
+import { blankPlayer, type RosterEntry } from "../src/roster";
 afterEach(cleanup);
 const initial: RosterEntry = {
   ...blankPlayer(),

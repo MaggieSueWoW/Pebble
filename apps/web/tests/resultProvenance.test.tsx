@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, expect, it } from "vitest";
-import { AvailabilityExplanation } from "./AvailabilityExplanation";
-import { NightDiagnostics } from "./NightDiagnostics";
+import { AvailabilityExplanation } from "../src/AvailabilityExplanation";
+import { NightDiagnostics } from "../src/NightDiagnostics";
 afterEach(cleanup);
 it("explains partial half flags and whole-row source without inventing full-half time", () => {
   render(

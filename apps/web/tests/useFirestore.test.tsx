@@ -10,8 +10,8 @@ import {
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { User } from "firebase/auth";
-import { useFirestore } from "./useFirestore";
-import Root from "./Root";
+import { useFirestore } from "../src/useFirestore";
+import Root from "../src/Root";
 
 type Data = Record<string, unknown>;
 type Snapshot = {
@@ -39,7 +39,7 @@ const mock = vi.hoisted(() => ({
   setDoc: vi.fn(),
   transaction: vi.fn(),
 }));
-vi.mock("./firebase", () => ({
+vi.mock("../src/firebase", () => ({
   auth: {},
   db: {},
   configured: true,

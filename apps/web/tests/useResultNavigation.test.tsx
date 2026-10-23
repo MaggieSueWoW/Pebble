@@ -5,7 +5,7 @@ import {
   readResultLocation,
   resultLink,
   useResultNavigation,
-} from "./useResultNavigation";
+} from "../src/useResultNavigation";
 
 beforeEach(() => history.replaceState(null, "", "/"));
 afterEach(cleanup);

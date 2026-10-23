@@ -1,6 +1,6 @@
 import { expect, it } from "vitest";
-import { planMainSwap } from "./mainSwap";
-import { blankPlayer } from "./roster";
+import { planMainSwap } from "../src/mainSwap";
+import { blankPlayer } from "../src/roster";
 const main = {
   ...blankPlayer(),
   id: "main",

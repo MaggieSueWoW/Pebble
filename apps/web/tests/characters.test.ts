@@ -5,8 +5,8 @@ import {
   identityCasefold,
   normalizeCharacter,
   validateCharacter,
-} from "./characters";
-import { blankPlayer } from "./roster";
+} from "../src/characters";
+import { blankPlayer } from "../src/roster";
 const roster = [
   { ...blankPlayer(), id: "main", version: 1, name: "Example", active: false },
 ];

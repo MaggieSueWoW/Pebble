@@ -9,11 +9,11 @@ import {
   within,
 } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import App from "./App";
-import { blankPlayer } from "./roster";
-import { freshState, type Player } from "./model";
-import { defaultCalculation } from "./calculation";
-import type { LiveConnection } from "./useFirestore";
+import App from "../src/App";
+import { blankPlayer } from "../src/roster";
+import { freshState, type Player } from "../src/model";
+import { defaultCalculation } from "../src/calculation";
+import type { LiveConnection } from "../src/useFirestore";
 
 const alpha: Player = {
   id: "a",

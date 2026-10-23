@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
 import { act, cleanup, renderHook } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
-import { useReportEditor } from "./useReportEditor";
-import type { Report } from "./model";
-import type { Versions } from "./useFirestore";
+import { useReportEditor } from "../src/useReportEditor";
+import type { Report } from "../src/model";
+import type { Versions } from "../src/useFirestore";
 const a = "AAAAAAAAAAAAAAAA",
   b = "BBBBBBBBBBBBBBBB",
   c = "CCCCCCCCCCCCCCCC";

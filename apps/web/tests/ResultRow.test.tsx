@@ -7,8 +7,8 @@ import {
   within,
 } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
-import { ResultRow } from "./ResultRow";
-import type { Player, PlayerResult, WeeklyPlayerResult } from "./model";
+import { ResultRow } from "../src/ResultRow";
+import type { Player, PlayerResult, WeeklyPlayerResult } from "../src/model";
 
 const player: Player = {
   id: "example",

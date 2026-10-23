@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
-import { RosterList } from "./RosterList";
-import { blankPlayer, type RosterEntry } from "./roster";
-import type { CharacterEntry } from "./characters";
+import { RosterList } from "../src/RosterList";
+import { blankPlayer, type RosterEntry } from "../src/roster";
+import type { CharacterEntry } from "../src/characters";
 
 afterEach(cleanup);
 

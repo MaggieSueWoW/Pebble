@@ -7,8 +7,8 @@ import {
   within,
 } from "@testing-library/react";
 import { afterEach, expect, it } from "vitest";
-import { AttendanceDetails } from "./AttendanceDetails";
-import type { AttendanceProjection } from "./model";
+import { AttendanceDetails } from "../src/AttendanceDetails";
+import type { AttendanceProjection } from "../src/model";
 afterEach(cleanup);
 const value: AttendanceProjection = {
   played: 100,

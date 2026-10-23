@@ -9,7 +9,7 @@ import {
   stableJSON,
   timingSpans,
   validateAdjustment,
-} from "./model";
+} from "../src/model";
 
 describe("report entry", () => {
   it("normalizes report URLs and skips duplicate URLs/codes without accepting other hosts", () => {

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { blankPlayer, validatePlayer } from "./roster";
+import { blankPlayer, validatePlayer } from "../src/roster";
 describe("roster validation", () => {
   it("accepts Unicode main names and blank or valid membership dates", () => {
     expect(

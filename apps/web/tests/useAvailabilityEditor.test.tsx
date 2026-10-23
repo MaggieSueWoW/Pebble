@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 import { act, cleanup, renderHook } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
-import { emptyAdjustment, type Adjustment } from "./model";
-import { useAvailabilityEditor } from "./useAvailabilityEditor";
+import { emptyAdjustment, type Adjustment } from "../src/model";
+import { useAvailabilityEditor } from "../src/useAvailabilityEditor";
 const key = "2026-10-14/player-a",
   bounds = { pre: 90, post: 80 };
 const available = (): Adjustment => ({

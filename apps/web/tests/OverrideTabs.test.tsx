@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
-import { OverrideTabs } from "./OverrideTabs";
+import { OverrideTabs } from "../src/OverrideTabs";
 afterEach(cleanup);
 it("moves the single focus entry point with arrows/Home/End without activation", () => {
   const change = vi.fn();

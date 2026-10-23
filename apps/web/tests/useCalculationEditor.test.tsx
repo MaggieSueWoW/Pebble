@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 import { act, cleanup, renderHook } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
-import { defaultCalculation } from "./calculation";
-import { useCalculationEditor } from "./useCalculationEditor";
+import { defaultCalculation } from "../src/calculation";
+import { useCalculationEditor } from "../src/useCalculationEditor";
 afterEach(cleanup);
 it("freezes calculation versions, retains conflicts and cancels to latest settings", async () => {
   const write = vi.fn().mockRejectedValueOnce(new Error("Conflict"));

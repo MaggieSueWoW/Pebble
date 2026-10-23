@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
 import { act, cleanup, renderHook } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
-import { blankTiming } from "./timing";
-import type { Timing } from "./model";
-import { useTimingEditor } from "./useTimingEditor";
+import { blankTiming } from "../src/timing";
+import type { Timing } from "../src/model";
+import { useTimingEditor } from "../src/useTimingEditor";
 const night = "2026-10-14";
 const value = (notes: string): Timing => ({ ...blankTiming(), notes });
 const save = () =>

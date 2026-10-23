@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { blankTiming, validateTiming } from "./timing";
-import { wallTime } from "./model";
+import { blankTiming, validateTiming } from "../src/timing";
+import { wallTime } from "../src/model";
 const detected = {
   ...blankTiming(),
   start: "2026-10-14T19:00",

@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { defaultCalculation, validateCalculation } from "./calculation";
+import { defaultCalculation, validateCalculation } from "../src/calculation";
 it("uses worker defaults and accepts optional timing and fractional extension", () => {
   expect(validateCalculation(defaultCalculation())).toBeNull();
   expect(

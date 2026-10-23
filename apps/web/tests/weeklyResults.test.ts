@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { readWeekResults } from "./weeklyResults";
+import { readWeekResults } from "../src/weeklyResults";
 
 it("preserves stored weekly minutes, zero rows and historical names without private fields", () => {
   const row = {

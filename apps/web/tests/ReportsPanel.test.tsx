@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
-import { ReportsPanel } from "./ReportsPanel";
-import { useReportEditor } from "./useReportEditor";
-import type { Report } from "./model";
+import { ReportsPanel } from "../src/ReportsPanel";
+import { useReportEditor } from "../src/useReportEditor";
+import type { Report } from "../src/model";
 const code = "AAAAAAAAAAAAAAAA";
 const report: Report = {
   code,

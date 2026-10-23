@@ -40,6 +40,11 @@ npm test
 npm run build
 ```
 
+Application code lives in `src/`, unit and component tests in `tests/`, and browser
+workflow tests in `e2e/`. Test filenames mirror their source modules; preserve
+that structure if modules move into subfolders. `npm test` runs `tests/` through
+Vitest, and the build type-checks both application code and unit/component tests.
+
 The web rollout tracker (#14) contains the implementation backlog
 and acceptance status. Architecture references cover stack/workflow (#2),
 Firestore/security (#3), and officer/public UX (#4).

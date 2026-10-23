@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
 import { act, cleanup, renderHook } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
-import { useCharacterEditor } from "./useCharacterEditor";
-import { blankPlayer } from "./roster";
-import { blankCharacter } from "./characters";
+import { useCharacterEditor } from "../src/useCharacterEditor";
+import { blankPlayer } from "../src/roster";
+import { blankCharacter } from "../src/characters";
 afterEach(cleanup);
 const roster = [{ ...blankPlayer(), id: "main", name: "Example", version: 1 }];
 const mapping = {
