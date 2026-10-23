@@ -1,11 +1,5 @@
 // @vitest-environment jsdom
-import {
-  cleanup,
-  fireEvent,
-  render,
-  screen,
-  within,
-} from "@testing-library/react";
+import { cleanup, render, screen, within } from "@testing-library/react";
 import { afterEach, expect, it } from "vitest";
 import { AttendanceDetails } from "../../../src/features/results/AttendanceDetails";
 import type { AttendanceProjection } from "../../../src/shared/model";
@@ -23,36 +17,28 @@ const value: AttendanceProjection = {
 it("shows published helper minutes and rate without deriving from aggregate played share", () => {
   render(<AttendanceDetails attendance={{ ...value, rate: 0.12345 }} />);
   const attendance = screen.getByRole("region", { name: "Attendance" });
-  expect(attendance.textContent).toContain("Attendance rate12.3%");
-  expect(attendance.textContent).toContain("Eligible played100 min");
-  expect(attendance.textContent).toContain("Eligible bench50 min");
-  expect(attendance.textContent).toContain("Possible minutes200 min");
+  expect(attendance.textContent).toContain("Attendance: 12.3%");
+  expect(attendance.textContent).toContain("1h 40m eligible played");
+  expect(attendance.textContent).toContain("50m eligible bench");
+  expect(attendance.textContent).toContain("3h 20m possible");
   expect(attendance.textContent).not.toContain("75%");
-  expect(attendance.textContent).toContain("differs from the played share");
+  expect(attendance.querySelectorAll("details")).toHaveLength(0);
 });
 it("orders weekly records, expands P/B/O accessibly and identifies empty statuses", () => {
   render(<AttendanceDetails attendance={value} />);
-  const disclosure = screen
-    .getByText("Weekly attendance", { selector: "summary" })
-    .closest("details")!;
-  expect(disclosure.open).toBe(false);
-  fireEvent.click(disclosure.querySelector("summary")!);
-  expect(disclosure.open).toBe(true);
   const rows = within(
     screen.getByRole("table", { name: "Weekly attendance" }),
   ).getAllByRole("row");
   expect(rows[1].textContent).toContain("October 6");
   expect(rows[1].textContent).toContain("No applicable event");
   expect(rows[2].textContent).toContain("October 13");
-  expect(screen.getByLabelText("played, benched, out").textContent).toBe("PBO");
-  expect(screen.getByText(/P = played/).textContent).toContain(
-    "B = benched · O = out",
-  );
+  expect(screen.getByText("played, benched, out")).toBeTruthy();
+  expect(screen.queryByText(/P = played/)).toBeNull();
   expect(value.weeks[0].week).toBe("2026-10-13");
 });
 it("keeps a missing projection unavailable without a zero rate or eligibility guess", () => {
   render(<AttendanceDetails />);
-  expect(screen.getByText(/Attendance unavailable/)).toBeTruthy();
+  expect(screen.getByText(/Attendance not recorded/)).toBeTruthy();
   expect(screen.queryByText("0%")).toBeNull();
   expect(screen.queryByText(/ineligible|left the roster/i)).toBeNull();
   expect(screen.queryByRole("table")).toBeNull();
@@ -76,6 +62,8 @@ it("distinguishes a recorded zero attendance rate from unavailable data", () => 
     />,
   );
   expect(screen.getByText("0%", { exact: true })).toBeTruthy();
-  expect(screen.getAllByText("0 min", { exact: true })).toHaveLength(2);
-  expect(screen.getByText("No weekly attendance was published.")).toBeTruthy();
+  expect(
+    screen.getByRole("region", { name: "Attendance" }).textContent,
+  ).toContain("(0m eligible played + 0m eligible bench)");
+  expect(screen.getByText("No weekly attendance recorded.")).toBeTruthy();
 });

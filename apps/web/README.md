@@ -305,6 +305,21 @@ optional private notes start collapsed, and Save availability, Cancel, and Reset
 to detected share one action group. Saved changes recalculate through the top
 Next button before Results opens.
 
+Results keeps the main table with Bench, Played, and Played %; displayed durations
+round to whole minutes while sorting and percentages retain published precision.
+Adjusted badges appear only for a selected night. Its period breakdown marks
+adjusted times and includes per-period reasons directly in the table; missing
+provenance stays unknown. Season player details have no nested disclosures or
+adjustment tags: attendance shows the published percentage alongside eligible
+played/bench/possible time, followed by a compact weekly table using full status
+words. Attendance details remain season-only. The top toolbar groups the period picker,
+update status, and Copy result link. Reports remains available in the sidebar. Officers see a persistent Nights to review sidebar list, grouped newest first
+by date with a warning count and direct navigation to that night. General warnings
+appear once under Other warnings. The list follows the displayed completed run,
+remains during pending/failed updates, and clears when a clean run loads. Public
+readers retain the published warning text. Results has no extra readiness line;
+its existing run status still reports loading, failures, and stale inputs.
+
 Ignores use versioned character inputs with `ignored: true` and an empty `playerId`.
 They use the existing character subscription and input-version freshness checks.
 The worker removes ignored actors from participation while retaining fight times;

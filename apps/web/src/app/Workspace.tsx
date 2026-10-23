@@ -651,26 +651,6 @@ export function Workspace({
           </button>
         </>
       )}
-      {page === "results" && (
-        <>
-          <p>
-            {active || waitingForResults
-              ? "Results are updating…"
-              : unprocessed
-                ? "Saved changes need a new run before this night is finished."
-                : connection?.resultsError
-                  ? "Results are unavailable. Retry loading to finish reviewing."
-                  : lastFailed
-                    ? "The last run failed. Review run history before continuing."
-                    : !connection || connection.hasResults
-                      ? "You’ve reached the results. Night processing is complete."
-                      : "Add a report and run Pebble to get started."}
-          </p>
-          <button className="button secondary" onClick={() => go("reports")}>
-            Process another night
-          </button>
-        </>
-      )}
     </div>
   );
   return (
@@ -680,6 +660,16 @@ export function Workspace({
         <Sidebar
           connection={connection}
           canManage={canManage}
+          warnings={results.warnings}
+          reviewWarnings={(warningNight) =>
+            guard(() => {
+              if (warningNight && nightOptions.includes(warningNight)) {
+                nightChosen.current = true;
+                setNight(warningNight);
+              }
+              setPage("review");
+            })
+          }
           page={page}
           go={go}
           reportCount={inputs.reports.length}
@@ -900,25 +890,7 @@ export function Workspace({
           view={resultsView}
           hasResults={!connection || connection.hasResults}
           canManage={canManage}
-          officer={Boolean(connection?.officer)}
           demo={Boolean(demo)}
-          sources={connection?.resultSources ?? []}
-          onReviewNight={() =>
-            guard(() => {
-              const warningNight = (results.warnings ?? [])
-                .map((warning) => warning.match(/^(\d{4}-\d{2}-\d{2}):/)?.[1])
-                .find((value) => value && nightOptions.includes(value));
-              const targetNight =
-                visibleResultNight !== "season"
-                  ? visibleResultNight
-                  : warningNight;
-              if (targetNight) {
-                nightChosen.current = true;
-                setNight(targetNight);
-              }
-              setPage("review");
-            })
-          }
           runStatusMessage={runStatusMessage}
           completedAt={completedAt}
           onEditAvailability={(id) =>
@@ -935,7 +907,6 @@ export function Workspace({
           }
         />
       )}
-      {canManage && page === "results" && reviewNextAction}
 
       {canManage && (
         <RunHistory history={history} connected={Boolean(connection)} />

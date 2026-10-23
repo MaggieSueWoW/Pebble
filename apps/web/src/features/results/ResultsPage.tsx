@@ -1,4 +1,4 @@
-import { CheckCheck, FileText, Link2 } from "lucide-react";
+import { FileText, Link2 } from "lucide-react";
 import { Notice } from "../../components/Feedback";
 import { AttendanceDetails } from "./AttendanceDetails";
 import { DataTable } from "../../components/DataTable";
@@ -9,7 +9,6 @@ import { ResultRow } from "./ResultRow";
 import { RunStatus } from "../../components/RunStatus";
 import { SelectControl } from "../../components/SelectControl";
 import { SortButton } from "../../components/SortButton";
-import type { LiveConnection } from "../../data/useFirestore";
 import type { ResultsView } from "./useResultsView";
 export function ResultsPage({
   results,
@@ -17,12 +16,9 @@ export function ResultsPage({
   view,
   hasResults,
   canManage,
-  officer,
   demo,
-  sources,
   runStatusMessage,
   completedAt,
-  onReviewNight,
   onEditAvailability,
 }: {
   results: Results;
@@ -30,10 +26,7 @@ export function ResultsPage({
   view: ResultsView;
   hasResults: boolean;
   canManage: boolean;
-  officer: boolean;
   demo: boolean;
-  sources: LiveConnection["resultSources"];
-  onReviewNight?: () => void;
   runStatusMessage: string;
   completedAt?: string;
   onEditAvailability: (id: string) => void;
@@ -62,26 +55,10 @@ export function ResultsPage({
         )}
       {hasResults && (
         <>
-          {officer && onReviewNight ? (
-            Boolean(
-              warningsForNight(
-                results.warnings,
-                visibleResultNight === "season"
-                  ? undefined
-                  : visibleResultNight,
-              ).length,
-            ) && (
-              <Notice tone="amber">
-                This completed run has warnings.{" "}
-                <button className="text-button" onClick={onReviewNight}>
-                  Review night checks →
-                </button>
-              </Notice>
-            )
-          ) : (
+          {!canManage && (
             <ResultWarnings
               warnings={warningsForNight(results.warnings)}
-              sources={officer ? sources : []}
+              sources={[]}
             />
           )}
           <section className="card results-card">
@@ -103,10 +80,6 @@ export function ResultsPage({
                   ))}
                 </SelectControl>
               </div>
-              <span className="result-night-count">
-                {results.nights.length} raid{" "}
-                {results.nights.length === 1 ? "night" : "nights"} this season
-              </span>
               <RunStatus message={runStatusMessage} completedAt={completedAt} />
               <button
                 className="text-button"
@@ -125,7 +98,7 @@ export function ResultsPage({
                       ["name", "Player"],
                       ["bench", "Bench"],
                       ["played", "Played"],
-                      ["share", "Time Played"],
+                      ["share", "Played %"],
                     ] as const
                   ).map(([key, label]) => (
                     <th
@@ -204,12 +177,6 @@ export function ResultsPage({
                 </p>
               </div>
             )}
-            <div className="table-footnote">
-              <CheckCheck size={14} />{" "}
-              {!hasResults
-                ? "No completed result set loaded."
-                : "Results update automatically after a successful run."}
-            </div>
           </section>
           {additionalAttendance.length > 0 && (
             <section

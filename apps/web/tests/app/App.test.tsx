@@ -240,7 +240,9 @@ it.each([true, false])(
       fireEvent.click(screen.getByRole("button", { name: /^Results/ }));
     if (officer) {
       fireEvent.click(
-        screen.getByRole("button", { name: "Review night checks →" }),
+        screen.getAllByRole("button", {
+          name: /^Review (warnings for|other warnings)/,
+        })[0],
       );
       fireEvent.change(screen.getByRole("combobox", { name: "Raid night" }), {
         target: { value: "2026-10-14" },
@@ -630,7 +632,9 @@ it.each([true, false])(
       fireEvent.click(screen.getByRole("button", { name: /^Results/ }));
     if (officer)
       fireEvent.click(
-        screen.getByRole("button", { name: "Review night checks →" }),
+        screen.getAllByRole("button", {
+          name: /^Review (warnings for|other warnings)/,
+        })[0],
       );
     expect(
       screen.getByRole("region", { name: "Result warnings" }),
@@ -1129,7 +1133,7 @@ it("toggles Results column sorting while keeping details on the selected player"
   expect(names()).toEqual([alpha.name, beta.name]);
   fireEvent.click(screen.getByRole("button", { name: "Played" }));
   expect(names()).toEqual([alpha.name, beta.name]);
-  fireEvent.click(screen.getByRole("button", { name: "Time Played" }));
+  fireEvent.click(screen.getByRole("button", { name: "Played %" }));
   expect(names()).toEqual([alpha.name, beta.name]);
   expect(
     document.querySelector('.result-name[aria-expanded="true"]')?.textContent,
@@ -1341,11 +1345,7 @@ it("walks through four numbered steps and carries the reviewed night to results"
       }) as HTMLSelectElement
     ).value,
   ).toBe("2026-10-14");
-  expect(
-    screen.getByText(
-      "You’ve reached the results. Night processing is complete.",
-    ),
-  ).toBeTruthy();
+  expect(screen.queryByRole("status", { name: "Night completion" })).toBeNull();
   expect(c.requestRun).toHaveBeenCalledOnce();
 });
 
@@ -1627,3 +1627,73 @@ it.each(["main", "alt", "ignore"] as const)(
     expect(c.requestRun).not.toHaveBeenCalled();
   },
 );
+
+it("keeps published warning nights in the officer sidebar across panels and guards date navigation", () => {
+  const c = connection([alpha]);
+  c.hasResults = true;
+  c.nights = ["2026-10-14", "2026-10-15"];
+  c.saved.results.warnings = [
+    "2026-10-14: First",
+    "2026-10-15: Latest",
+    "2026-10-14: Second",
+    "General warning",
+  ];
+  const { rerender } = render(<App connection={c} />);
+  const warningPanel = () =>
+    screen.getByRole("region", { name: "Nights to review" });
+  expect(
+    within(warningPanel())
+      .getAllByRole("button")
+      .map((button) => button.textContent),
+  ).toEqual(["Oct 151 warning", "Oct 142 warnings", "Other warnings1 warning"]);
+  fireEvent.click(
+    screen.getByRole("button", {
+      name: "Review warnings for 2026-10-14: 2 warnings",
+    }),
+  );
+  expect(
+    (screen.getByRole("combobox", { name: "Raid night" }) as HTMLSelectElement)
+      .value,
+  ).toBe("2026-10-14");
+  overrides();
+  fireEvent.change(notes(), { target: { value: "Retain draft" } });
+  fireEvent.click(
+    screen.getByRole("button", {
+      name: "Review warnings for 2026-10-15: 1 warning",
+    }),
+  );
+  expect(
+    (screen.getByRole("combobox", { name: "Raid night" }) as HTMLSelectElement)
+      .value,
+  ).toBe("2026-10-14");
+  fireEvent.click(
+    screen.getByRole("button", { name: "Keep editing", hidden: true }),
+  );
+  expect(notes().value).toBe("Retain draft");
+  fireEvent.click(
+    screen.getByRole("button", {
+      name: "Review warnings for 2026-10-15: 1 warning",
+    }),
+  );
+  fireEvent.click(
+    screen.getByRole("button", { name: "Discard edits", hidden: true }),
+  );
+  expect(
+    (screen.getByRole("combobox", { name: "Raid night" }) as HTMLSelectElement)
+      .value,
+  ).toBe("2026-10-15");
+  fireEvent.click(screen.getByRole("button", { name: "Results" }));
+  expect(warningPanel()).toBeTruthy();
+  expect(screen.queryByRole("status", { name: "Night completion" })).toBeNull();
+  rerender(
+    <App
+      connection={{
+        ...c,
+        saved: { ...c.saved, results: { ...c.saved.results, warnings: [] } },
+      }}
+    />,
+  );
+  expect(screen.queryByRole("region", { name: "Nights to review" })).toBeNull();
+  rerender(<App connection={{ ...c, officer: false }} />);
+  expect(screen.queryByRole("region", { name: "Nights to review" })).toBeNull();
+});

@@ -91,12 +91,13 @@ test("public recorded explanations and officer-only diagnostics survive selectio
     ),
   );
   await page.goto(`/?view=results&period=${night}&player=example`);
-  const explanation = page.getByRole("region", {
-    name: "Recorded availability explanation",
-  });
-  await page.getByText("Availability explanation", { exact: true }).click();
-  await expect(explanation).toContainText("Partial availability");
-  await expect(explanation).toContainText("Recorded unavailable");
+  const explanation = page.getByRole("table", { name: "Time by break" });
+  await expect(explanation.locator(".result-adjusted-time")).toHaveCount(1);
+  await expect(page.getByText("How calculated", { exact: true })).toHaveCount(
+    0,
+  );
+  await expect(explanation).toContainText("Available for part of the period");
+  await expect(explanation).toContainText("Unavailable · Detected");
   await expect(
     page.getByLabel("Night details for 2026-10-15", { exact: true }),
   ).toHaveCount(0);

@@ -52,9 +52,12 @@ test("guides an officer through four steps, recalculates edits, and finishes on 
     page.getByRole("combobox", { name: "Result period" }),
   ).toHaveValue("2026-10-14");
   await expect(
-    page.getByText("You’ve reached the results. Night processing is complete."),
-  ).toBeVisible();
-  await page.getByRole("button", { name: "Process another night" }).click();
+    page.getByRole("status", { name: "Night completion" }),
+  ).toHaveCount(0);
+  await page
+    .getByRole("navigation", { name: "Main navigation" })
+    .getByRole("button", { name: /^Reports/ })
+    .click();
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Reports");
   await expect(
     page.getByRole("navigation", { name: "Main navigation" }),

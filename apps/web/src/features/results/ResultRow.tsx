@@ -1,9 +1,10 @@
+import { Badge } from "../../components/Feedback";
+import { resultMinutes } from "./format";
 import { AvailabilityExplanation } from "./AvailabilityExplanation";
 import { useId } from "react";
 import { AttendanceDetails } from "./AttendanceDetails";
 import { ArrowRight, ChevronDown, ChevronRight, Settings2 } from "lucide-react";
 import {
-  minutes,
   type Player,
   type PlayerResult,
   type WeeklyPlayerResult,
@@ -37,21 +38,26 @@ export function ResultRow({
           {String(rank ?? index + 1).padStart(2, "0")}
         </td>
         <td>
-          <button
-            className="row-name result-name"
-            aria-expanded={expanded}
-            aria-controls={detailId}
-          >
-            <strong style={{ color: player.color }}>{player.name}</strong>
-          </button>
+          <span className="result-player-name">
+            <button
+              className="row-name result-name"
+              aria-expanded={expanded}
+              aria-controls={detailId}
+            >
+              <strong style={{ color: player.color }}>{player.name}</strong>
+            </button>
+            {!showAttendance && "overridden" in row && row.overridden && (
+              <Badge tone="purple">Adjusted</Badge>
+            )}
+          </span>
         </td>
-        <td className="numeric bench-value">{minutes(row.bench)}</td>
-        <td className="numeric">{minutes(row.played)}</td>
+        <td className="numeric bench-value">{resultMinutes(row.bench)}</td>
+        <td className="numeric">{resultMinutes(row.played)}</td>
         <td>
           <div className="result-breakdown">
             <div
               className="time-bar"
-              aria-label={`${row.played} minutes played, ${row.bench} minutes benched`}
+              aria-label={`${Math.round(row.played)} minutes played, ${Math.round(row.bench)} minutes benched`}
             >
               <span
                 style={{ width: `${total ? (row.played / total) * 100 : 0}%` }}
@@ -93,50 +99,73 @@ export function ResultRow({
                     <th scope="col">Period</th>
                     <th scope="col">Bench</th>
                     {"overridden" in row && <th scope="col">Played</th>}
+                    {!showAttendance && "overridden" in row && (
+                      <th scope="col">Reason</th>
+                    )}
                   </tr>
                 </thead>
                 <tbody>
-                  <tr>
-                    <th scope="row">Before break</th>
-                    <td>{row.preBench === 0 ? "-" : `${row.preBench} min`}</td>
-                    {"overridden" in row && (
-                      <td>
-                        {row.prePlayed == null
-                          ? "Not recorded"
-                          : row.prePlayed === 0
-                            ? "-"
-                            : `${row.prePlayed} min`}
-                      </td>
-                    )}
-                  </tr>
-                  <tr>
-                    <th scope="row">After break</th>
-                    <td>
-                      {row.postBench === 0 ? "-" : `${row.postBench} min`}
-                    </td>
-                    {"overridden" in row && (
-                      <td>
-                        {row.postPlayed == null
-                          ? "Not recorded"
-                          : row.postPlayed === 0
-                            ? "-"
-                            : `${row.postPlayed} min`}
-                      </td>
-                    )}
-                  </tr>
+                  {(
+                    [
+                      ["pre", "Before break"],
+                      ["post", "After break"],
+                    ] as const
+                  ).map(([half, label]) => {
+                    const availability =
+                      "availability" in row ? row.availability : undefined;
+                    const adjusted =
+                      !showAttendance &&
+                      availability?.[half] != null &&
+                      availability[half].mode !== "automatic";
+                    const bench = half === "pre" ? row.preBench : row.postBench;
+                    const played =
+                      "overridden" in row
+                        ? half === "pre"
+                          ? row.prePlayed
+                          : row.postPlayed
+                        : undefined;
+                    return (
+                      <tr key={half}>
+                        <th scope="row">{label}</th>
+                        <td
+                          className={
+                            adjusted ? "result-adjusted-time" : undefined
+                          }
+                          title={adjusted ? "Availability adjusted" : undefined}
+                        >
+                          {resultMinutes(bench)}
+                        </td>
+                        {"overridden" in row && (
+                          <td
+                            className={
+                              adjusted && played != null
+                                ? "result-adjusted-time"
+                                : undefined
+                            }
+                            title={
+                              adjusted && played != null
+                                ? "Availability adjusted"
+                                : undefined
+                            }
+                          >
+                            {played == null
+                              ? "Not recorded"
+                              : resultMinutes(played)}
+                          </td>
+                        )}
+                        {!showAttendance && "overridden" in row && (
+                          <td>
+                            <AvailabilityExplanation
+                              availability={availability}
+                              half={half}
+                            />
+                          </td>
+                        )}
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
-              {"overridden" in row && (
-                <details className="detail-disclosure">
-                  <summary>Availability explanation</summary>
-                  <p>
-                    {row.overridden
-                      ? "Officer adjustment applied"
-                      : "Automatically inferred"}
-                  </p>
-                  <AvailabilityExplanation availability={row.availability} />
-                </details>
-              )}
             </div>
             {showAttendance && (
               <AttendanceDetails

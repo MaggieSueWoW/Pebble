@@ -194,6 +194,98 @@ test.afterEach(async () => {
     ).toBe("Baseline Player");
   });
 });
+test("makes completion and officer actions obvious while keeping details and adjustments compact", async ({
+  page,
+}) => {
+  await admin(async (ctx) => {
+    const ref = doc(
+      ctx.firestore(),
+      `${season}/results/baseline/nights/${nights.baseline}`,
+    );
+    const night = (await getDoc(ref)).data()!;
+    await setDoc(
+      ref,
+      {
+        players: [
+          {
+            ...night.players[0],
+            bench: 30.4,
+            played: 90.6,
+            preBench: 10.2,
+            postBench: 20.2,
+            prePlayed: 40.4,
+            postPlayed: 50.2,
+            overridden: true,
+          },
+        ],
+      },
+      { merge: true },
+    );
+  });
+  await resultsPage(page);
+  await expect(
+    page.getByRole("status", { name: "Night completion" }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Played %", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Time Played", exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Process another night" }),
+  ).toHaveCount(0);
+  await page
+    .getByRole("combobox", { name: "Result period" })
+    .selectOption(nights.baseline);
+  const row = page.locator(".result-player-row");
+  await expect(row.getByText("Adjusted", { exact: true })).toBeVisible();
+  await expect(row.getByText("30m", { exact: true })).toBeVisible();
+  await expect(row.getByText("1h 31m", { exact: true })).toBeVisible();
+  await page
+    .getByRole("button", { name: "Details for Baseline Player" })
+    .click();
+  const breakdown = page.getByRole("region", {
+    name: "Availability breakdown for Baseline Player",
+  });
+  await expect(breakdown.getByRole("row")).toHaveText([
+    "PeriodBenchPlayedReason",
+    "Before break10m40mNot recorded",
+    "After break20m50mNot recorded",
+  ]);
+  await expect(
+    breakdown.getByRole("region", { name: "Attendance", exact: true }),
+  ).toHaveCount(0);
+  await expect(breakdown.locator("details")).toHaveCount(0);
+  await seedResult("warnings", "Baseline Player", nights.baseline, true, 1, [
+    `${nights.baseline}: First warning`,
+    `${nights.baseline}: Second warning`,
+  ]);
+  await publish("warnings");
+  await expect(
+    page.getByRole("region", { name: "Nights to review" }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: /^Review warnings for/ }).click();
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText(
+    "Review Night",
+  );
+  await page
+    .getByRole("navigation", { name: "Main navigation" })
+    .getByRole("button", { name: "Results", exact: true })
+    .click();
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth,
+    ),
+  ).toBe(true);
+  await page
+    .getByRole("navigation", { name: "Main navigation" })
+    .getByRole("button", { name: /^Reports/ })
+    .click();
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Reports");
+});
+
 test("retains the complete view during held reads and swaps rows, totals and nights together", async ({
   page,
 }) => {
@@ -224,9 +316,6 @@ test("retains the complete view during held reads and swaps rows, totals and nig
   await expect(
     page.getByRole("combobox", { name: "Result period" }).locator("option"),
   ).toHaveText(["Season to date", "Thursday, October 15"]);
-  await expect(
-    page.getByText("1 raid night this season", { exact: true }),
-  ).toBeVisible();
   await expect(status(page)).toContainText("Updated");
 });
 test("public read denial preserves prior results and keyboard retry recovers on a narrow screen", async ({
@@ -430,7 +519,11 @@ test("keeps officer warnings with displayed rows during loading and clears them 
     );
   });
   await resultsPage(page);
-  await page.getByRole("button", { name: "Review night checks →" }).click();
+  await page
+    .getByRole("region", { name: "Nights to review" })
+    .getByRole("button")
+    .first()
+    .click();
   const region = page.getByRole("region", { name: "Result warnings" });
   await expect(
     region.getByRole("heading", { name: "Result warnings" }),
@@ -899,7 +992,11 @@ test("officer warning sources stay with displayed results instead of newer histo
     );
   });
   await resultsPage(page);
-  await page.getByRole("button", { name: "Review night checks →" }).click();
+  await page
+    .getByRole("region", { name: "Nights to review" })
+    .getByRole("button")
+    .first()
+    .click();
   const sources = page.getByRole("list", {
     name: "Source reports for this warning",
   });
@@ -1251,8 +1348,8 @@ for (const signedIn of [false, true]) {
       breakdown.getByRole("table", { name: "Time by break" }).getByRole("row"),
     ).toHaveText([
       "PeriodBenchPlayed",
-      "Before break10 min13 min",
-      "After break20 min47 min",
+      "Before break10m13m",
+      "After break20m47m",
     ]);
     await expect(
       breakdown.getByRole("button", { name: "Edit availability" }),
@@ -1266,14 +1363,12 @@ for (const signedIn of [false, true]) {
     await expect(
       breakdown.getByRole("table", { name: "Time by break" }).getByRole("row"),
     ).toHaveText([
-      "PeriodBenchPlayed",
-      "Before break10 min-",
-      "After break20 min60 min",
+      "PeriodBenchPlayedReason",
+      "Before break10m-Not recorded",
+      "After break20m1h 00mNot recorded",
     ]);
-    await breakdown
-      .getByText("Availability explanation", { exact: true })
-      .click();
-    await expect(breakdown).toContainText("Officer adjustment applied");
+    await expect(breakdown.locator("details")).toHaveCount(0);
+    await expect(page.getByText("Adjusted", { exact: true })).toBeVisible();
     await expect(breakdown).not.toContainText("undefined");
     expect(
       await page.evaluate(

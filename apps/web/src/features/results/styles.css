@@ -8,28 +8,35 @@
   .result-period-select {
     min-width: 13rem;
   }
-  .result-night-count {
-    color: var(--color-muted);
+  .result-player-name {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    min-width: 0;
+  }
+  .result-player-name .badge {
+    flex-shrink: 0;
   }
   .results-table {
     --table-min-width: 44rem;
     table-layout: fixed;
   }
-  .results-table th:first-child {
+  .results-table > thead > tr > th:first-child {
     width: 3rem;
   }
-  .results-table th:nth-child(2) {
+  .results-table > thead > tr > th:nth-child(2) {
     width: 27%;
   }
-  .results-table th:nth-child(3),
-  .results-table th:nth-child(4) {
+  .results-table > thead > tr > th:nth-child(3),
+  .results-table > thead > tr > th:nth-child(4) {
     width: 15%;
   }
-  .results-table th:last-child {
+  .results-table > thead > tr > th:last-child {
     width: 3rem;
   }
   .result-name {
     max-width: 100%;
+    min-width: 0;
   }
   .result-name strong {
     overflow: hidden;
@@ -70,15 +77,33 @@
     align-items: start;
     gap: var(--space-5) var(--space-8);
   }
+  .break-summary th {
+    white-space: nowrap;
+  }
   .player-time-details {
-    flex: 0 1 20rem;
+    flex: 0 1 auto;
     min-width: 14rem;
   }
   .result-detail .text-button {
     margin-left: auto;
   }
-  .attendance-totals {
-    margin-block: var(--space-3);
+  .attendance-summary {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: var(--space-2) var(--space-3);
+    margin-bottom: var(--space-3);
+  }
+  .attendance-summary > span {
+    color: var(--color-muted);
+    font-size: var(--text-caption);
+  }
+  .result-adjusted-time {
+    color: var(--color-purple);
+  }
+  .attendance-weeks th,
+  .attendance-weeks td {
+    padding-block: var(--space-1);
   }
   .attendance-weeks {
     max-width: 30rem;

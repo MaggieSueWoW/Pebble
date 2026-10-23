@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import {
+  CircleAlert,
   Sparkles,
   ClipboardCheck,
   FileText,
@@ -13,7 +14,8 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import type { LiveConnection } from "../data/useFirestore";
-import type { Page } from "../shared/model";
+import { formatDate, type Page } from "../shared/model";
+import { warningNights } from "../features/review/warnings";
 import { steps } from "./runStages";
 
 type SidebarProps = {
@@ -32,6 +34,8 @@ type SidebarProps = {
   accountAction: (action: () => Promise<void>) => Promise<void>;
   guard: (action: () => void) => void;
   demoControls?: ReactNode;
+  warnings?: string[];
+  reviewWarnings: (night: string) => void;
 };
 export function Sidebar({
   connection,
@@ -46,7 +50,10 @@ export function Sidebar({
   accountAction,
   guard,
   demoControls,
+  warnings,
+  reviewWarnings,
 }: SidebarProps) {
+  const nights = warningNights(warnings);
   return (
     <aside className="sidebar">
       <a
@@ -111,6 +118,33 @@ export function Sidebar({
             </button>
           ))}
       </nav>
+      {canManage && nights.length > 0 && (
+        <section className="sidebar-warnings" aria-label="Nights to review">
+          <h2>
+            <CircleAlert size={14} /> Nights to review
+          </h2>
+          <ul>
+            {nights.map(({ night, count }) => (
+              <li key={night}>
+                <button
+                  onClick={() => reviewWarnings(night)}
+                  aria-label={
+                    night
+                      ? `Review warnings for ${night}: ${count} ${count === 1 ? "warning" : "warnings"}`
+                      : `Review other warnings: ${count} ${count === 1 ? "warning" : "warnings"}`
+                  }
+                >
+                  <span>{night ? formatDate(night) : "Other warnings"}</span>
+                  <span>
+                    {count} {count === 1 ? "warning" : "warnings"}
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+          <small>Last completed run</small>
+        </section>
+      )}
       {(canManage || active) && (
         <div className="sidebar-run">
           {runButton}

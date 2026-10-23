@@ -4,29 +4,25 @@ import { afterEach, expect, it } from "vitest";
 import { AvailabilityExplanation } from "../../../src/features/results/AvailabilityExplanation";
 import { NightDiagnostics } from "../../../src/features/results/NightDiagnostics";
 afterEach(cleanup);
-it("explains partial half flags and whole-row source without inventing full-half time", () => {
+it("explains each half without assigning the overall source to an automatic half", () => {
+  const availability = {
+    pre: { available: true, mode: "partial" as const },
+    post: { available: false, mode: "automatic" as const },
+    source: "override" as const,
+  };
   render(
-    <AvailabilityExplanation
-      availability={{
-        pre: { available: true, mode: "partial" },
-        post: { available: false, mode: "automatic" },
-        source: "override",
-      }}
-    />,
+    <>
+      <AvailabilityExplanation availability={availability} half="pre" />
+      <AvailabilityExplanation availability={availability} half="post" />
+    </>,
   );
-  expect(
-    screen.getByRole("region", { name: "Recorded availability explanation" })
-      .textContent,
-  ).toContain("Recorded available · Input: Partial availability");
-  expect(screen.getByText("Officer adjustment")).toBeTruthy();
-  expect(screen.getByText(/overall source describes the row/)).toBeTruthy();
+  expect(screen.getByText(/Available for part of the period/)).toBeTruthy();
+  expect(screen.getByText(/Unavailable · Detected/)).toBeTruthy();
+  expect(screen.queryByText("Officer adjustment")).toBeNull();
 });
-it("does not infer source or availability for old result rows", () => {
-  render(<AvailabilityExplanation />);
-  expect(
-    screen.getByText("Availability source not recorded for this result."),
-  ).toBeTruthy();
-  expect(screen.queryByText("Automatic")).toBeNull();
+it("keeps missing period provenance unknown", () => {
+  render(<AvailabilityExplanation half="pre" />);
+  expect(screen.getByText("Not recorded")).toBeTruthy();
 });
 it("shows private aggregate diagnostics with timing sources and no invented break", () => {
   render(

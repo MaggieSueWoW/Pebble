@@ -1,7 +1,12 @@
+import { resultMinutes } from "./format";
 import { useId } from "react";
 import { formatDate, type AttendanceProjection } from "../../shared/model";
 const recordedMinutes = (value: number) =>
-  Number.isFinite(value) && value >= 0 ? `${value} min` : "Unavailable";
+  Number.isFinite(value) && value >= 0
+    ? value === 0
+      ? "0m"
+      : resultMinutes(value)
+    : "Unavailable";
 const statusWords = (status: string) =>
   status
     ? Array.from(
@@ -34,81 +39,46 @@ export function AttendanceDetails({
       <h3 id={title} className="sr-only">
         Attendance
       </h3>
-      <dl className="stat-list attendance-summary">
-        <div>
-          <dt>Attendance rate</dt>
-          <dd>{rate}</dd>
-        </div>
-      </dl>
+      <div className="attendance-summary">
+        <strong>
+          Attendance: <span>{rate}</span>
+        </strong>
+        {attendance && (
+          <span>
+            <span>({recordedMinutes(attendance.played)}</span> eligible played +{" "}
+            <span>{recordedMinutes(attendance.bench)}</span> eligible bench) /{" "}
+            <span>{recordedMinutes(attendance.possible)}</span> possible
+          </span>
+        )}
+      </div>
       {!attendance ? (
-        <details className="detail-disclosure">
-          <summary>Attendance explanation</summary>
-          <p>
-            Attendance unavailable. This result set does not include attendance
-            for this player.
-          </p>
-        </details>
+        <p className="muted small">Attendance not recorded.</p>
       ) : (
         <>
-          <details className="detail-disclosure">
-            <summary>Attendance explanation</summary>
-            <dl className="stat-list attendance-totals">
-              <div>
-                <dt>Eligible played</dt>
-                <dd>{recordedMinutes(attendance.played)}</dd>
-              </div>
-              <div>
-                <dt>Eligible bench</dt>
-                <dd>{recordedMinutes(attendance.bench)}</dd>
-              </div>
-              <div>
-                <dt>Possible minutes</dt>
-                <dd>{recordedMinutes(attendance.possible)}</dd>
-              </div>
-            </dl>
-            <p>
-              Attendance counts eligible played and bench time against possible
-              time. It differs from the played share above. These minutes use
-              eligible membership nights and may differ from the season totals.
-            </p>
-            {attendance.possible === 0 && (
-              <p>
-                No possible time was recorded; attendance rate is unavailable.
-              </p>
-            )}
-          </details>
-          <details className="detail-disclosure">
-            <summary>Weekly attendance</summary>
-            <p className="attendance-legend">
-              P = played · B = benched · O = out. A week can contain several
-              statuses; an empty status means no applicable event.
-            </p>
-            {weeks.length ? (
-              <table className="summary-table attendance-weeks">
-                <caption>Weekly attendance</caption>
-                <thead>
-                  <tr>
-                    <th scope="col">Week of</th>
-                    <th scope="col">Status</th>
+          {attendance.possible === 0 && (
+            <p className="muted small">No possible time recorded.</p>
+          )}
+          {weeks.length ? (
+            <table className="summary-table attendance-weeks">
+              <caption>Weekly attendance</caption>
+              <thead>
+                <tr>
+                  <th scope="col">Week of</th>
+                  <th scope="col">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {weeks.map(({ week, status }) => (
+                  <tr key={week}>
+                    <th scope="row">{formatDate(week, true)}</th>
+                    <td>{statusWords(status)}</td>
                   </tr>
-                </thead>
-                <tbody>
-                  {weeks.map(({ week, status }) => (
-                    <tr key={week}>
-                      <th scope="row">{formatDate(week, true)}</th>
-                      <td>
-                        <span aria-label={statusWords(status)}>
-                          {status || "No applicable event"}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            ) : (
-              <p>No weekly attendance was published.</p>
-            )}
-          </details>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <p className="muted small">No weekly attendance recorded.</p>
+          )}
         </>
       )}
     </section>
