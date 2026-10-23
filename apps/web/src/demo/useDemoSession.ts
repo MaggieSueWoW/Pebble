@@ -9,8 +9,8 @@ import {
   timingSpans,
   demoCode,
 } from "./model";
-import type { Inputs, Saved } from "../model";
-import type { Versions } from "../useFirestore";
+import type { Inputs, Saved } from "../shared/model";
+import type { Versions } from "../data/useFirestore";
 const STORAGE = "pebble-prototype-v1";
 function loadSaved(): Saved {
   try {

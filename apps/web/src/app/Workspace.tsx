@@ -1,32 +1,35 @@
 import { Check, CircleAlert, LoaderCircle, Play, X } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { authMessage } from "../authMessages";
-import { adjustmentKey, emptyAdjustment, type Page } from "../model";
-import type { LiveConnection } from "../useFirestore";
+import { authMessage } from "./authMessages";
+import { adjustmentKey, emptyAdjustment, type Page } from "../shared/model";
+import type { LiveConnection } from "../data/useFirestore";
 
-import { RunStatus } from "../RunStatus";
-import { useReportEditor } from "../useReportEditor";
-import { useResultNavigation } from "../useResultNavigation";
+import { RunStatus } from "../components/RunStatus";
+import { useReportEditor } from "../features/reports/useReportEditor";
+import { useResultNavigation } from "./useResultNavigation";
 
-import { useAvailabilityEditor } from "../useAvailabilityEditor";
-import { useCharacterEditor } from "../useCharacterEditor";
-import { useTimingEditor } from "../useTimingEditor";
+import { useAvailabilityEditor } from "../features/overrides/useAvailabilityEditor";
+import { useCharacterEditor } from "../features/roster/useCharacterEditor";
+import { useTimingEditor } from "../features/overrides/useTimingEditor";
 
-import { defaultCalculation } from "../calculation";
-import { blankTiming } from "../timing";
-import { useCalculationEditor } from "../useCalculationEditor";
-import { useRosterEditor } from "../useRosterEditor";
+import { defaultCalculation } from "../features/settings/calculation";
+import { blankTiming } from "../features/overrides/timing";
+import { useCalculationEditor } from "../features/settings/useCalculationEditor";
+import { useRosterEditor } from "../features/roster/useRosterEditor";
 
 import type { DemoSession } from "../demo/useDemoSession";
-import { OverridesPage, type OverrideSort } from "../pages/OverridesPage";
-import { ReportsPage } from "../pages/ReportsPage";
-import { ResultsPage } from "../pages/ResultsPage";
-import { RosterPage } from "../pages/RosterPage";
-import { SettingsPage } from "../pages/SettingsPage";
-import { useResultsView } from "../pages/useResultsView";
+import {
+  OverridesPage,
+  type OverrideSort,
+} from "../features/overrides/OverridesPage";
+import { ReportsPage } from "../features/reports/ReportsPage";
+import { ResultsPage } from "../features/results/ResultsPage";
+import { RosterPage } from "../features/roster/RosterPage";
+import { SettingsPage } from "../features/settings/SettingsPage";
+import { useResultsView } from "../features/results/useResultsView";
 import { AppShell } from "./AppShell";
 import { ConnectionNotices } from "./ConnectionNotices";
-import { ConfirmDiscard, Notice } from "./Feedback";
+import { ConfirmDiscard, Notice } from "../components/Feedback";
 import { RunHistory } from "./RunHistory";
 import { steps } from "./runStages";
 import { Sidebar } from "./Sidebar";

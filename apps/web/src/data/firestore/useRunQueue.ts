@@ -8,8 +8,8 @@ import {
   serverTimestamp,
   where,
 } from "firebase/firestore";
-import { db, seasonId } from "../../firebase";
-import type { Results } from "../../model";
+import { db, seasonId } from "../firebase";
+import type { Results } from "../../shared/model";
 import { compareActiveRuns, timestampISO } from "./documents";
 import type { OfficerAccess } from "./useOfficerAccess";
 import type { PrivateState } from "./usePrivateState";

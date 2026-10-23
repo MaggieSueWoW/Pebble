@@ -8,20 +8,20 @@ import {
   runTransaction,
   serverTimestamp,
 } from "firebase/firestore";
-import { db, seasonId } from "../../firebase";
+import { db, seasonId } from "../firebase";
 import {
   validatePlayer,
   type RosterEntry,
   type RosterValue,
-} from "../../roster";
+} from "../../features/roster/roster";
 import {
   normalizeCharacter,
   validateCharacter,
   type CharacterEntry,
   type CharacterValue,
-} from "../../characters";
-import { readLinkedPlayers, advanceLinkedPlayers } from "../../linkedPlayers";
-import { planMainSwap } from "../../mainSwap";
+} from "../../features/roster/characters";
+import { readLinkedPlayers, advanceLinkedPlayers } from "./linkedPlayers";
+import { planMainSwap } from "../../features/roster/mainSwap";
 import type { Versions } from "./types";
 import type { OfficerAccess } from "./useOfficerAccess";
 import type { PrivateState } from "./usePrivateState";

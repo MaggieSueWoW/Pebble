@@ -1,9 +1,12 @@
 import type { User } from "firebase/auth";
-import type { Inputs, Player, Saved } from "../../model";
-import type { CalculationSettings } from "../../calculation";
-import type { CharacterEntry, CharacterValue } from "../../characters";
-import type { RosterEntry, RosterValue } from "../../roster";
-import type { RecordedNightDiagnostics } from "../../resultProvenance";
+import type { Inputs, Player, Saved } from "../../shared/model";
+import type { CalculationSettings } from "../../features/settings/calculation";
+import type {
+  CharacterEntry,
+  CharacterValue,
+} from "../../features/roster/characters";
+import type { RosterEntry, RosterValue } from "../../features/roster/roster";
+import type { RecordedNightDiagnostics } from "../../features/results/resultProvenance";
 export type Versions = Record<string, number>;
 export type LiveConnection = {
   saved: Saved;

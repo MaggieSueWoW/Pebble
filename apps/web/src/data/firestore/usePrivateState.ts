@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { DocumentData } from "firebase/firestore";
-import type { RecordedNightDiagnostics } from "../../resultProvenance";
+import type { RecordedNightDiagnostics } from "../../features/results/resultProvenance";
 import type { Versions } from "./types";
 
 /** Private buffers reset together before another officer session may use them. */

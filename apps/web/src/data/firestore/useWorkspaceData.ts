@@ -5,13 +5,13 @@ import {
   type Inputs,
   type Results,
   type Player,
-} from "../../model";
+} from "../../shared/model";
 import {
   defaultCalculation,
   type CalculationSettings,
-} from "../../calculation";
-import type { RosterEntry } from "../../roster";
-import type { CharacterEntry } from "../../characters";
+} from "../../features/settings/calculation";
+import type { RosterEntry } from "../../features/roster/roster";
+import type { CharacterEntry } from "../../features/roster/characters";
 import { dataOnly, timestampISO } from "./documents";
 import type { Versions } from "./types";
 import type { PrivateState } from "./usePrivateState";

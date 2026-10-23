@@ -40,10 +40,11 @@ npm test
 npm run build
 ```
 
-Application code lives in `src/`, unit and component tests in `tests/`, and browser
-workflow tests in `e2e/`. Test filenames mirror their source modules; preserve
-that structure if modules move into subfolders. `npm test` runs `tests/` through
-Vitest, and the build type-checks both application code and unit/component tests.
+Application code lives in `src/`, unit and component tests mirror its folders in
+`tests/`, and browser workflow tests stay in `e2e/`. For example,
+`src/features/roster/RosterList.tsx` has its component tests in
+`tests/features/roster/RosterList.test.tsx`. `npm test` runs `tests/` through Vitest,
+and the build type-checks both application code and unit/component tests.
 
 The web rollout tracker (#14) contains the implementation backlog
 and acceptance status. Architecture references cover stack/workflow (#2),
@@ -51,25 +52,29 @@ Firestore/security (#3), and officer/public UX (#4).
 
 ## Code map
 
-- `Root.tsx` handles Firebase setup/loading and officer-access remounts. `App.tsx`
+- `app/Root.tsx` handles Firebase setup/loading and officer-access remounts. `app/App.tsx`
   selects the connected workspace or the sample app.
 - `app/Workspace.tsx` coordinates navigation, editor hooks, draft guards, account
   actions and run submission. Editors stay mounted here across page changes so
-  switching pages cannot silently discard a draft. `pages/useResultsView.ts`
+  switching pages cannot silently discard a draft. `features/results/useResultsView.ts`
   similarly keeps result sorting and link selection alive across navigation.
-- `app/AppShell.tsx`, `Sidebar.tsx`, `ConnectionNotices.tsx`, `RunHistory.tsx` and
-  `Feedback.tsx` own the shared layout and feedback presentation.
-- `pages/` contains the five page views. They receive typed data, editor state and
-  callbacks; saves and guarded transitions go through the workspace. Shared table,
-  form and player-detail components remain in `src/`.
+- `app/` also owns the shell, sidebar, navigation and run history. `components/`
+  contains shared controls, tables, panel headers, status and feedback components.
+- `features/` groups Reports, Results, Overrides, Roster and Settings. Each folder
+  owns its page, feature components, editor hooks, domain helpers and `styles.css`.
+  Pages receive typed data, editor state and callbacks; saves and guarded
+  transitions go through the workspace. Shared UI belongs in `components/`;
+  feature-specific UI stays with its feature.
 - `demo/` owns sample fixtures, illustrative calculations, browser persistence,
   simulated runs and prototype controls. Only `DemoApp` mounts `useDemoSession`;
   the connected workspace never starts sample timers or reads sample storage.
   Sample-only timing validation and the sample report link are supplied explicitly
   to the shared UI. The existing sample storage key and schema are preserved.
-- `model.ts` contains shared types, input validation/parsing and formatting.
-- `useFirestore.ts` is the connected-data facade. Its `LiveConnection` and
-  `Versions` exports remain the public contract used by the UI. `usePublicResults.ts`
+- `shared/model.ts` contains shared types, input validation/parsing and formatting.
+  `shared/useVersionedEditor.ts` supplies the common versioned-draft lifecycle.
+- `data/firebase.ts` configures the Firebase client. `data/useFirestore.ts` is the
+  connected-data facade. Its `LiveConnection` and `Versions` exports remain the
+  public contract used by the UI. `data/usePublicResults.ts`
   independently loads the public publication; private implementation lives in
   `data/firestore/`:
   - `useOfficerAccess.ts` owns Auth, server-confirmed officer membership, access
@@ -123,7 +128,7 @@ release alone does not enable it in an environment with older rules.
 
 Every sortable list marks its active direction, including the default. Sorting is
 local to the displayed list and makes no writes or run requests. Settings field
-labels and detailed descriptions are editable in `src/calculationFields.ts`.
+labels and detailed descriptions are editable in `src/features/settings/calculationFields.ts`.
 
 ## Styling
 
@@ -137,7 +142,7 @@ labels and detailed descriptions are editable in `src/calculationFields.ts`.
 - `styles/components.css`: reusable controls, panels, toolbars, notices, tables,
   disclosures and dialogs.
 - `styles/layout.css`: the application shell, sidebar and shared run history.
-- `styles/pages/*.css`: page layout and content-specific details, including their
+- `features/*/styles.css`: page layout and content-specific details, including their
   responsive rules. Prefer arranging shared components here over restyling them.
 
 Use `DataTable` for a scrolling table with shared headers and row density;

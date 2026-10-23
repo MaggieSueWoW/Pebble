@@ -13,7 +13,7 @@ import {
 } from "firebase/firestore";
 import { readFileSync } from "node:fs";
 import { officer } from "./officer";
-import { defaultCalculation } from "../src/calculation";
+import { defaultCalculation } from "../src/features/settings/calculation";
 let env: RulesTestEnvironment;
 const season = "seasons/test-reports";
 const admin = (

@@ -11,7 +11,7 @@ import {
   type Timing,
   type Availability,
   type AttendanceProjection,
-} from "../model";
+} from "../shared/model";
 
 export const players: Player[] = [
   {

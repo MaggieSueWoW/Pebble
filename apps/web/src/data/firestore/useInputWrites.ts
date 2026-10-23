@@ -5,13 +5,13 @@ import {
   serverTimestamp,
   type DocumentData,
 } from "firebase/firestore";
-import { db, seasonId } from "../../firebase";
-import { stableJSON, type Inputs } from "../../model";
+import { db, seasonId } from "../firebase";
+import { stableJSON, type Inputs } from "../../shared/model";
 import {
   validateCalculation,
   type CalculationSettings,
-} from "../../calculation";
-import { readLinkedPlayers, advanceLinkedPlayers } from "../../linkedPlayers";
+} from "../../features/settings/calculation";
+import { readLinkedPlayers, advanceLinkedPlayers } from "./linkedPlayers";
 import { dataOnly } from "./documents";
 import type { Versions } from "./types";
 import type { OfficerAccess } from "./useOfficerAccess";

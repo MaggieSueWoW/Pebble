@@ -1,6 +1,6 @@
 import { Info } from "lucide-react";
-import type { LiveConnection } from "../useFirestore";
-import { Notice } from "./Feedback";
+import type { LiveConnection } from "../data/useFirestore";
+import { Notice } from "../components/Feedback";
 export function ConnectionNotices({
   connection,
   canManage,

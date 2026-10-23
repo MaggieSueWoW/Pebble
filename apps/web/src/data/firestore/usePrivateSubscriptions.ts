@@ -7,7 +7,7 @@ import {
   orderBy,
   query,
 } from "firebase/firestore";
-import { db, seasonId } from "../../firebase";
+import { db, seasonId } from "../firebase";
 import { ACCESS_WAIT_MS, inputCollections } from "./constants";
 import type { OfficerAccess } from "./useOfficerAccess";
 import type { PrivateState } from "./usePrivateState";

@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { doc, onSnapshot, type DocumentData } from "firebase/firestore";
-import { db, seasonId } from "../../firebase";
+import { db, seasonId } from "../firebase";
 import type { OfficerAccess } from "./useOfficerAccess";
 import type { PrivateState } from "./usePrivateState";
 

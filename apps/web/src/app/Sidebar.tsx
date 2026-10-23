@@ -11,8 +11,8 @@ import {
   WifiOff,
   ShieldCheck,
 } from "lucide-react";
-import type { LiveConnection } from "../useFirestore";
-import type { Page } from "../model";
+import type { LiveConnection } from "../data/useFirestore";
+import type { Page } from "../shared/model";
 import { steps } from "./runStages";
 
 type SidebarProps = {

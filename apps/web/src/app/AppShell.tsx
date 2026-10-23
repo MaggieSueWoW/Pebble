@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import type { Page } from "../model";
+import type { Page } from "../shared/model";
 
 const titles: Record<Page, string> = {
   reports: "Reports",

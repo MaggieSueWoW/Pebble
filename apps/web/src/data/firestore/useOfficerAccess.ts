@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { onAuthStateChanged, type User } from "firebase/auth";
 import { doc, onSnapshot } from "firebase/firestore";
-import { auth, db } from "../../firebase";
+import { auth, db } from "../firebase";
 import { ACCESS_ERROR, ACCESS_WAIT_MS } from "./constants";
 
 /** Own authorization generations; invalidation precedes private-data cleanup. */
