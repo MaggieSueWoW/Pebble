@@ -27,7 +27,7 @@ export function RosterPage({
   setRosterDetail: Dispatch<SetStateAction<"main" | "alt" | null>>;
 }) {
   return (
-    <div className="roster-page">
+    <div className="roster-panels">
       <RosterList
         close={() => guard(() => setRosterDetail(null))}
         roster={connection.roster}

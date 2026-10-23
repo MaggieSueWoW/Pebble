@@ -1,5 +1,5 @@
 @layer pages {
-  .roster-page {
+  .roster-panels {
     display: grid;
     gap: var(--space-5);
   }

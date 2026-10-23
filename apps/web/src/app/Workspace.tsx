@@ -4,12 +4,7 @@ import { ReviewNightPage } from "../features/review/ReviewNightPage";
 import { Check, CircleAlert, LoaderCircle, Play, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { authMessage } from "./authMessages";
-import {
-  adjustmentKey,
-  emptyAdjustment,
-  formatDate,
-  type Page,
-} from "../shared/model";
+import { adjustmentKey, emptyAdjustment, type Page } from "../shared/model";
 import type { LiveConnection } from "../data/useFirestore";
 
 import { RunStatus } from "../components/RunStatus";
@@ -775,15 +770,8 @@ export function Workspace({
         </>
       }
     >
-      {canManage && (
-        <>
-          <NightFlow page={page} go={go} />
-          {night && ["roster"].includes(page) && (
-            <p className="muted">
-              Selected raid night: {formatDate(night, true)}
-            </p>
-          )}
-        </>
+      {canManage && page !== "roster" && page !== "settings" && (
+        <NightFlow page={page} go={go} />
       )}
       {page !== "results" && page !== "overrides" && page !== "review" && (
         <div
