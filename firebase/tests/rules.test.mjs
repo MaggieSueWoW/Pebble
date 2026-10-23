@@ -296,6 +296,10 @@ test('officers can persist season ignores without a main; public, forged and lin
   const value = { name: 'Extra', realm: 'Azjol-Nerub', region: 'eu', playerId: '', ignored: true, ...meta() };
   for (const reader of [env.unauthenticatedContext().firestore(), env.authenticatedContext('member').firestore()]) await assertFails(setDoc(doc(reader, `${season}/characters/ignore-extra`), { ...value, ...meta('member') }));
   await assertSucceeds(setDoc(ref, value));
+  for (const reader of [env.unauthenticatedContext().firestore(), env.authenticatedContext('member').firestore()]) {
+    await assertFails(getDoc(doc(reader, `${season}/characters/ignore-extra`)));
+    await assertFails(deleteDoc(doc(reader, `${season}/characters/ignore-extra`)));
+  }
   await assertFails(updateDoc(ref, { playerId: 'p1', ...meta('officer', 2) }));
   await assertFails(updateDoc(ref, { ignored: false, playerId: 'p1', ...meta('officer', 2) }));
   await assertSucceeds(deleteDoc(ref));

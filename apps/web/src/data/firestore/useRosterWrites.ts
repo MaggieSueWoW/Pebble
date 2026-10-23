@@ -366,6 +366,36 @@ export function useRosterWrites(
       if (accessSession === session.current) setBusy(false);
     }
   }
+  async function undoIgnoreCharacter(id: string, expected: number) {
+    assertAccess();
+    if (!/^[A-Za-z0-9_-]{1,100}$/.test(id))
+      throw new Error("Invalid character ID.");
+    setBusy(true);
+    setError("");
+    try {
+      await runTransaction(db!, async (transaction) => {
+        assertAccess();
+        const ref = doc(db!, "seasons", seasonId, "characters", id);
+        const snapshot = await transaction.get(ref);
+        assertAccess();
+        if (
+          !snapshot.exists() ||
+          snapshot.data()?.version !== expected ||
+          snapshot.data()?.ignored !== true ||
+          snapshot.data()?.playerId !== ""
+        )
+          throw new Error(
+            "This ignore decision changed. Review the latest list and try again.",
+          );
+        transaction.delete(ref);
+      });
+    } catch (cause) {
+      if (accessSession === session.current) fail(cause as Error);
+      throw cause;
+    } finally {
+      if (accessSession === session.current) setBusy(false);
+    }
+  }
   return {
     savePlayer,
     deletePlayer,
@@ -373,5 +403,6 @@ export function useRosterWrites(
     swapMain,
     saveCharacter,
     ignoreCharacter,
+    undoIgnoreCharacter,
   };
 }

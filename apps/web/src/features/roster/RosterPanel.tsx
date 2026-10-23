@@ -29,7 +29,10 @@ export function RosterPanel({
       className="panel panel-body roster-panel"
       aria-label="Main details"
     >
-      {!editor.exists && <PanelHeader title="New main" id="roster-title" />}
+      <PanelHeader
+        title={editor.exists ? "Main" : "New main"}
+        id="roster-title"
+      />
       <div className="roster-editor">
         {editor.id && (
           <form
@@ -63,20 +66,6 @@ export function RosterPanel({
                   ))}
                 </SelectControl>
               </label>
-              <label className="field roster-active">
-                <span>
-                  <input
-                    type="checkbox"
-                    aria-label="Active"
-                    checked={editor.value.active}
-                    onChange={(e) => field("active", e.target.checked)}
-                  />{" "}
-                  Active
-                </span>
-                <span className="muted small">
-                  Inactive players stay in the roster.
-                </span>
-              </label>
               <label className="field">
                 Join date
                 <input
@@ -94,6 +83,20 @@ export function RosterPanel({
                   aria-describedby="roster-validation"
                   onChange={(e) => field("leaveDate", e.target.value)}
                 />
+              </label>
+              <label className="field roster-active">
+                <span>
+                  <input
+                    type="checkbox"
+                    aria-label="Active"
+                    checked={editor.value.active}
+                    onChange={(e) => field("active", e.target.checked)}
+                  />{" "}
+                  Active
+                </span>
+                <span className="muted small">
+                  Inactive players stay in the roster.
+                </span>
               </label>
               <label className="field">
                 Private roster notes
@@ -123,7 +126,7 @@ export function RosterPanel({
             <p className="muted small roster-help">
               Changes apply after Run Pebble.
             </p>
-            <div className="button-row">
+            <div className="button-row roster-main-actions">
               <button
                 className="button primary"
                 type="submit"
@@ -135,6 +138,7 @@ export function RosterPanel({
               </button>
               <button
                 className="button secondary"
+                aria-label="Cancel roster edits"
                 type="button"
                 disabled={(editor.exists && !editor.dirty) || editor.blocked}
                 onClick={() => {
@@ -142,7 +146,7 @@ export function RosterPanel({
                   if (!editor.exists) cancelCreate();
                 }}
               >
-                Cancel roster edits
+                Cancel
               </button>
               {editor.exists && !confirmDelete && (
                 <button

@@ -48,6 +48,7 @@ function connection(players: Player[] = []): LiveConnection {
     roster: [],
     characters: [],
     ignoredCharacters: [],
+    undoIgnoreCharacter: vi.fn().mockResolvedValue(undefined),
     ignoreCharacter: vi.fn().mockResolvedValue(undefined),
     saveCharacter: vi.fn(),
     deleteReport: vi.fn().mockResolvedValue(undefined),
@@ -1790,4 +1791,102 @@ it("keeps a missing-player draft cancellable when another officer resolves that 
       }) as HTMLButtonElement
     ).disabled,
   ).toBe(false);
+});
+
+it("lists season ignores, filters identities, and undoes with the displayed version", async () => {
+  const c = connection();
+  c.ignoredCharacters = [
+    {
+      id: "one",
+      name: "Visitor",
+      realm: "Example",
+      region: "us",
+      playerId: "",
+      ignored: true,
+      version: 3,
+    },
+    {
+      id: "two",
+      name: "Guest",
+      realm: "Other",
+      region: "eu",
+      playerId: "",
+      ignored: true,
+      version: 1,
+    },
+  ];
+  const view = render(<App connection={c} />);
+  fireEvent.click(screen.getByRole("button", { name: "Roster" }));
+  expect(screen.getByText(/Season: Example season/)).toBeTruthy();
+  const panel = screen.getByRole("region", { name: "Ignored players (2)" });
+  expect(within(panel).getByText("Visitor")).toBeTruthy();
+  fireEvent.change(
+    screen.getByRole("textbox", { name: "Search ignored players" }),
+    { target: { value: "EXAMPLE" } },
+  );
+  expect(within(panel).queryByText("Guest")).toBeNull();
+  fireEvent.click(
+    within(panel).getByRole("button", {
+      name: "Undo ignore for Visitor (Example, US)",
+    }),
+  );
+  await waitFor(() =>
+    expect(c.undoIgnoreCharacter).toHaveBeenCalledWith("one", 3),
+  );
+  await waitFor(() =>
+    expect(within(panel).getByRole("status").textContent).toContain(
+      "Run Pebble",
+    ),
+  );
+  view.rerender(
+    <App connection={{ ...c, ignoredCharacters: [c.ignoredCharacters[1]] }} />,
+  );
+  expect(
+    screen.getByRole("region", { name: "Ignored players (1)" }),
+  ).toBeTruthy();
+  expect(
+    screen.queryByRole("button", { name: /Undo ignore for Visitor/ }),
+  ).toBeNull();
+});
+
+it("keeps failed ignores visible for retry and does not expose them publicly", async () => {
+  const c = connection();
+  c.ignoredCharacters = [
+    {
+      id: "one",
+      name: "Visitor",
+      realm: "Example",
+      region: "us",
+      playerId: "",
+      ignored: true,
+      version: 3,
+    },
+  ];
+  vi.mocked(c.undoIgnoreCharacter).mockRejectedValueOnce(
+    new Error(
+      "This ignore decision changed. Review the latest list and try again.",
+    ),
+  );
+  const view = render(<App connection={c} />);
+  fireEvent.click(screen.getByRole("button", { name: "Roster" }));
+  fireEvent.click(
+    screen.getByRole("button", { name: /Undo ignore for Visitor/ }),
+  );
+  await waitFor(() =>
+    expect(screen.getByRole("alert").textContent).toContain(
+      "ignore decision changed",
+    ),
+  );
+  expect(
+    screen
+      .getByRole("button", { name: /Undo ignore for Visitor/ })
+      .hasAttribute("disabled"),
+  ).toBe(false);
+  view.rerender(
+    <App connection={{ ...c, officer: false, accessGeneration: 1 }} />,
+  );
+  expect(
+    screen.queryByRole("textbox", { name: "Search ignored players" }),
+  ).toBeNull();
+  expect(screen.queryByText("Visitor")).toBeNull();
 });

@@ -1952,3 +1952,52 @@ it.each([1, 2])(
     });
   },
 );
+
+it("undoes a season ignore without reading or modifying any mains", async () => {
+  const { result } = renderHook(useFirestore);
+  login();
+  grant();
+  loadPrivate();
+  const remove = vi.fn(),
+    set = vi.fn();
+  const get = vi.fn(async () =>
+    snap({ ignored: true, playerId: "", version: 3 }),
+  );
+  mock.transaction.mockImplementation(async (_db, callback) =>
+    callback({ get, set, delete: remove }),
+  );
+  await act(async () => {
+    await result.current.connection.undoIgnoreCharacter("visitor", 3);
+  });
+  expect(get).toHaveBeenCalledTimes(1);
+  expect(remove.mock.calls[0][0].path).toBe("seasons/test/characters/visitor");
+  expect(set).not.toHaveBeenCalled();
+});
+
+it.each([
+  { ignored: true, playerId: "", version: 4 },
+  { playerId: "main", version: 3 },
+])("preserves a concurrently changed ignore decision: %j", async (saved) => {
+  const { result } = renderHook(useFirestore);
+  login();
+  grant();
+  loadPrivate();
+  const remove = vi.fn();
+  mock.transaction.mockImplementation(async (_db, callback) =>
+    callback({ get: async () => snap(saved), delete: remove }),
+  );
+  await act(async () => {
+    await expect(
+      result.current.connection.undoIgnoreCharacter("visitor", 3),
+    ).rejects.toThrow("ignore decision changed");
+  });
+  expect(remove).not.toHaveBeenCalled();
+});
+
+it("rejects undoing ignores without officer access", async () => {
+  const { result } = renderHook(useFirestore);
+  await expect(
+    result.current.connection.undoIgnoreCharacter("visitor", 3),
+  ).rejects.toThrow();
+  expect(mock.transaction).not.toHaveBeenCalled();
+});

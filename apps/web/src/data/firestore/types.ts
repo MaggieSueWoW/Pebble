@@ -14,6 +14,7 @@ export type LiveConnection = {
   roster: RosterEntry[];
   characters: CharacterEntry[];
   ignoredCharacters: CharacterEntry[];
+  undoIgnoreCharacter: (id: string, expected: number) => Promise<void>;
   ignoreCharacter: (
     id: string,
     value: Omit<CharacterValue, "playerId">,
