@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { Clock3 } from "lucide-react";
 import { MissingPlayers } from "./MissingPlayers";
 import type { MissingPlayerEditor, Resolution } from "./useMissingPlayerEditor";
 import type { MissingPlayer } from "../results/resultProvenance";
@@ -27,7 +28,9 @@ export function ReviewNightPage({
   playerEditor,
   onPlayerAction,
   nextAction,
+  status,
 }: {
+  status?: ReactNode;
   night: string;
   nights: string[];
   chooseNight: (night: string) => void;
@@ -45,9 +48,12 @@ export function ReviewNightPage({
 }) {
   if (!nights.length)
     return (
-      <Notice>
-        Add a report and run Pebble to identify a raid night for review.
-      </Notice>
+      <>
+        <div className="toolbar">{status}</div>
+        <Notice>
+          Add a report and run Pebble to identify a raid night for review.
+        </Notice>
+      </>
     );
   const warnings = warningsForNight(results.warnings, night);
   const diagnostic = diagnostics[night];
@@ -56,7 +62,8 @@ export function ReviewNightPage({
     <div className="night-review">
       <div className="toolbar">
         <label className="night-select">
-          Raid night
+          <Clock3 size={16} />
+          <span>Raid night</span>
           <SelectControl
             aria-label="Raid night"
             value={night}
@@ -69,6 +76,8 @@ export function ReviewNightPage({
             ))}
           </SelectControl>
         </label>
+        {status}
+        <div className="override-next">{nextAction}</div>
       </div>
       <section className="card panel-body" aria-label="Raid night summary">
         <NightDiagnostics
@@ -84,7 +93,6 @@ export function ReviewNightPage({
           <TimingEditor night={night} detected={detected} editor={editor} />
         </details>
       </section>
-      {nextAction}
       {hasResults ? (
         <>
           <ResultWarnings

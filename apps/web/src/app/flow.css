@@ -81,9 +81,6 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  .night-review > .flow-actions {
-    margin-block: 0;
-  }
   .night-review {
     display: grid;
     gap: var(--space-5);

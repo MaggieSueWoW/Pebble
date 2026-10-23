@@ -95,6 +95,20 @@ test("reviews times and resolves each extra player without leaving the night", a
   await expect(
     page.getByRole("region", { name: "Result warnings" }),
   ).toHaveCount(0);
+  const pickerBox = (await page
+    .getByRole("combobox", { name: "Raid night", exact: true })
+    .boundingBox())!;
+  const runStatus = page.getByRole("status", {
+    name: "Run status",
+    exact: true,
+  });
+  await expect(runStatus).toHaveCount(1);
+  const statusBox = (await runStatus.boundingBox())!;
+  expect(
+    Math.abs(
+      pickerBox.y + pickerBox.height / 2 - (statusBox.y + statusBox.height / 2),
+    ),
+  ).toBeLessThan(3);
   const main = page.getByRole("article", { name: "Missing player Newmain" });
   const summary = page.getByRole("region", { name: "Raid night summary" });
   await expect(summary).toContainText("Mythic encounters");
@@ -109,7 +123,12 @@ test("reviews times and resolves each extra player without leaving the night", a
   const missingBox = (await page
     .getByRole("region", { name: "Missing players", exact: true })
     .boundingBox())!;
-  expect(nextBox.y).toBeGreaterThanOrEqual(summaryBox.y + summaryBox.height);
+  expect(nextBox.y + nextBox.height).toBeLessThanOrEqual(summaryBox.y);
+  expect(
+    Math.abs(
+      nextBox.y + nextBox.height / 2 - (pickerBox.y + pickerBox.height / 2),
+    ),
+  ).toBeLessThan(3);
   expect(nextBox.y + nextBox.height).toBeLessThanOrEqual(missingBox.y);
   const rowHeight = (await main.boundingBox())!.height;
   await main.getByRole("button", { name: "Add main", exact: true }).click();

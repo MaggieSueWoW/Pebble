@@ -614,7 +614,7 @@ export function Workspace({
     <div className="flow-actions">
       {(page === "review" || page === "overrides") && (
         <>
-          {(page !== "overrides" || unsaved || pendingFlow) && (
+          {(unsaved || pendingFlow) && (
             <p className="muted">
               {unsaved
                 ? "Save or discard your edits to continue."
@@ -652,6 +652,35 @@ export function Workspace({
         </>
       )}
     </div>
+  );
+  const workspaceStatus = (
+    <>
+      <RunStatus
+        message={runStatusMessage}
+        completedAt={
+          !connection || connection.hasResults ? results.completedAt : undefined
+        }
+        detail={
+          connection?.submitting
+            ? "Waiting for the server to confirm your request."
+            : active
+              ? "Your last completed results stay visible while Pebble works."
+              : unsaved
+                ? "Save or discard your edits before running Pebble."
+                : unprocessed
+                  ? "Saved inputs have changed. Run Pebble to update the results."
+                  : undefined
+        }
+      />
+      {connection?.officer && connection.queueError && (
+        <button
+          className="text-button"
+          onClick={() => retryWithFocus(connection.retryQueue)}
+        >
+          Retry run queue
+        </button>
+      )}
+    </>
   );
   return (
     <AppShell
@@ -744,37 +773,11 @@ export function Workspace({
           )}
         </>
       )}
-      {page !== "results" && page !== "overrides" && (
+      {page !== "results" && page !== "overrides" && page !== "review" && (
         <div
           className={`reports-status toolbar ${active || connection?.submitting || waitingForResults ? "is-running" : ""} ${(lastFailed || resultLoadFailed) && !active && !connection?.submitting ? "has-error" : ""}`}
         >
-          <RunStatus
-            message={runStatusMessage}
-            completedAt={
-              !connection || connection.hasResults
-                ? results.completedAt
-                : undefined
-            }
-            detail={
-              connection?.submitting
-                ? "Waiting for the server to confirm your request."
-                : active
-                  ? "Your last completed results stay visible while Pebble works."
-                  : unsaved
-                    ? "Save or discard your edits before running Pebble."
-                    : unprocessed
-                      ? "Saved inputs have changed. Run Pebble to update the results."
-                      : undefined
-            }
-          />
-          {connection?.officer && connection.queueError && (
-            <button
-              className="text-button"
-              onClick={() => retryWithFocus(connection.retryQueue)}
-            >
-              Retry run queue
-            </button>
-          )}
+          {workspaceStatus}
         </div>
       )}
       {demo?.storageError && (
@@ -794,6 +797,7 @@ export function Workspace({
       )}
       {page === "review" && (
         <ReviewNightPage
+          status={workspaceStatus}
           night={night}
           nights={nightOptions}
           chooseNight={chooseNight}

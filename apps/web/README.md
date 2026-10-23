@@ -280,13 +280,14 @@ processed. Successful guided runs open the newly fetched report’s night for re
 Failed submissions/runs stay on Reports, and an offline worker leaves the request
 queued with visible status. Review Night groups timing checks/corrections, missing-player
 warnings, source links and private night diagnostics for the selected raid night.
-Review Night starts with one compact row of recorded start/end/break times,
-raid duration, report count, and encounter count, followed immediately by Next.
+Review Night places the night selector, update status, and Next on one toolbar
+row above a compact summary of start/end/break times, raid duration, report count,
+and encounter count.
 Timing sources appear under each time; durations round to whole minutes.
 Timing overrides are collapsed by default behind “Times look wrong? Adjust timing”
 in the summary box, with an Unsaved badge when there is a timing draft. Times
 use Pacific, as in the timing editor. Terse warnings and compact
-per-character action rows follow, with timing overrides below. Officers can
+per-character action rows follow. Officers can
 ignore a character for this season, add a main with the reviewed night as its join
 date, or map an alt to an existing main without leaving the page. Character
 identities come from private completed-run diagnostics, preserving exact names,
