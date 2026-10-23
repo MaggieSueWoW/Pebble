@@ -88,7 +88,7 @@ export function MissingPlayers({
                 </span>
               </div>
               <div className="missing-player-controls">
-                {resolved ? (
+                {resolved && !draft ? (
                   <span className="muted missing-player-status" title={status}>
                     {status}
                   </span>

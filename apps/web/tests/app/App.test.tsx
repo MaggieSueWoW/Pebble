@@ -1697,3 +1697,97 @@ it("keeps published warning nights in the officer sidebar across panels and guar
   rerender(<App connection={{ ...c, officer: false }} />);
   expect(screen.queryByRole("region", { name: "Nights to review" })).toBeNull();
 });
+
+it("reviews a re-added older report even when prior run metadata already marks it fetched", async () => {
+  const c = dates(connection([alpha]), ["2026-10-22"], []);
+  c.hasResults = true;
+  const { rerender } = render(<App connection={c} />);
+  fireEvent.change(
+    screen.getByRole("textbox", { name: "Warcraft Logs reports" }),
+    { target: { value: "AAAAAAAAAAAAAAAA" } },
+  );
+  await act(async () =>
+    fireEvent.click(screen.getByRole("button", { name: "Add report" })),
+  );
+  const withReport = {
+    ...c,
+    saved: {
+      ...c.saved,
+      inputs: {
+        ...c.saved.inputs,
+        reports: [
+          {
+            code: "AAAAAAAAAAAAAAAA",
+            enabled: true,
+            fetched: true,
+            title: "Cached report",
+            night: "2026-10-14",
+          },
+        ],
+      },
+    },
+  };
+  rerender(<App connection={withReport} />);
+  await act(async () =>
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Next: Run Pebble and go to Review Night",
+      }),
+    ),
+  );
+  rerender(
+    <App
+      connection={{
+        ...withReport,
+        saved: {
+          ...withReport.saved,
+          results: { ...c.saved.results, completedAt: "2026-10-23T08:00:00Z" },
+        },
+      }}
+    />,
+  );
+  await waitFor(() => expect(raidPicker().value).toBe("2026-10-14"));
+  expect(screen.getByRole("heading", { level: 1 }).textContent).toBe(
+    "Review Night",
+  );
+});
+
+it("keeps a missing-player draft cancellable when another officer resolves that player", () => {
+  const c = dates(connection([alpha]), ["2026-10-15"]);
+  c.hasResults = true;
+  c.resultDiagnostics = {
+    "2026-10-15": {
+      reportCount: 1,
+      mythicFights: 1,
+      unmappedCharacters: 1,
+      breakMinutes: null,
+      timing: { start: "detected", end: "detected", break: "none" },
+      missingPlayers: [
+        { name: "Extra", realm: "Example", region: "eu", className: "Mage" },
+      ],
+    },
+  };
+  const { rerender } = render(<App connection={c} />);
+  fireEvent.click(screen.getByRole("button", { name: "Review Night" }));
+  fireEvent.click(screen.getByRole("button", { name: "Add main" }));
+  rerender(
+    <App
+      connection={{
+        ...c,
+        roster: [{ ...blankPlayer(), id: "extra", name: "Extra", version: 1 }],
+      }}
+    />,
+  );
+  expect(
+    screen.getByRole("combobox", { name: "Class for Extra" }),
+  ).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "Cancel player change" }));
+  expect(screen.getByText(/Main added · joins/)).toBeTruthy();
+  expect(
+    (
+      screen.getByRole("button", {
+        name: "Next: Review overrides →",
+      }) as HTMLButtonElement
+    ).disabled,
+  ).toBe(false);
+});

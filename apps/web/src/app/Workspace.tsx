@@ -146,11 +146,17 @@ export function Workspace({
   const toastTimer = useRef<ReturnType<typeof setTimeout> | undefined>(
     undefined,
   );
+  const recentlyAddedReports = useRef<string[]>([]);
   const reportEditor = useReportEditor(
     inputs.reports,
     connection?.versions ?? {},
     async (reports, expected) => {
       await saveInputs({ reports, adjustments: {}, timings: {} }, expected);
+      const added = reports.filter(
+        (report) => expected[`reports/${report.code}`] === 0,
+      );
+      if (added.length)
+        recentlyAddedReports.current = added.map((report) => report.code);
     },
     connection?.deleteReport ?? demo!.deleteReport,
     Boolean(connection?.busy),
@@ -464,7 +470,12 @@ export function Workspace({
         ...(target === "review"
           ? {
               reportCodes: reports
-                .filter((report) => report.enabled && !report.fetched)
+                .filter(
+                  (report) =>
+                    report.enabled &&
+                    (!report.fetched ||
+                      recentlyAddedReports.current.includes(report.code)),
+                )
                 .map((report) => report.code),
             }
           : {}),
@@ -519,6 +530,7 @@ export function Workspace({
             .map((report) => report.night)
             .sort()
             .reverse()[0];
+          recentlyAddedReports.current = [];
           nightChosen.current = true;
           setNight(reportedNight ?? defaultNight);
         }
