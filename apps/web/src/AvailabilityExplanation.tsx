@@ -1,4 +1,3 @@
-import "./provenance.css";
 import type { Mode } from "./model";
 import type { RecordedAvailability } from "./resultProvenance";
 const modes: Record<Mode, string> = {
@@ -27,7 +26,7 @@ export function AvailabilityExplanation({
       aria-label="Recorded availability explanation"
     >
       <h3>Recorded availability</h3>
-      <dl>
+      <dl className="metadata-grid">
         {(
           [
             ["pre", "Before break"],

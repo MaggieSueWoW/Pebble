@@ -6,6 +6,7 @@ import {
   FileText,
   Info,
 } from "lucide-react";
+import { DataTable } from "./DataTable";
 import { demoCode, formatDate, type Report } from "./model";
 import type { ReportEditor } from "./useReportEditor";
 import { useState, type ReactNode } from "react";
@@ -61,7 +62,7 @@ export function ReportsPanel({
       <div role="status" aria-label="Report changes" aria-live="polite">
         {saving ? "Saving report changes…" : message}
       </div>
-      <section className="card add-card" aria-busy={saving}>
+      <section className="card panel-body add-card" aria-busy={saving}>
         <form
           className="report-entry"
           onSubmit={(event) => {
@@ -158,137 +159,135 @@ export function ReportsPanel({
         </div>
       </section>
       <section className="card reports-card" aria-busy={saving}>
-        <div className="table-scroll">
-          <table>
-            <thead>
+        <DataTable className="reports-table">
+          <thead>
+            <tr>
+              <th>Report</th>
+              <th scope="col" aria-sort={direction}>
+                <SortButton
+                  label="Raid night (PT)"
+                  direction={direction}
+                  onClick={() =>
+                    setDirection((current) =>
+                      current === "ascending" ? "descending" : "ascending",
+                    )
+                  }
+                />
+              </th>
+              <th>Status</th>
+              <th className="align-right">Include</th>
+            </tr>
+          </thead>
+          <tbody>
+            {!reports.length && (
               <tr>
-                <th>Report</th>
-                <th scope="col" aria-sort={direction}>
-                  <SortButton
-                    label="Raid night (PT)"
-                    direction={direction}
-                    onClick={() =>
-                      setDirection((current) =>
-                        current === "ascending" ? "descending" : "ascending",
-                      )
-                    }
-                  />
-                </th>
-                <th>Status</th>
-                <th className="align-right">Include</th>
+                <td colSpan={4} className="empty-state">
+                  No reports yet. Paste a Warcraft Logs link or report code in
+                  the field above.
+                </td>
               </tr>
-            </thead>
-            <tbody>
-              {!reports.length && (
-                <tr>
-                  <td colSpan={4} className="empty-state">
-                    No reports yet. Paste a Warcraft Logs link or report code in
-                    the field above.
-                  </td>
-                </tr>
-              )}
-              {sortedReports.map((r) => {
-                const enabled = includeEdits[r.code] ?? r.enabled;
-                const checkedAt =
-                  r.checkedAt && Number.isFinite(Date.parse(r.checkedAt))
-                    ? r.checkedAt
-                    : "";
-                return (
-                  <tr key={r.code} className={enabled ? "" : "excluded-row"}>
-                    <td>
-                      <div className="report-cell">
-                        <span
-                          className={`report-icon ${!r.fetched ? "unfetched" : ""}`}
+            )}
+            {sortedReports.map((r) => {
+              const enabled = includeEdits[r.code] ?? r.enabled;
+              const checkedAt =
+                r.checkedAt && Number.isFinite(Date.parse(r.checkedAt))
+                  ? r.checkedAt
+                  : "";
+              return (
+                <tr key={r.code} className={enabled ? "" : "excluded-row"}>
+                  <td>
+                    <div className="report-cell">
+                      <span
+                        className={`report-icon ${!r.fetched ? "unfetched" : ""}`}
+                      >
+                        <FileText size={18} />
+                      </span>
+                      <div>
+                        <a
+                          href={`https://www.warcraftlogs.com/reports/${r.code}`}
+                          target="_blank"
+                          rel="noreferrer"
                         >
-                          <FileText size={18} />
-                        </span>
-                        <div>
-                          <a
-                            href={`https://www.warcraftlogs.com/reports/${r.code}`}
-                            target="_blank"
-                            rel="noreferrer"
-                          >
-                            {r.fetched && r.title.trim() ? r.title : r.code}
-                            <ExternalLink size={12} />
-                          </a>
-                          <div className="report-metadata">
-                            <span className="report-code">
-                              {r.fetched
-                                ? r.code
-                                : "Metadata appears after the next run"}
-                            </span>
-                            <span className="cell-subtitle">
-                              {checkedAt ? (
-                                <>
-                                  Last checked{" "}
-                                  <time dateTime={checkedAt}>
-                                    {new Intl.DateTimeFormat("en-US", {
-                                      year: "numeric",
-                                      month: "short",
-                                      day: "numeric",
-                                      hour: "numeric",
-                                      minute: "2-digit",
-                                      timeZone: "America/Los_Angeles",
-                                      timeZoneName: "short",
-                                    }).format(new Date(checkedAt))}
-                                  </time>
-                                </>
-                              ) : (
-                                "Last checked unavailable"
-                              )}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                    </td>
-                    <td>
-                      {r.fetched ? (
-                        <>
-                          <span className="cell-title">
-                            {formatDate(r.night)}
+                          {r.fetched && r.title.trim() ? r.title : r.code}
+                          <ExternalLink size={12} />
+                        </a>
+                        <div className="report-metadata">
+                          <span className="report-code">
+                            {r.fetched
+                              ? r.code
+                              : "Metadata appears after the next run"}
                           </span>
                           <span className="cell-subtitle">
-                            {new Intl.DateTimeFormat("en-US", {
-                              weekday: "long",
-                              timeZone: "UTC",
-                            }).format(new Date(`${r.night}T12:00:00Z`))}
+                            {checkedAt ? (
+                              <>
+                                Last checked{" "}
+                                <time dateTime={checkedAt}>
+                                  {new Intl.DateTimeFormat("en-US", {
+                                    year: "numeric",
+                                    month: "short",
+                                    day: "numeric",
+                                    hour: "numeric",
+                                    minute: "2-digit",
+                                    timeZone: "America/Los_Angeles",
+                                    timeZoneName: "short",
+                                  }).format(new Date(checkedAt))}
+                                </time>
+                              </>
+                            ) : (
+                              "Last checked unavailable"
+                            )}
                           </span>
-                        </>
-                      ) : (
-                        <span className="muted">—</span>
-                      )}
-                    </td>
-                    <td>
-                      <Badge
-                        tone={
-                          !enabled ? "neutral" : !r.fetched ? "amber" : "green"
-                        }
-                      >
-                        {!enabled
-                          ? "Excluded"
-                          : !r.fetched
-                            ? "Not fetched"
-                            : "Processed"}
-                      </Badge>
-                    </td>
-                    <td className="align-right">
-                      <button
-                        className={`switch ${enabled ? "on" : ""}`}
-                        role="switch"
-                        aria-checked={enabled}
-                        aria-label={`Include ${r.code}`}
-                        disabled={blocked}
-                        onClick={() => toggle(r.code)}
-                      >
-                        <span />
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+                        </div>
+                      </div>
+                    </div>
+                  </td>
+                  <td>
+                    {r.fetched ? (
+                      <>
+                        <span className="cell-title">
+                          {formatDate(r.night)}
+                        </span>
+                        <span className="cell-subtitle">
+                          {new Intl.DateTimeFormat("en-US", {
+                            weekday: "long",
+                            timeZone: "UTC",
+                          }).format(new Date(`${r.night}T12:00:00Z`))}
+                        </span>
+                      </>
+                    ) : (
+                      <span className="muted">—</span>
+                    )}
+                  </td>
+                  <td>
+                    <Badge
+                      tone={
+                        !enabled ? "neutral" : !r.fetched ? "amber" : "green"
+                      }
+                    >
+                      {!enabled
+                        ? "Excluded"
+                        : !r.fetched
+                          ? "Not fetched"
+                          : "Processed"}
+                    </Badge>
+                  </td>
+                  <td className="align-right">
+                    <button
+                      className={`switch ${enabled ? "on" : ""}`}
+                      role="switch"
+                      aria-checked={enabled}
+                      aria-label={`Include ${r.code}`}
+                      disabled={blocked}
+                      onClick={() => toggle(r.code)}
+                    >
+                      <span />
+                    </button>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </DataTable>
         {Object.keys(includeEdits).length > 0 && (
           <div className="inclusion-save">
             <span className="small">

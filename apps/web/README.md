@@ -78,6 +78,44 @@ Every sortable list marks its active direction, including the default. Sorting i
 local to the displayed list and makes no writes or run requests. Settings field
 labels and detailed descriptions are editable in `src/calculationFields.ts`.
 
+## Styling
+
+`src/styles.css` is the import entry point. Keep styles in these layers, in order:
+
+- `styles/tokens.css`: the palette, five typography sizes, spacing scale and shared
+  dimensions. Change `--text-body` for the default text size, `--row-height` for
+  desktop list density, and `--panel-padding` for panel spacing.
+- `styles/base.css`: element defaults, inherited typography, focus rings and small
+  utilities. Controls and table data inherit the body size.
+- `styles/components.css`: reusable controls, panels, toolbars, notices, tables,
+  disclosures and dialogs.
+- `styles/layout.css`: the application shell, sidebar and shared run history.
+- `styles/pages/*.css`: page layout and content-specific details, including their
+  responsive rules. Prefer arranging shared components here over restyling them.
+
+Use `DataTable` for a scrolling table with shared headers and row density;
+`summary-table` styles nested breakdowns. `PanelHeader`, `RunStatus` and
+`SelectControl` provide the repeated header, timestamp and dropdown markup.
+Keep native table/form semantics and existing accessible labels when composing
+these components. Inline styles are reserved for data-driven values such as
+player class colors and percentage bars.
+
+Results, Roster and Overrides use `--row-height` for their collapsed player rows,
+including borders and detail controls. The token is 28px on desktop and changes
+to 36px below 40rem for touch use; both values are defined in `tokens.css`.
+Expanded details keep their own content spacing.
+
+For new UI, start with existing components and tokens. Add a shared pattern when
+it is useful across pages; keep one-off layouts in their page file. Avoid chains
+of overrides that change typography or control padding separately on each page.
+The cascade layers establish precedence without increasingly specific selectors.
+
+`npm run lint:css` checks for duplicate rules/properties, excessive specificity,
+`!important`, and literal font sizes, font families and hex colors outside the
+tokens file. It also runs as part of `npm run build`. Run `npm test` and
+`npm run test:browser` after structural changes; the browser suite includes
+keyboard behavior and narrow-screen overflow checks.
+
 ## Sample mode
 
 Open http://127.0.0.1:5173/?demo=1 for the original standalone sample prototype.

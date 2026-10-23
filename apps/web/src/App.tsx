@@ -50,6 +50,10 @@ import {
   sortResultRows,
   type ResultSort,
 } from "./resultRanking";
+import { DataTable } from "./DataTable";
+import { PanelHeader } from "./PanelHeader";
+import { RunStatus, formatRunDate } from "./RunStatus";
+import { SelectControl } from "./SelectControl";
 import { SortButton } from "./SortButton";
 import { ResultRow } from "./ResultRow";
 import { AttendanceDetails } from "./AttendanceDetails";
@@ -71,12 +75,6 @@ import { useRosterEditor } from "./useRosterEditor";
 import { blankTiming } from "./timing";
 
 const STORAGE = "pebble-prototype-v1";
-const formatRunDate = (iso: string) =>
-  new Intl.DateTimeFormat("en-US", {
-    month: "short",
-    day: "numeric",
-    timeZone: "America/Los_Angeles",
-  }).format(new Date(iso));
 function loadSaved(): Saved {
   try {
     const stored = JSON.parse(localStorage.getItem(STORAGE) || "null");
@@ -259,8 +257,6 @@ export default function App({ connection }: { connection?: LiveConnection }) {
       };
     });
   }
-  const compactRunStatus =
-    page === "reports" || page === "roster" || page === "settings";
   const setPage = (page: Page) => navigation.navigate({ page });
   const [night, setNight] = useState(defaultNight);
   const nightChosen = useRef(false);
@@ -1102,75 +1098,30 @@ export default function App({ connection }: { connection?: LiveConnection }) {
           </div>
           {page !== "results" && page !== "overrides" && (
             <div
-              className={`${compactRunStatus ? "reports-status" : "run-strip"} ${active || connection?.submitting || waitingForResults ? "is-running" : ""} ${(lastFailed || resultLoadFailed) && !active && !connection?.submitting ? "has-error" : ""}`}
+              className={`reports-status toolbar ${active || connection?.submitting || waitingForResults ? "is-running" : ""} ${(lastFailed || resultLoadFailed) && !active && !connection?.submitting ? "has-error" : ""}`}
             >
-              {!compactRunStatus && (
-                <div
-                  className={`strip-icon ${active || connection?.submitting || waitingForResults ? "running-icon" : ""}`}
-                >
-                  {active ||
-                  connection?.submitting ||
-                  (waitingForResults && !resultLoadFailed) ? (
-                    <LoaderCircle size={19} className="spin" />
-                  ) : lastFailed || resultLoadFailed ? (
-                    <CircleAlert size={19} />
-                  ) : unprocessed ? (
-                    <Clock3 size={19} />
-                  ) : (
-                    <CheckCheck size={19} />
-                  )}
-                </div>
-              )}
-              <div
-                className="strip-copy"
-                role="status"
-                aria-label="Run status"
-                aria-atomic="true"
-              >
-                <strong>
-                  {runStatusMessage ||
-                    (connection && !connection.hasResults
-                      ? "No completed runs yet"
-                      : null)}
-                </strong>
-                <span>
-                  {page === "settings" &&
-                  (!connection || connection.hasResults) ? (
-                    <>
-                      Updated{" "}
-                      <time dateTime={results.completedAt}>
-                        {formatTime(results.completedAt)} PT ·{" "}
-                        {formatRunDate(results.completedAt)}
-                      </time>
-                    </>
-                  ) : active ? (
-                    "Your last completed results stay visible while Pebble works."
-                  ) : connection?.submitting ? (
-                    "Waiting for the server to confirm your request."
-                  ) : connection?.officer && !connection.queueReady ? (
-                    "Waiting to check for pending runs. Your previous results stay visible."
-                  ) : connection?.resultsError || connection?.resultsPending ? (
-                    connection.hasResults ? (
-                      "Showing the previous completed results until the latest set loads."
-                    ) : (
-                      "The latest result set has not loaded yet."
-                    )
-                  ) : lastFailed ? (
-                    "Previous results are still available. You can run Pebble again."
-                  ) : unsaved ? (
-                    "Save or discard your edits before running Pebble."
-                  ) : unprocessed ? (
-                    "Saved inputs have changed. Run Pebble to update the results."
-                  ) : connection && !connection.hasResults ? (
-                    "Add reports and Run Pebble to create the first result set."
-                  ) : (
-                    `Last completed ${formatTime(results.completedAt)} PT · ${formatRunDate(results.completedAt)}`
-                  )}
-                </span>
-              </div>
+              <RunStatus
+                message={runStatusMessage}
+                completedAt={
+                  !connection || connection.hasResults
+                    ? results.completedAt
+                    : undefined
+                }
+                detail={
+                  connection?.submitting
+                    ? "Waiting for the server to confirm your request."
+                    : active
+                      ? "Your last completed results stay visible while Pebble works."
+                      : unsaved
+                        ? "Save or discard your edits before running Pebble."
+                        : unprocessed
+                          ? "Saved inputs have changed. Run Pebble to update the results."
+                          : undefined
+                }
+              />
               {connection?.officer && connection.queueError && (
                 <button
-                  className="button"
+                  className="text-button"
                   onClick={() => retryWithFocus(connection.retryQueue)}
                 >
                   Retry run queue
@@ -1357,44 +1308,30 @@ export default function App({ connection }: { connection?: LiveConnection }) {
           )}
           {page === "overrides" && nightOptions.length > 0 && (
             <>
-              <div className="override-toolbar">
+              <div className="override-toolbar toolbar">
                 <label className="night-select">
                   <Clock3 size={16} />
                   <span>Raid night</span>
-                  <span className="select-control">
-                    <select
-                      aria-label="Raid night"
-                      value={night}
-                      onChange={(e) => chooseNight(e.target.value)}
-                    >
-                      {nightOptions.map((n) => (
-                        <option key={n} value={n}>
-                          {formatDate(n, true)}
-                        </option>
-                      ))}
-                    </select>
-                    <ChevronDown size={16} aria-hidden="true" />
-                  </span>
+                  <SelectControl
+                    aria-label="Raid night"
+                    value={night}
+                    onChange={(e) => chooseNight(e.target.value)}
+                  >
+                    {nightOptions.map((n) => (
+                      <option key={n} value={n}>
+                        {formatDate(n, true)}
+                      </option>
+                    ))}
+                  </SelectControl>
                 </label>
-                <span
-                  className="result-updated"
-                  role="status"
-                  aria-label="Run status"
-                  aria-atomic="true"
-                >
-                  {runStatusMessage && `${runStatusMessage} · `}
-                  {!connection || connection.hasResults ? (
-                    <>
-                      Updated{" "}
-                      <time dateTime={results.completedAt}>
-                        {formatTime(results.completedAt)} PT ·{" "}
-                        {formatRunDate(results.completedAt)}
-                      </time>
-                    </>
-                  ) : (
-                    "No completed runs yet"
-                  )}
-                </span>
+                <RunStatus
+                  message={runStatusMessage}
+                  completedAt={
+                    !connection || connection.hasResults
+                      ? results.completedAt
+                      : undefined
+                  }
+                />
                 {connection?.officer && connection.queueError && (
                   <button
                     className="text-button"
@@ -1416,12 +1353,10 @@ export default function App({ connection }: { connection?: LiveConnection }) {
                   aria-labelledby="override-tab-availability"
                 >
                   <section className="card player-card">
-                    <div className="table-heading">
-                      <div>
-                        <h2>Who was available?</h2>
-                        <p>Select a player to adjust their availability.</p>
-                      </div>
-                    </div>
+                    <PanelHeader
+                      title="Who was available?"
+                      description="Select a player to adjust their availability."
+                    />
                     <label className="search-field">
                       <Search size={16} />
                       <input
@@ -1642,9 +1577,9 @@ export default function App({ connection }: { connection?: LiveConnection }) {
                 </section>
               )}
               <section className="card results-card">
-                <div className="results-toolbar">
+                <div className="results-toolbar toolbar">
                   <div className="result-period-select">
-                    <select
+                    <SelectControl
                       aria-label="Result period"
                       value={visibleResultNight}
                       onChange={(e) => {
@@ -1658,27 +1593,21 @@ export default function App({ connection }: { connection?: LiveConnection }) {
                           {formatDate(n.night, true)}
                         </option>
                       ))}
-                    </select>
-                    <ChevronDown size={16} aria-hidden="true" />
+                    </SelectControl>
                   </div>
                   <span className="result-night-count">
                     {results.nights.length} raid{" "}
                     {results.nights.length === 1 ? "night" : "nights"} this
                     season
                   </span>
-                  <span
-                    className="result-updated"
-                    role="status"
-                    aria-label="Run status"
-                    aria-atomic="true"
-                  >
-                    {runStatusMessage && `${runStatusMessage} · `}
-                    Updated{" "}
-                    <time dateTime={results.completedAt}>
-                      {formatTime(results.completedAt)} PT ·{" "}
-                      {formatRunDate(results.completedAt)}
-                    </time>
-                  </span>
+                  <RunStatus
+                    message={runStatusMessage}
+                    completedAt={
+                      !connection || connection.hasResults
+                        ? results.completedAt
+                        : undefined
+                    }
+                  />
                   <button
                     className="text-button"
                     onClick={() => void copyResultLink()}
@@ -1695,110 +1624,108 @@ export default function App({ connection }: { connection?: LiveConnection }) {
                     }
                   />
                 )}
-                <div className="table-scroll">
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>#</th>
-                        {(
-                          [
-                            ["name", "Player"],
-                            ["bench", "Bench"],
-                            ["played", "Played"],
-                            ["share", "Time Played"],
-                          ] as const
-                        ).map(([key, label]) => (
-                          <th
-                            key={key}
-                            scope="col"
-                            aria-sort={
+                <DataTable className="results-table">
+                  <thead>
+                    <tr>
+                      <th>#</th>
+                      {(
+                        [
+                          ["name", "Player"],
+                          ["bench", "Bench"],
+                          ["played", "Played"],
+                          ["share", "Time Played"],
+                        ] as const
+                      ).map(([key, label]) => (
+                        <th
+                          key={key}
+                          scope="col"
+                          aria-sort={
+                            activeResultSort.key === key
+                              ? activeResultSort.direction
+                              : undefined
+                          }
+                        >
+                          <SortButton
+                            label={label}
+                            direction={
                               activeResultSort.key === key
                                 ? activeResultSort.direction
                                 : undefined
                             }
-                          >
-                            <SortButton
-                              label={label}
-                              direction={
-                                activeResultSort.key === key
-                                  ? activeResultSort.direction
-                                  : undefined
-                              }
-                              onClick={() => changeResultSort(key)}
-                            />
-                          </th>
-                        ))}
-                        <th />
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {resultRows.map((row, i) => {
-                        const player = row.name
-                          ? {
-                              id: row.id,
-                              name: row.name,
-                              className: row.className ?? "",
-                              role: row.role ?? "",
-                              color: row.color ?? "#b9c7d8",
-                              pre: 0,
-                              post: 0,
-                            }
-                          : players.find((p) => p.id === row.id)!;
-                        return (
-                          <ResultRow
-                            key={row.id}
-                            player={player}
-                            row={row}
-                            showAttendance={visibleResultNight === "season"}
-                            index={i}
-                            rank={
-                              visibleResultNight === "season"
-                                ? row.ranking?.rank
-                                : undefined
-                            }
-                            expanded={expandedPlayer === row.id}
-                            onExpand={() =>
-                              setExpandedPlayer(
-                                expandedPlayer === row.id ? null : row.id,
-                              )
-                            }
-                            onEdit={
-                              !canManage
-                                ? undefined
-                                : () => {
-                                    guard(() => {
-                                      const n =
-                                        visibleResultNight === "season"
-                                          ? (results.nights[0]?.night ??
-                                            defaultNight)
-                                          : visibleResultNight;
-                                      nightChosen.current = true;
-                                      setNight(n);
-                                      setSelected(row.id);
-                                      setOverrideTab("availability");
-                                      setPage("overrides");
-                                    });
-                                  }
-                            }
+                            onClick={() => changeResultSort(key)}
                           />
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                  {!resultRows.length && (
-                    <div className="empty-state">
-                      <FileText size={28} />
-                      <h3>No player time for this period</h3>
-                      <p>
-                        {canManage
-                          ? "Use Reports in the sidebar to review the included logs."
-                          : "No player time was recorded for this period in the completed results."}
-                        {results.nights.length > 0 &&
-                          " Try another result period."}
-                      </p>
-                    </div>
-                  )}
-                </div>
+                        </th>
+                      ))}
+                      <th />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {resultRows.map((row, i) => {
+                      const player = row.name
+                        ? {
+                            id: row.id,
+                            name: row.name,
+                            className: row.className ?? "",
+                            role: row.role ?? "",
+                            color: row.color ?? "#b9c7d8",
+                            pre: 0,
+                            post: 0,
+                          }
+                        : players.find((p) => p.id === row.id)!;
+                      return (
+                        <ResultRow
+                          key={row.id}
+                          player={player}
+                          row={row}
+                          showAttendance={visibleResultNight === "season"}
+                          index={i}
+                          rank={
+                            visibleResultNight === "season"
+                              ? row.ranking?.rank
+                              : undefined
+                          }
+                          expanded={expandedPlayer === row.id}
+                          onExpand={() =>
+                            setExpandedPlayer(
+                              expandedPlayer === row.id ? null : row.id,
+                            )
+                          }
+                          onEdit={
+                            !canManage
+                              ? undefined
+                              : () => {
+                                  guard(() => {
+                                    const n =
+                                      visibleResultNight === "season"
+                                        ? (results.nights[0]?.night ??
+                                          defaultNight)
+                                        : visibleResultNight;
+                                    nightChosen.current = true;
+                                    setNight(n);
+                                    setSelected(row.id);
+                                    setOverrideTab("availability");
+                                    setPage("overrides");
+                                  });
+                                }
+                          }
+                        />
+                      );
+                    })}
+                  </tbody>
+                </DataTable>
+                {!resultRows.length && (
+                  <div className="empty-state">
+                    <FileText size={28} />
+                    <h3>No player time for this period</h3>
+                    <p>
+                      {canManage
+                        ? "Use Reports in the sidebar to review the included logs."
+                        : "No player time was recorded for this period in the completed results."}
+                      {results.nights.length > 0 &&
+                        " Try another result period."}
+                    </p>
+                  </div>
+                )}
                 <div className="table-footnote">
                   <CheckCheck size={14} />{" "}
                   {connection && !connection.hasResults

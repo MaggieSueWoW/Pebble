@@ -1,3 +1,4 @@
+import { PanelHeader } from "./PanelHeader";
 import { useState } from "react";
 import { Trash2 } from "lucide-react";
 import { SelectControl } from "./SelectControl";
@@ -24,12 +25,11 @@ export function RosterPanel({
   const field = (key: keyof RosterValue, value: string | boolean) =>
     editor.change((old) => ({ ...old, [key]: value }));
   return (
-    <section className="panel roster-panel" aria-label="Main details">
-      {!editor.exists && (
-        <div className="panel-header">
-          <h2 id="roster-title">New main</h2>
-        </div>
-      )}
+    <section
+      className="panel panel-body roster-panel"
+      aria-label="Main details"
+    >
+      {!editor.exists && <PanelHeader title="New main" id="roster-title" />}
       <div className="roster-editor">
         {editor.id && (
           <form
@@ -106,13 +106,18 @@ export function RosterPanel({
               </label>
             </fieldset>
             <p
+              className="validation"
               id="roster-validation"
               role={editor.validation && editor.dirty ? "alert" : undefined}
             >
               {editor.dirty ? editor.validation : ""}
             </p>
             {editor.error && <p role="alert">{editor.error}</p>}
-            <div role="status" aria-label="Roster changes">
+            <div
+              className="form-status"
+              role="status"
+              aria-label="Roster changes"
+            >
               {editor.message}
             </div>
             <p className="muted small roster-help">

@@ -19,13 +19,17 @@ export function CalculationEditor({
   } = editor;
   return (
     <section
-      className="card timing-card calculation-card"
+      className="card panel-body calculation-card"
       aria-label="Calculation settings editor"
     >
       <p className="settings-form-intro">
         All times are Pacific. Save, then Run Pebble to apply changes.
       </p>
-      <div role="status" aria-label="Calculation settings changes">
+      <div
+        className="form-status"
+        role="status"
+        aria-label="Calculation settings changes"
+      >
         {saving ? "Saving calculation settings…" : message}
       </div>
       {error && (

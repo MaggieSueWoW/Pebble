@@ -1,4 +1,3 @@
-import "./provenance.css";
 import type { RecordedNightDiagnostics } from "./resultProvenance";
 const sources = {
   override: "Officer timing override",
@@ -23,7 +22,7 @@ export function NightDiagnostics({
       {!diagnostic ? (
         <p>No recorded diagnostics for this night.</p>
       ) : (
-        <dl>
+        <dl className="metadata-grid">
           <div>
             <dt>Source reports</dt>
             <dd>{diagnostic.reportCount}</dd>

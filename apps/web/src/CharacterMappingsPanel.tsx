@@ -1,3 +1,4 @@
+import { PanelHeader } from "./PanelHeader";
 import { useState } from "react";
 import { ArrowLeftRight, Plus, Trash2 } from "lucide-react";
 import {
@@ -50,21 +51,22 @@ export function CharacterMappingsPanel({
     editor.change((old) => ({ ...old, [key]: value }));
   return (
     <section
-      className="panel roster-panel roster-alts-panel"
+      className="panel panel-body roster-panel roster-alts-panel"
       aria-labelledby="character-title"
     >
-      <div className="panel-header">
-        <div>
-          <h2 id="character-title">Alts</h2>
-        </div>
-        <button
-          className="text-button"
-          onClick={add}
-          disabled={deleting || editor.saving}
-        >
-          <Plus size={14} /> Add alt
-        </button>
-      </div>
+      <PanelHeader
+        title="Alts"
+        id="character-title"
+        actions={
+          <button
+            className="text-button"
+            onClick={add}
+            disabled={deleting || editor.saving}
+          >
+            <Plus size={14} /> Add alt
+          </button>
+        }
+      />
       <div className="roster-editor">
         <ul className="main-alt-list">
           {alts.map((alt) => (
@@ -265,13 +267,18 @@ export function CharacterMappingsPanel({
               </p>
             </fieldset>
             <p
+              className="validation"
               id="character-validation"
               role={editor.validation && editor.dirty ? "alert" : undefined}
             >
               {editor.dirty ? editor.validation : ""}
             </p>
             {editor.error && <p role="alert">{editor.error}</p>}
-            <div role="status" aria-label="Character mapping changes">
+            <div
+              className="form-status"
+              role="status"
+              aria-label="Character mapping changes"
+            >
               {editor.message}
             </div>
             <div className="button-row">

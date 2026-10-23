@@ -5,11 +5,12 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1",
-    "build": "tsc -b && vite build",
+    "build": "npm run lint:css && tsc -b && vite build",
     "preview": "vite preview --host 127.0.0.1",
     "test": "vitest run",
     "format": "prettier --write src vite.config.ts",
-    "test:browser": "firebase emulators:exec --project demo-pebble-reports --config ../../firebase.browser.json --only auth,firestore \"playwright test\""
+    "test:browser": "firebase emulators:exec --project demo-pebble-reports --config ../../firebase.browser.json --only auth,firestore \"playwright test\"",
+    "lint:css": "stylelint \"src/**/*.css\""
   },
   "dependencies": {
     "firebase": "^12.19.0",
@@ -26,6 +27,7 @@
     "@vitejs/plugin-react": "^4.3.4",
     "jsdom": "^29.1.1",
     "prettier": "^3.4.2",
+    "stylelint": "^17.16.0",
     "typescript": "~5.7.2",
     "vite": "^6.4.4",
     "vitest": "^5.0.5"

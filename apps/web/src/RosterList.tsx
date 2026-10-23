@@ -1,5 +1,6 @@
 import { Fragment, useState, type ReactNode } from "react";
 import { ChevronDown, ChevronRight, Plus, Search } from "lucide-react";
+import { DataTable } from "./DataTable";
 import { SortButton } from "./SortButton";
 import type { RosterEntry } from "./roster";
 import { identityCasefold } from "./characters";
@@ -99,123 +100,120 @@ export function RosterList({
       {detail &&
         !roster.some((player) => player.id === detailPlayerId) &&
         detail}
-      <div className="table-scroll">
-        <table className="roster-table">
-          <thead>
-            <tr>
-              {(
-                [
-                  ["name", "Player"],
-                  ["joinDate", "Joined"],
-                  ["leaveDate", "Left"],
-                  ["alts", "Alts"],
-                ] as const
-              ).map(([key, label]) => (
-                <th
-                  key={key}
-                  scope="col"
-                  aria-sort={sort.key === key ? sort.direction : undefined}
-                >
-                  <SortButton
-                    label={label}
-                    direction={sort.key === key ? sort.direction : undefined}
-                    onClick={() =>
-                      setSort((current) => ({
-                        key,
-                        direction:
-                          current.key === key &&
-                          current.direction === "ascending"
-                            ? "descending"
-                            : "ascending",
-                      }))
-                    }
-                  />
-                </th>
-              ))}
-              <th scope="col">
-                <span className="sr-only">Details</span>
+      <DataTable className="roster-table">
+        <thead>
+          <tr>
+            {(
+              [
+                ["name", "Player"],
+                ["joinDate", "Joined"],
+                ["leaveDate", "Left"],
+                ["alts", "Alts"],
+              ] as const
+            ).map(([key, label]) => (
+              <th
+                key={key}
+                scope="col"
+                aria-sort={sort.key === key ? sort.direction : undefined}
+              >
+                <SortButton
+                  label={label}
+                  direction={sort.key === key ? sort.direction : undefined}
+                  onClick={() =>
+                    setSort((current) => ({
+                      key,
+                      direction:
+                        current.key === key && current.direction === "ascending"
+                          ? "descending"
+                          : "ascending",
+                    }))
+                  }
+                />
               </th>
-            </tr>
-          </thead>
-          <tbody>
-            {players.map((player) => (
-              <Fragment key={player.id}>
-                <tr onClick={() => toggle(player.id)}>
-                  <td>
-                    <button
-                      className="roster-main-button"
-                      aria-label={`Edit ${player.name}`}
-                      aria-expanded={Boolean(
-                        detail && detailPlayerId === player.id,
-                      )}
-                    >
-                      <strong style={{ color: colors[player.id] }}>
-                        {player.name}
-                      </strong>
-                      {!player.active && (
-                        <span className="roster-inactive">Inactive</span>
-                      )}
-                    </button>
-                  </td>
-                  <td>{player.joinDate || "—"}</td>
-                  <td>{player.leaveDate || "—"}</td>
-                  <td onClick={(event) => event.stopPropagation()}>
-                    <div className="roster-alts">
-                      {visibleAlts.get(player.id)!.map((alt, index) => (
-                        <Fragment key={alt.id}>
-                          {index > 0 && ", "}
-                          <button
-                            className="roster-alt-button"
-                            onClick={() => editAlt(alt.id)}
-                            title={`${alt.realm || "All realms"} · ${alt.region.toUpperCase()}`}
-                            aria-label={`Edit alt ${alt.name} for ${player.name}`}
-                          >
-                            {alt.name}
-                            {characters.filter(
-                              (other) =>
-                                other.playerId === player.id &&
-                                other.name.toLocaleLowerCase() ===
-                                  alt.name.toLocaleLowerCase(),
-                            ).length > 1 && (
-                              <small>
-                                {" "}
-                                · {alt.realm || "All realms"} ·{" "}
-                                {alt.region.toUpperCase()}
-                              </small>
-                            )}
-                          </button>
-                        </Fragment>
-                      ))}
-                    </div>
-                  </td>
-                  <td>
-                    <button
-                      className="roster-row-toggle"
-                      aria-label={`${detail && detailPlayerId === player.id ? "Collapse" : "Details for"} ${player.name}`}
-                      aria-expanded={Boolean(
-                        detail && detailPlayerId === player.id,
-                      )}
-                    >
-                      {detail && detailPlayerId === player.id ? (
-                        <ChevronDown size={14} />
-                      ) : (
-                        <ChevronRight size={14} />
-                      )}
-                    </button>
+            ))}
+            <th scope="col">
+              <span className="sr-only">Details</span>
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {players.map((player) => (
+            <Fragment key={player.id}>
+              <tr className="interactive-row" onClick={() => toggle(player.id)}>
+                <td>
+                  <button
+                    className="row-name roster-main-button"
+                    aria-label={`Edit ${player.name}`}
+                    aria-expanded={Boolean(
+                      detail && detailPlayerId === player.id,
+                    )}
+                  >
+                    <strong style={{ color: colors[player.id] }}>
+                      {player.name}
+                    </strong>
+                    {!player.active && (
+                      <span className="roster-inactive">Inactive</span>
+                    )}
+                  </button>
+                </td>
+                <td>{player.joinDate || "—"}</td>
+                <td>{player.leaveDate || "—"}</td>
+                <td onClick={(event) => event.stopPropagation()}>
+                  <div className="roster-alts">
+                    {visibleAlts.get(player.id)!.map((alt, index) => (
+                      <Fragment key={alt.id}>
+                        {index > 0 && ", "}
+                        <button
+                          className="roster-alt-button"
+                          onClick={() => editAlt(alt.id)}
+                          title={`${alt.realm || "All realms"} · ${alt.region.toUpperCase()}`}
+                          aria-label={`Edit alt ${alt.name} for ${player.name}`}
+                        >
+                          {alt.name}
+                          {characters.filter(
+                            (other) =>
+                              other.playerId === player.id &&
+                              other.name.toLocaleLowerCase() ===
+                                alt.name.toLocaleLowerCase(),
+                          ).length > 1 && (
+                            <small>
+                              {" "}
+                              · {alt.realm || "All realms"} ·{" "}
+                              {alt.region.toUpperCase()}
+                            </small>
+                          )}
+                        </button>
+                      </Fragment>
+                    ))}
+                  </div>
+                </td>
+                <td>
+                  <button
+                    className="roster-row-toggle"
+                    aria-label={`${detail && detailPlayerId === player.id ? "Collapse" : "Details for"} ${player.name}`}
+                    aria-expanded={Boolean(
+                      detail && detailPlayerId === player.id,
+                    )}
+                  >
+                    {detail && detailPlayerId === player.id ? (
+                      <ChevronDown size={14} />
+                    ) : (
+                      <ChevronRight size={14} />
+                    )}
+                  </button>
+                </td>
+              </tr>
+              {detail && detailPlayerId === player.id && (
+                <tr className="detail-row roster-detail-row">
+                  <td colSpan={5} className="roster-detail-cell">
+                    {detail}
                   </td>
                 </tr>
-                {detail && detailPlayerId === player.id && (
-                  <tr className="roster-detail-row">
-                    <td colSpan={5} className="roster-detail-cell">
-                      {detail}
-                    </td>
-                  </tr>
-                )}
-              </Fragment>
-            ))}
-          </tbody>
-        </table>
-      </div>
+              )}
+            </Fragment>
+          ))}
+        </tbody>
+      </DataTable>
       {characters.some(
         (alt) => !roster.some((player) => player.id === alt.playerId),
       ) && (

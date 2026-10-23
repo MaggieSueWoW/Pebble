@@ -34,7 +34,7 @@ export function AttendanceDetails({
       <h3 id={title} className="sr-only">
         Attendance
       </h3>
-      <dl className="attendance-summary">
+      <dl className="stat-list attendance-summary">
         <div>
           <dt>Attendance rate</dt>
           <dd>{rate}</dd>
@@ -52,7 +52,7 @@ export function AttendanceDetails({
         <>
           <details className="detail-disclosure">
             <summary>Attendance explanation</summary>
-            <dl className="attendance-totals">
+            <dl className="stat-list attendance-totals">
               <div>
                 <dt>Eligible played</dt>
                 <dd>{recordedMinutes(attendance.played)}</dd>
@@ -84,7 +84,7 @@ export function AttendanceDetails({
               statuses; an empty status means no applicable event.
             </p>
             {weeks.length ? (
-              <table className="attendance-weeks">
+              <table className="summary-table attendance-weeks">
                 <caption>Weekly attendance</caption>
                 <thead>
                   <tr>

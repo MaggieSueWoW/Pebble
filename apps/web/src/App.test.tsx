@@ -116,18 +116,18 @@ it("selects arriving players, keeps search independent and renders only known me
   fireEvent.change(search, { target: { value: "mage" } });
   expect(screen.getByRole("button", { name: /Example Alpha/ })).toBeTruthy();
   expect(screen.queryByRole("button", { name: /Example Beta/ })).toBeNull();
-  expect(editor().querySelector(".editor-heading")?.textContent).not.toMatch(
-    /Unknown| · /,
-  );
+  expect(
+    within(editor()).getByRole("heading", { level: 2 }).textContent,
+  ).not.toMatch(/Unknown| · /);
   fireEvent.change(screen.getByRole("textbox", { name: "Search players" }), {
     target: { value: "Beta" },
   });
   expect(editor().textContent).toContain("Example Alpha");
   fireEvent.click(screen.getByRole("button", { name: /Example Beta/ }));
   expect(editor().textContent).toContain("Example Beta");
-  expect(editor().querySelector(".editor-heading")?.textContent).not.toContain(
-    " · ",
-  );
+  expect(
+    within(editor()).getByRole("heading", { level: 2 }).textContent,
+  ).not.toContain(" · ");
   fireEvent.change(screen.getByRole("textbox", { name: "Search players" }), {
     target: { value: "no match" },
   });

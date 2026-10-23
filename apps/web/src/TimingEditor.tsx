@@ -1,3 +1,4 @@
+import { PanelHeader } from "./PanelHeader";
 import { Check, CircleAlert, RotateCcw } from "lucide-react";
 import { formatDate, wallTime, type Timing } from "./model";
 import { timingFields } from "./timing";
@@ -25,8 +26,16 @@ export function TimingEditor({
     reset,
   } = editor;
   return (
-    <section className="card timing-card" aria-label="Raid timing editor">
-      <div role="status" aria-label="Timing changes" aria-live="polite">
+    <section
+      className="card panel-body timing-card"
+      aria-label="Raid timing editor"
+    >
+      <div
+        className="form-status"
+        role="status"
+        aria-label="Timing changes"
+        aria-live="polite"
+      >
         {saving ? "Saving timing…" : message}
       </div>
       {error && (
@@ -34,10 +43,10 @@ export function TimingEditor({
           {error}
         </p>
       )}
-      <div className="timing-heading">
-        <h2>Timing overrides</h2>
-        {timingDirty && <span className="badge amber">Unsaved</span>}
-      </div>
+      <PanelHeader
+        title="Timing overrides"
+        actions={timingDirty && <span className="badge amber">Unsaved</span>}
+      />
       <p className="timing-help">
         Pacific time. Leave overrides blank to use detected times.
       </p>
@@ -47,7 +56,10 @@ export function TimingEditor({
           automatic timing on the next run, or enter Pacific times.
         </p>
       )}
-      <table className="timing-table" aria-label="Raid timing overrides">
+      <table
+        className="summary-table timing-table"
+        aria-label="Raid timing overrides"
+      >
         <thead>
           <tr>
             <th scope="col">Event</th>

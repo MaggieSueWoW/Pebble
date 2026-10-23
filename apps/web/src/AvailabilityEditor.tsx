@@ -1,4 +1,6 @@
-import { Check, ChevronDown, CircleAlert, Info, RotateCcw } from "lucide-react";
+import { Check, CircleAlert, Info, RotateCcw } from "lucide-react";
+import { SelectControl } from "./SelectControl";
+import { PanelHeader } from "./PanelHeader";
 import { type Player, type Availability, type Mode } from "./model";
 import type { AvailabilityEditorState } from "./useAvailabilityEditor";
 function AvailabilityField({
@@ -22,25 +24,22 @@ function AvailabilityField({
     <div className="field">
       <label>
         {label}
-        <span className="select-control">
-          <select
-            value={value.mode}
-            onChange={(e) =>
-              onChange(
-                ["partial", "unavailableFor"].includes(e.target.value)
-                  ? { mode: e.target.value as Mode, minutes: max }
-                  : { mode: e.target.value as Mode },
-              )
-            }
-          >
-            <option value="automatic">Automatic</option>
-            <option value="available">Available</option>
-            <option value="unavailable">Unavailable</option>
-            <option value="partial">Partial availability…</option>
-            <option value="unavailableFor">Unavailable for…</option>
-          </select>
-          <ChevronDown size={16} aria-hidden="true" />
-        </span>
+        <SelectControl
+          value={value.mode}
+          onChange={(e) =>
+            onChange(
+              ["partial", "unavailableFor"].includes(e.target.value)
+                ? { mode: e.target.value as Mode, minutes: max }
+                : { mode: e.target.value as Mode },
+            )
+          }
+        >
+          <option value="automatic">Automatic</option>
+          <option value="available">Available</option>
+          <option value="unavailable">Unavailable</option>
+          <option value="partial">Partial availability…</option>
+          <option value="unavailableFor">Unavailable for…</option>
+        </SelectControl>
       </label>
       {["partial", "unavailableFor"].includes(value.mode) && (
         <label className="minutes-label">
@@ -124,10 +123,15 @@ export function AvailabilityEditor({
   } = editor;
   return (
     <section
-      className="card adjustment-card"
+      className="card panel-body adjustment-card"
       aria-label="Player availability editor"
     >
-      <div role="status" aria-label="Availability changes" aria-live="polite">
+      <div
+        className="form-status"
+        role="status"
+        aria-label="Availability changes"
+        aria-live="polite"
+      >
         {saving ? "Saving availability…" : message}
       </div>
       {error && (
@@ -135,12 +139,10 @@ export function AvailabilityEditor({
           {error}
         </p>
       )}
-      <div className="editor-heading">
-        <div>
-          <h2 style={{ color: p.color }}>{p.name}</h2>
-        </div>
-        {editDirty && <span className="badge amber">Unsaved</span>}
-      </div>
+      <PanelHeader
+        title={<span style={{ color: p.color }}>{p.name}</span>}
+        actions={editDirty && <span className="badge amber">Unsaved</span>}
+      />
       <p className="editor-intro">
         Tell Pebble when this player was available. Automatic uses the bot’s
         normal inference.

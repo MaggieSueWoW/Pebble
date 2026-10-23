@@ -32,13 +32,13 @@ export function ResultRow({
   const detailId = useId();
   return (
     <>
-      <tr className="result-player-row" onClick={onExpand}>
+      <tr className="interactive-row result-player-row" onClick={onExpand}>
         <td className="muted rank">
           {String(rank ?? index + 1).padStart(2, "0")}
         </td>
         <td>
           <button
-            className="result-name"
+            className="row-name result-name"
             aria-expanded={expanded}
             aria-controls={detailId}
           >
@@ -76,7 +76,7 @@ export function ResultRow({
           </button>
         </td>
       </tr>
-      <tr className="result-detail" hidden={!expanded}>
+      <tr className="detail-row result-detail" hidden={!expanded}>
         <td colSpan={6}>
           <div
             id={detailId}
@@ -84,7 +84,10 @@ export function ResultRow({
             aria-label={`Availability breakdown for ${player.name}`}
           >
             <div className="player-time-details">
-              <table className="break-summary" aria-label="Time by break">
+              <table
+                className="summary-table break-summary"
+                aria-label="Time by break"
+              >
                 <thead>
                   <tr>
                     <th scope="col">Period</th>

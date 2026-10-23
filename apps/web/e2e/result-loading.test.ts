@@ -872,7 +872,7 @@ test("officer empty periods and recent history keep progress visible and link to
 
 async function sourceMetadata(
   id: string,
-  summaries: Record<string, { title: string }>,
+  summaries: Record<string, { title: string; warningIndexes: number[] }>,
 ) {
   await admin(async (ctx) => {
     await setDoc(
@@ -896,7 +896,7 @@ test("officer warning sources stay with displayed results instead of newer histo
 }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await sourceMetadata("baseline", {
-    [report]: { title: "Original source report" },
+    [report]: { title: "Original source report", warningIndexes: [0] },
   });
   await admin(async (ctx) => {
     await setDoc(
@@ -906,8 +906,8 @@ test("officer warning sources stay with displayed results instead of newer histo
     );
   });
   await resultsPage(page);
-  const sources = page.getByRole("region", {
-    name: "Source reports for this run",
+  const sources = page.getByRole("list", {
+    name: "Source reports for this warning",
   });
   const original = sources.getByRole("link", {
     name: "Original source report",
@@ -937,7 +937,9 @@ test("officer warning sources stay with displayed results instead of newer histo
   await seedResult("delayed", "Delayed Player", nights.delayed, true, 2, [
     "New warning",
   ]);
-  await sourceMetadata("delayed", { BBBBBBBBBBBBBBBB: { title: "  " } });
+  await sourceMetadata("delayed", {
+    BBBBBBBBBBBBBBBB: { title: "  ", warningIndexes: [0] },
+  });
   await publish("delayed");
   await expect.poll(() => held.hits).toBeGreaterThan(0);
   await expect(original).toBeVisible();
@@ -976,7 +978,7 @@ test("public warnings do not expose private source metadata", async ({
   page,
 }) => {
   await sourceMetadata("baseline", {
-    [report]: { title: "Officer source metadata" },
+    [report]: { title: "Officer source metadata", warningIndexes: [0] },
   });
   await admin(async (ctx) => {
     await setDoc(
@@ -990,7 +992,7 @@ test("public warnings do not expose private source metadata", async ({
     page.getByText("Public result warning", { exact: true }),
   ).toBeVisible();
   await expect(
-    page.getByRole("region", { name: "Source reports for this run" }),
+    page.getByRole("list", { name: "Source reports for this warning" }),
   ).toHaveCount(0);
   await expect(
     page.getByText("Officer source metadata", { exact: true }),
