@@ -777,7 +777,7 @@ export function Workspace({
         </>
       }
     >
-      {canManage && page !== "roster" && page !== "settings" && (
+      {canManage && !["roster", "settings", "officers"].includes(page) && (
         <NightFlow page={page} go={go} />
       )}
       {page !== "results" && page !== "overrides" && page !== "review" && (
