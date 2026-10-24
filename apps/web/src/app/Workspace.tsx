@@ -736,6 +736,7 @@ export function Workspace({
       notices={
         <ConnectionNotices
           connection={connection}
+          showResults={page !== "officers"}
           canManage={canManage}
           retryWithFocus={retryWithFocus}
           authPending={authPending}
@@ -780,7 +781,7 @@ export function Workspace({
       {canManage && !["roster", "settings", "officers"].includes(page) && (
         <NightFlow page={page} go={go} />
       )}
-      {page !== "results" && page !== "overrides" && page !== "review" && (
+      {!["results", "overrides", "review", "officers"].includes(page) && (
         <div
           className={`reports-status toolbar ${active || connection?.submitting || waitingForResults ? "is-running" : ""} ${(lastFailed || resultLoadFailed) && !active && !connection?.submitting ? "has-error" : ""}`}
         >

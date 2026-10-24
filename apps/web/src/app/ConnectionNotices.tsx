@@ -8,11 +8,13 @@ export function ConnectionNotices({
   retryWithFocus,
   switchAccount,
   authPending,
+  showResults = true,
 }: {
   connection?: LiveConnection;
   canManage: boolean;
   switchAccount: () => void;
   authPending: boolean;
+  showResults?: boolean;
   retryWithFocus: (retry: () => void) => void;
 }) {
   return (
@@ -63,7 +65,7 @@ export function ConnectionNotices({
           </div>
         </section>
       )}
-      {connection?.resultsError && (
+      {showResults && connection?.resultsError && (
         <Notice tone="amber">
           <span role="alert">{connection.resultsError}</span>{" "}
           <button
@@ -74,7 +76,8 @@ export function ConnectionNotices({
           </button>
         </Notice>
       )}
-      {connection &&
+      {showResults &&
+        connection &&
         !connection.hasResults &&
         !connection.resultsPending &&
         !connection.resultsError && (
