@@ -7,6 +7,7 @@ import {
   signOut,
 } from "firebase/auth";
 import { connectFirestoreEmulator, getFirestore } from "firebase/firestore";
+import { connectFunctionsEmulator, getFunctions } from "firebase/functions";
 
 const env = import.meta.env;
 export const configured = Boolean(
@@ -29,7 +30,13 @@ const app = configured
   : null;
 export const auth = app ? getAuth(app) : null;
 export const db = app ? getFirestore(app) : null;
-if (emulated && auth && db) {
+export const functions = app ? getFunctions(app, "us-central1") : null;
+if (emulated && auth && db && functions) {
+  connectFunctionsEmulator(
+    functions,
+    "127.0.0.1",
+    Number(env.VITE_FUNCTIONS_EMULATOR_PORT || 5001),
+  );
   connectAuthEmulator(
     auth,
     env.VITE_FIREBASE_AUTH_EMULATOR_URL || "http://127.0.0.1:9099",

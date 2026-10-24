@@ -21,6 +21,7 @@ export default defineConfig({
       VITE_FIREBASE_AUTH_EMULATOR_URL: "http://127.0.0.1:9199",
       VITE_FIRESTORE_EMULATOR_HOST: "127.0.0.1",
       VITE_FIRESTORE_EMULATOR_PORT: "8180",
+      VITE_FUNCTIONS_EMULATOR_PORT: "5101",
       VITE_PEBBLE_SEASON_ID: "test-reports",
       VITE_PEBBLE_SEASON_LABEL: "Browser acceptance",
     },

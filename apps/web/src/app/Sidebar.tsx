@@ -92,6 +92,11 @@ export function Sidebar({
               ? [
                   { id: "roster" as const, name: "Roster", icon: Users },
                   {
+                    id: "officers" as const,
+                    name: "Officers",
+                    icon: ShieldCheck,
+                  },
+                  {
                     id: "settings" as const,
                     name: "Settings",
                     icon: SlidersHorizontal,

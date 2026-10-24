@@ -1,7 +1,7 @@
 # Pebble web app
 
-React + TypeScript frontend for Reports, Review Night, Overrides, Results, Roster and Settings.
-Run Pebble is available in the sidebar throughout the officer flow. Reports also offers a Next action that runs Pebble and opens Review Night after success. Google officer login and Firestore are the only hosted services;
+React + TypeScript frontend for Reports, Review Night, Overrides, Results, Roster, Officers and Settings.
+Run Pebble is available in the sidebar throughout the officer flow. Reports also offers a Next action that runs Pebble and opens Review Night after success. Google officer login, Firestore, and the officer-access callable provide the hosted services;
 the Python bot continues running locally. Successful runs automatically update
 public results. There is no approval or publish step.
 
@@ -451,3 +451,16 @@ recorded eligibility/order, undefined ratios, historical night/week visibility,
 keyboard details and narrow layout. New ranking metadata requires a future normal
 successful worker run after the reviewed worker source is deployed. This change
 does not trigger a live run or deploy anything.
+
+### Officer access management
+
+Current officers can open **Officers** to see enabled accounts and pending
+invitations, invite a Google account, cancel an invitation, or remove access.
+Recipients accept after Google sign-in, using the shared link or a matching
+invitation shown on normal sign-in. All officers may manage access; the last
+one cannot leave. Invitations last seven days and are delivered manually.
+
+Install callable dependencies with `npm ci --prefix firebase/functions` from the
+repository root before running browser acceptance (which now starts the Functions
+emulator too). Local Functions uses port 5001; browser acceptance uses 5101.
+See [deployment, recovery, and cost controls](../../docs/officer-access.md).

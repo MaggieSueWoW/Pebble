@@ -45,7 +45,7 @@ test('only officers may save reports, with strict fields and attribution', async
 test('officer membership, worker status, results, and public pointer cannot be written by browsers', async () => {
   const db = env.authenticatedContext('officer').firestore();
   for (const path of ['officers/member', 'bot/status', 'publicSeasons/midnight-s2', `${season}/results/forged`, `${season}/results/forged/players/p1`]) await assertFails(setDoc(doc(db, path), { enabled: true, complete: true }));
-  await assertFails(getDoc(doc(db, 'officers/another-officer')));
+  await assertSucceeds(getDoc(doc(db, 'officers/another-officer')));
   await assertSucceeds(getDoc(doc(db, 'officers/officer')));
 });
 test('run submission is create-only and starts queued with authenticated identity', async () => {
@@ -305,4 +305,17 @@ test('officers can persist season ignores without a main; public, forged and lin
   await assertSucceeds(deleteDoc(ref));
   await assertSucceeds(linkedWrite(db, ref, 'set', { name: 'Extra', realm: '', region: 'us', playerId: 'p1', ...meta() }));
   await assertFails(updateDoc(ref, { ignored: true, playerId: '', ...meta('officer', 2) }));
+});
+
+test('officer directory, invitations and audit are private and browser writes stay denied', async () => {
+  const officer = env.authenticatedContext('officer').firestore();
+  const member = env.authenticatedContext('member').firestore();
+  const publicDb = env.unauthenticatedContext().firestore();
+  for (const name of ['officers', 'officerInvitations', 'officerAudit']) {
+    await assertSucceeds(getDocs(collection(officer, name)));
+    for (const db of [member, publicDb]) await assertFails(getDocs(collection(db, name)));
+    await assertFails(setDoc(doc(officer, `${name}/forged`), { enabled: true }));
+  }
+  await assertFails(getDoc(doc(officer, 'officerManagement/state')));
+  await assertFails(setDoc(doc(officer, 'officerManagement/state'), { version: 1 }));
 });

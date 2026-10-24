@@ -1,3 +1,4 @@
+import { InvitationNotice } from "../features/officers/InvitationNotice";
 import { Info } from "lucide-react";
 import type { LiveConnection } from "../data/useFirestore";
 import { Notice } from "../components/Feedback";
@@ -5,13 +6,33 @@ export function ConnectionNotices({
   connection,
   canManage,
   retryWithFocus,
+  switchAccount,
+  authPending,
 }: {
   connection?: LiveConnection;
   canManage: boolean;
+  switchAccount: () => void;
+  authPending: boolean;
   retryWithFocus: (retry: () => void) => void;
 }) {
   return (
     <>
+      {connection &&
+        !connection.user &&
+        new URLSearchParams(location.search).has("invite") && (
+          <Notice>
+            You've opened an officer invitation. Use Officer sign-in to continue
+            with the invited Google account.
+          </Notice>
+        )}
+      {connection?.user && (
+        <InvitationNotice
+          user={connection.user}
+          officer={connection.officer}
+          switchAccount={switchAccount}
+          authPending={authPending}
+        />
+      )}
       {connection?.error && <Notice tone="amber">{connection.error}</Notice>}
       {connection?.accessError && (
         <Notice tone="amber">
@@ -27,17 +48,17 @@ export function ConnectionNotices({
           <div>
             <h2 id="officer-access-title">Officer access not enabled</h2>
             <p>
-              This account does not have officer access. You can still read
-              completed results. Editing inputs and running Pebble require an
-              enabled officer account. Sign out and sign back in to use another
-              account.
+              This account does not have officer access. Ask a current officer
+              to invite your Google account email. You can still read completed
+              results. Editing inputs and running Pebble require an enabled
+              officer account. Sign out and sign back in to use another account.
             </p>
             <details>
               <summary>Account details</summary>
               <p>
                 Account ID: <code>{connection.user.uid}</code>
               </p>
-              <p>Use this ID when enabling officer access.</p>
+              <p>An administrator can use this ID for account recovery.</p>
             </details>
           </div>
         </section>

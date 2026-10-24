@@ -37,7 +37,13 @@ service cloud.firestore {
     function complete(season, run) {
       return get(/databases/$(database)/documents/seasons/$(season)/results/$(run)).data.complete == true;
     }
-    match /officers/{uid} { allow get: if request.auth != null && uid == request.auth.uid; }
+    match /officers/{uid} {
+      allow get: if officer() || (request.auth != null && uid == request.auth.uid);
+      allow list: if officer();
+    }
+    // Only the trusted callable may change membership, invitations, or audit records.
+    match /officerInvitations/{id} { allow read: if officer(); }
+    match /officerAudit/{id} { allow read: if officer(); }
     match /bot/status { allow read: if officer(); }
     match /publicSeasons/{season} { allow read: if true; }
     match /seasons/{season} {

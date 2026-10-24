@@ -8,6 +8,7 @@ const titles: Record<Page, string> = {
   results: "Results",
   roster: "Roster",
   settings: "Settings",
+  officers: "Officers",
 };
 /** Layout only; the workspace retains navigation and draft ownership. */
 export function AppShell({
