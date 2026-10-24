@@ -19,6 +19,14 @@ import {
 } from "../../src/shared/model";
 import { defaultCalculation } from "../../src/features/settings/calculation";
 import type { LiveConnection } from "../../src/data/useFirestore";
+import { officerAction } from "../../src/features/officers/api";
+
+vi.mock("../../src/features/officers/api", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../src/features/officers/api")>()),
+  officerAction: vi
+    .fn()
+    .mockResolvedValue({ invitations: [], invitation: null }),
+}));
 
 const alpha: Player = {
   id: "a",
@@ -1889,4 +1897,40 @@ it("keeps failed ignores visible for retry and does not expose them publicly", a
     screen.queryByRole("textbox", { name: "Search ignored players" }),
   ).toBeNull();
   expect(screen.queryByText("Visitor")).toBeNull();
+});
+
+it("guards invitation account switching while an officer has unsaved report edits", async () => {
+  const live = connection();
+  live.user = { uid: "current", email: "current@example.test" } as NonNullable<
+    LiveConnection["user"]
+  >;
+  vi.mocked(officerAction).mockResolvedValueOnce({
+    invitations: [],
+    invitation: {
+      id: "a".repeat(48),
+      email: "intended@example.test",
+      invitedByName: "Inviting Officer",
+      expiresAt: "2026-10-30T00:00:00Z",
+      status: "pending",
+      matchesAccount: false,
+    },
+  });
+  history.replaceState(null, "", "/?invite=" + "a".repeat(48));
+  render(<App connection={live} />);
+  await screen.findByRole("button", { name: "Switch Google account" });
+  fireEvent.change(
+    screen.getByRole("textbox", { name: "Warcraft Logs reports" }),
+    { target: { value: "AAAAAAAAAAAAAAAA" } },
+  );
+  fireEvent.click(
+    screen.getByRole("button", { name: "Switch Google account" }),
+  );
+  expect(live.signIn).not.toHaveBeenCalled();
+  expect(HTMLDialogElement.prototype.showModal).toHaveBeenCalled();
+  await act(async () =>
+    fireEvent.click(
+      screen.getByRole("button", { name: "Discard edits", hidden: true }),
+    ),
+  );
+  expect(live.signIn).toHaveBeenCalledOnce();
 });

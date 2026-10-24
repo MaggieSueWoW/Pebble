@@ -61,6 +61,21 @@ Input snapshots remain private in local MongoDB; run records include input versi
 
 ## Officer onboarding and revocation
 
+Current officers use **Officers → Add officer** and enter the recipient's Google
+account email. Confirm the grant, copy the invitation link, and share it manually.
+The recipient signs in with that verified Google account and explicitly accepts.
+Invitations expire after seven days. A matching invitation also appears on normal
+sign-in. Officers can cancel pending invitations or remove access from this page;
+the last officer cannot leave. Membership is project-wide across seasons.
+
+The callable rechecks live membership inside transactions, binds acceptance to the
+verified Google email, and records immutable audit events. Direct browser writes
+to membership, invitations, audit, and the transaction lock remain denied. Removing
+an officer cancels their pending invitations, without affecting already promoted
+officers. See [officer callable deployment](officer-access.md) for rollout, cost
+settings, and emulator checks.
+
+The procedure below is for **first-officer bootstrap and emergency recovery**.
 Use a separate administrator identity with Firestore IAM write access to manage
 `officers/{uid}`. Browser officer membership does not grant that authority, and
 browser rules deny membership writes, including self-enrollment. The CLI uses
@@ -205,7 +220,7 @@ project ID. Use the Authentication emulator UI to create test users; seed their
 membership with administrator SDK/emulator credentials.
 
 ```sh
-firebase emulators:start --only auth,firestore --project demo-pebble
+firebase emulators:start --only auth,firestore,functions --project demo-pebble
 cd firebase
 npm ci
 npm test

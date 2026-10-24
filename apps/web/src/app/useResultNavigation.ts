@@ -13,6 +13,7 @@ const pages: Page[] = [
   "results",
   "roster",
   "settings",
+  "officers",
 ];
 const entry = () =>
   history.state?.pebbleNavigation as { index: number; page?: Page } | undefined;

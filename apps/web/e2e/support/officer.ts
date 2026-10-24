@@ -2,8 +2,11 @@ import type { RulesTestEnvironment } from "@firebase/rules-unit-testing";
 import { expect, type Page } from "@playwright/test";
 import { doc, setDoc } from "firebase/firestore";
 
-export async function signIn(page: Page) {
-  await page.goto("/");
+export async function signIn(
+  page: Page,
+  options: { email?: string; path?: string } = {},
+) {
+  await page.goto(options.path || "/");
   const popupPromise = page.waitForEvent("popup");
   await page.getByRole("button", { name: "Officer sign-in" }).click();
   const popup = await popupPromise;
@@ -11,7 +14,7 @@ export async function signIn(page: Page) {
   await popup.getByRole("button", { name: "Add new account" }).click();
   await popup
     .locator("#email-input")
-    .fill(`officer-${Date.now()}@example.test`);
+    .fill(options.email || `officer-${Date.now()}@example.test`);
   await popup.locator("#display-name-input").fill("Example Officer");
   await popup.locator("#sign-in").click();
   const notice = page.getByRole("region", {

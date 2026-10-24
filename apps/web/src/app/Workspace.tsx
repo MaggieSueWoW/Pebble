@@ -28,6 +28,7 @@ import {
 import { ReportsPage } from "../features/reports/ReportsPage";
 import { ResultsPage } from "../features/results/ResultsPage";
 import { RosterPage } from "../features/roster/RosterPage";
+import { OfficersPage } from "../features/officers/OfficersPage";
 import { SettingsPage } from "../features/settings/SettingsPage";
 import { useResultsView } from "../features/results/useResultsView";
 import { AppShell } from "./AppShell";
@@ -737,6 +738,12 @@ export function Workspace({
           connection={connection}
           canManage={canManage}
           retryWithFocus={retryWithFocus}
+          authPending={authPending}
+          switchAccount={() =>
+            guard(() => {
+              if (connection) void accountAction(connection.signIn);
+            })
+          }
         />
       }
       overlays={
@@ -838,6 +845,12 @@ export function Workspace({
             ← Return to night review
           </button>
         </div>
+      )}
+      {page === "officers" && connection?.officer && (
+        <OfficersPage
+          key={connection.accessGeneration}
+          user={connection.user!}
+        />
       )}
       {page === "settings" && connection?.officer && (
         <SettingsPage editor={calculationEditor} />

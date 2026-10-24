@@ -5,7 +5,11 @@
   },
   "hosting": {
     "public": "apps/web/dist",
-    "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
     "rewrites": [
       {
         "source": "**",
@@ -50,6 +54,22 @@
     "hosting": {
       "host": "127.0.0.1",
       "port": 5080
+    },
+    "functions": {
+      "host": "127.0.0.1",
+      "port": 5001
     }
-  }
+  },
+  "functions": [
+    {
+      "source": "firebase/functions",
+      "codebase": "officers",
+      "ignore": [
+        "node_modules",
+        ".git",
+        "tests",
+        "*.log"
+      ]
+    }
+  ]
 }

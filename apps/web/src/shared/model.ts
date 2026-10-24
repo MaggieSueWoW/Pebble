@@ -1,7 +1,13 @@
 import type { RecordedAvailability } from "../features/results/resultProvenance";
 
 export type Page =
-  "reports" | "review" | "overrides" | "results" | "roster" | "settings";
+  | "reports"
+  | "review"
+  | "overrides"
+  | "results"
+  | "roster"
+  | "settings"
+  | "officers";
 export type Mode =
   "automatic" | "available" | "unavailable" | "partial" | "unavailableFor";
 export type Availability = { mode: Mode; minutes?: number };
