@@ -12,6 +12,7 @@ import {
   Wifi,
   WifiOff,
   ShieldCheck,
+  Info,
 } from "lucide-react";
 import type { LiveConnection } from "../data/useFirestore";
 import { formatDate, type Page } from "../shared/model";
@@ -88,6 +89,7 @@ export function Sidebar({
             { id: "review", name: "Review Night", icon: ClipboardCheck },
             { id: "overrides", name: "Overrides", icon: SlidersHorizontal },
             { id: "results", name: "Results", icon: BarChart3 },
+            { id: "about", name: "About", icon: Info },
             ...(connection?.officer
               ? [
                   { id: "roster" as const, name: "Roster", icon: Users },
@@ -105,7 +107,9 @@ export function Sidebar({
               : []),
           ] as const
         )
-          .filter((item) => canManage || item.id === "results")
+          .filter(
+            (item) => canManage || item.id === "results" || item.id === "about",
+          )
           .map((item) => (
             <button
               key={item.id}

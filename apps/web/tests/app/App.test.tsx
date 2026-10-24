@@ -134,6 +134,36 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+it("lets public readers open About and return to Results without sign-in or writes", () => {
+  const live = { ...connection(), officer: false };
+  render(<App connection={live} />);
+  fireEvent.click(screen.getByRole("button", { name: "About" }));
+  expect(screen.getByRole("heading", { name: "About Pebble" })).toBeTruthy();
+  expect(screen.getByRole("heading", { name: "How we use it" })).toBeTruthy();
+  expect(location.search).toBe("?view=about");
+  expect(screen.queryByText(/No completed results yet/)).toBeNull();
+  expect(screen.queryByRole("button", { name: "Reports" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "Run Pebble" })).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "Results" }));
+  expect(screen.getByRole("heading", { name: "Results" })).toBeTruthy();
+  expect(live.signIn).not.toHaveBeenCalled();
+  expect(live.saveInputs).not.toHaveBeenCalled();
+  expect(live.requestRun).not.toHaveBeenCalled();
+});
+
+it.each([false, true])(
+  "opens a shared About link with officer access %s",
+  (officer) => {
+    history.replaceState(null, "", "/?view=about");
+    render(<App connection={{ ...connection(), officer }} />);
+    expect(screen.getByRole("heading", { name: "About Pebble" })).toBeTruthy();
+    expect(
+      screen.queryByRole("navigation", { name: "Process a raid night" }),
+    ).toBeNull();
+    expect(screen.queryByText("Run history")).toBeNull();
+  },
+);
+
 it("selects arriving players, keeps search independent and renders only known metadata", () => {
   const c = connection();
   const { rerender } = render(<App connection={c} />);

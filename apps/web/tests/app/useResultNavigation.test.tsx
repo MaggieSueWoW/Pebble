@@ -10,6 +10,24 @@ import {
 beforeEach(() => history.replaceState(null, "", "/"));
 afterEach(cleanup);
 
+it("restores About and Results through public browser history", async () => {
+  history.replaceState(null, "", "/?view=about");
+  expect(readResultLocation("results").page).toBe("about");
+  const { result } = renderHook(() =>
+    useResultNavigation(
+      "results",
+      () => false,
+      (action) => action(),
+    ),
+  );
+  act(() => result.current.navigate({ page: "results" }));
+  act(() => history.back());
+  await waitFor(() => expect(result.current.page).toBe("about"));
+  expect(location.search).toBe("?view=about");
+  act(() => history.forward());
+  await waitFor(() => expect(result.current.page).toBe("results"));
+});
+
 it("reads public result IDs and copies only public selection for the configured season", () => {
   history.replaceState(
     null,

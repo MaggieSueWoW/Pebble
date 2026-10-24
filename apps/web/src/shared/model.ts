@@ -7,6 +7,7 @@ export type Page =
   | "results"
   | "roster"
   | "settings"
+  | "about"
   | "officers";
 export type Mode =
   "automatic" | "available" | "unavailable" | "partial" | "unavailableFor";

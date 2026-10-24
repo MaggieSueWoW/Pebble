@@ -30,6 +30,7 @@ import { ResultsPage } from "../features/results/ResultsPage";
 import { RosterPage } from "../features/roster/RosterPage";
 import { OfficersPage } from "../features/officers/OfficersPage";
 import { SettingsPage } from "../features/settings/SettingsPage";
+import { AboutPage } from "../features/about/AboutPage";
 import { useResultsView } from "../features/results/useResultsView";
 import { AppShell } from "./AppShell";
 import { ConnectionNotices } from "./ConnectionNotices";
@@ -371,7 +372,7 @@ export function Workspace({
     else action();
   }
   function go(next: Page) {
-    if (!canManage && next !== "results") return;
+    if (!canManage && next !== "results" && next !== "about") return;
     if (next !== page) guard(() => setPage(next));
   }
   function chooseNight(next: string) {
@@ -736,7 +737,7 @@ export function Workspace({
       notices={
         <ConnectionNotices
           connection={connection}
-          showResults={page !== "officers"}
+          showResults={page !== "officers" && page !== "about"}
           canManage={canManage}
           retryWithFocus={retryWithFocus}
           authPending={authPending}
@@ -778,10 +779,13 @@ export function Workspace({
         </>
       }
     >
-      {canManage && !["roster", "settings", "officers"].includes(page) && (
-        <NightFlow page={page} go={go} />
-      )}
-      {!["results", "overrides", "review", "officers"].includes(page) && (
+      {canManage &&
+        !["roster", "settings", "officers", "about"].includes(page) && (
+          <NightFlow page={page} go={go} />
+        )}
+      {!["results", "overrides", "review", "officers", "about"].includes(
+        page,
+      ) && (
         <div
           className={`reports-status toolbar ${active || connection?.submitting || waitingForResults ? "is-running" : ""} ${(lastFailed || resultLoadFailed) && !active && !connection?.submitting ? "has-error" : ""}`}
         >
@@ -795,6 +799,7 @@ export function Workspace({
         </Notice>
       )}
 
+      {page === "about" && <AboutPage />}
       {page === "reports" && (
         <ReportsPage
           reports={inputs.reports}
@@ -926,7 +931,7 @@ export function Workspace({
         />
       )}
 
-      {canManage && page !== "officers" && (
+      {canManage && page !== "officers" && page !== "about" && (
         <RunHistory history={history} connected={Boolean(connection)} />
       )}
     </AppShell>

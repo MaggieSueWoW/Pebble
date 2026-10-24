@@ -1,0 +1,29 @@
+@layer pages {
+  .about-page {
+    display: grid;
+    gap: var(--space-5);
+    max-width: 48rem;
+  }
+  .about-intro {
+    color: var(--color-accent);
+    font-family: var(--font-heading);
+    font-size: var(--text-heading);
+  }
+  .about-page section {
+    padding: var(--panel-padding);
+  }
+  .about-page h2 {
+    margin-bottom: var(--space-3);
+  }
+  .about-page p + p,
+  .about-page ol + p {
+    margin-top: var(--space-3);
+  }
+  .about-page ol {
+    margin: 0;
+    padding-left: var(--space-5);
+  }
+  .about-page li + li {
+    margin-top: var(--space-2);
+  }
+}

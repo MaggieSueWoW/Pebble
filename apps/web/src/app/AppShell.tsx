@@ -9,6 +9,7 @@ const titles: Record<Page, string> = {
   roster: "Roster",
   settings: "Settings",
   officers: "Officers",
+  about: "About Pebble",
 };
 /** Layout only; the workspace retains navigation and draft ownership. */
 export function AppShell({

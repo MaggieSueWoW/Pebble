@@ -1,6 +1,9 @@
 # Pebble web app
 
 React + TypeScript frontend for Reports, Review Night, Overrides, Results, Roster, Officers and Settings.
+The public About page explains Pebble’s purpose, how the team uses bench time,
+and how reports become shared results. It is available from the sidebar to all
+readers and directly at `?view=about`, without signing in.
 Run Pebble is available in the sidebar throughout the officer flow. Reports also offers a Next action that runs Pebble and opens Review Night after success. Google officer login, Firestore, and the officer-access callable provide the hosted services;
 the Python bot continues running locally. Successful runs automatically update
 public results. There is no approval or publish step.

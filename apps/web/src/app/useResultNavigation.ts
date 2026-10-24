@@ -14,6 +14,7 @@ const pages: Page[] = [
   "roster",
   "settings",
   "officers",
+  "about",
 ];
 const entry = () =>
   history.state?.pebbleNavigation as { index: number; page?: Page } | undefined;
@@ -22,11 +23,13 @@ export function readResultLocation(defaultPage: Page): ResultLocation {
   const params = new URLSearchParams(location.search);
   const savedPage = entry()?.page;
   const page =
-    params.get("view") === "results"
-      ? "results"
-      : defaultPage !== "results" && savedPage && pages.includes(savedPage)
-        ? savedPage
-        : defaultPage;
+    params.get("view") === "about"
+      ? "about"
+      : params.get("view") === "results"
+        ? "results"
+        : defaultPage !== "results" && savedPage && pages.includes(savedPage)
+          ? savedPage
+          : defaultPage;
   return {
     page,
     period: params.get("period") || "season",
@@ -55,6 +58,7 @@ function navigationURL(selection: ResultLocation): string {
     );
   const url = new URL(location.href);
   for (const key of ["view", "period", "player"]) url.searchParams.delete(key);
+  if (selection.page === "about") url.searchParams.set("view", "about");
   url.hash = "";
   return url.href;
 }
