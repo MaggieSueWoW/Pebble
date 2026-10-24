@@ -15,6 +15,11 @@
   .about-page h2 {
     margin-bottom: var(--space-3);
   }
+  .about-page a {
+    color: var(--color-accent);
+    text-decoration: underline;
+    text-underline-offset: 0.15em;
+  }
   .about-page p + p,
   .about-page ol + p {
     margin-top: var(--space-3);
