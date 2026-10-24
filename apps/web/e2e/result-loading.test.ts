@@ -1200,7 +1200,7 @@ test("officer-access retry recovers heading focus after a denied membership list
   const selectedURL = page.url();
   const uid = await adminUid();
   const denied = original.replace(
-    "allow get: if request.auth != null && uid == request.auth.uid;",
+    "allow get: if officer() || (request.auth != null && uid == request.auth.uid);",
     "allow get: if false;",
   );
   expect(denied).not.toBe(original);

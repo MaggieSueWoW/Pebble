@@ -4,6 +4,7 @@ import {
 } from "@firebase/rules-unit-testing";
 import { test } from "@playwright/test";
 import { readFileSync } from "node:fs";
+import { setTimeout as delay } from "node:timers/promises";
 
 // Fixed demo project and loopback address: never use the developer's Firebase config.
 const projectId = "demo-pebble-reports";
@@ -32,7 +33,22 @@ export function setupEmulator() {
     environment = await createEnvironment();
   });
   test.beforeEach(async () => {
-    await current().clearFirestore();
+    // A callable from the previous browser can still hold a transaction lock.
+    // Retry only that transient emulator error; all other cleanup errors fail.
+    for (let attempt = 0; ; attempt += 1) {
+      try {
+        await current().clearFirestore();
+        break;
+      } catch (cause) {
+        if (
+          attempt >= 4 ||
+          !(cause instanceof Error) ||
+          !cause.message.includes("Transaction lock timeout")
+        )
+          throw cause;
+        await delay(250 * 2 ** attempt);
+      }
+    }
   });
   test.afterAll(async () => {
     await environment?.cleanup();
