@@ -925,7 +925,7 @@ export function Workspace({
         />
       )}
 
-      {canManage && (
+      {canManage && page !== "officers" && (
         <RunHistory history={history} connected={Boolean(connection)} />
       )}
     </AppShell>
