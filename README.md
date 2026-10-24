@@ -9,9 +9,13 @@ Firestore and security contracts (#3), and
 officer/public UX (#4). These reference issues include design targets;
 the tracker records what is implemented and what remains.
 
-Web-app work integrates into `web-app`; keep `main` unchanged until
-that work is complete. The existing Pebble/Sheets bot on deployment host must remain
-undisturbed during implementation; deployment and cutover remain future work.
+The legacy Sheets bot and the web worker run independently during the transition.
+Keep the existing spreadsheet, legacy runtime configuration, and Sheets credentials
+in place. Officers will manually keep reports, roster/main-alt mappings,
+availability and night overrides, and calculation settings aligned until the
+agreed cutover. Neither tool automatically synchronizes edits to the other.
+Merging source does not restart workers or retire the legacy workflow; deployment
+and the eventual officer cutover are separate operational actions.
 
 The [web app](apps/web/README.md) in `apps/web` connects directly to Firestore
 with Google officer login. A local Python worker handles Run Pebble and publishes
@@ -47,6 +51,14 @@ The root `Dockerfile` and `docker-compose.yaml` retain the legacy Sheets build.
 That image includes `config-*.yaml` and `service-account.json`, as required by the
 existing Compose command; `.env` remains supplied at runtime. The default build
 context allowlist excludes unrelated private deployment files.
+Private `config-web*.yaml` files are excluded from the legacy build. Both build
+contexts include only Python source under `pebble/`, excluding bytecode and other
+local files inside that directory.
+
+Verify both context boundaries against synthetic fixtures with
+`PEBBLE_TEST_DOCKER_BUILDS=1 python -m pytest -q tests/test_docker_build_context.py`.
+This opt-in check requires Docker with BuildKit and exports scratch build contents
+to a temporary directory without starting containers or reading real credentials.
 
 For a separately authorized legacy build, the existing commands remain:
 

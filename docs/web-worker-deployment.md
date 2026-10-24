@@ -1,8 +1,11 @@
 # Isolated web worker deployment (OPS-1)
 
-Implementation PRs target `web-app`. Keep `main` and the existing
-`pebble-loop` container, image, credentials, networks, Mongo database and Redis
-keys unchanged. This moves the web worker; it does not retire the Sheets bot.
+The legacy Sheets bot and web worker coexist during the transition. Keep the
+existing `pebble-loop` container, image, credentials, networks, Mongo database and
+Redis keys unchanged when deploying the web worker. Source integration does not
+retire or redeploy the Sheets bot. Officers manually reconcile reports, roster
+and main/alt mappings, availability and night overrides, and calculation settings
+until the agreed cutover; there is no automatic synchronization.
 
 ## Runtime and credentials
 

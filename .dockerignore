@@ -3,8 +3,8 @@
 !Dockerfile
 !pyproject.toml
 !README.md
-!pebble/
-!pebble/**/
 !pebble/**/*.py
 !config-*.yaml
 !service-account.json
+# Web configuration must never be baked into the legacy Sheets image.
+config-web*.yaml

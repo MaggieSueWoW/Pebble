@@ -3,6 +3,4 @@
 !Dockerfile.web
 !pyproject.toml
 !README.md
-!pebble/
-!pebble/**/
 !pebble/**/*.py
