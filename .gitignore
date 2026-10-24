@@ -292,3 +292,23 @@ pyrightconfig.json
 service-account.json
 .DS_Store
 config-TWW-S3-test.yaml
+
+# Web app dependencies and generated output
+node_modules/
+*.tsbuildinfo
+
+# Local Firebase configuration and credentials
+.env.local
+.env.*.local
+.pebble-service-account.json
+config-web.yaml
+config-web-admin.yaml
+.firebase/
+deploy/private/
+
+# Browser acceptance artifacts
+apps/web/test-results/
+apps/web/playwright-report/
+
+# Protected logical Firestore recovery files
+.pebble-backups/

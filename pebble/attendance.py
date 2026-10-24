@@ -96,7 +96,9 @@ def _collect_attendance_stats(db) -> Tuple[List[str], List[PlayerAttendance]]:
     bench_by_key = {(doc["night_id"], doc["main"]): doc for doc in bench_docs}
 
     roster_docs = list(db["team_roster"].find({}, {"_id": 0}))
-    roster: Dict[str, dict] = {doc["main"]: doc for doc in roster_docs if doc.get("main")}
+    roster: Dict[str, dict] = {
+        doc["main"]: doc for doc in roster_docs if doc.get("main")
+    }
 
     bench_mains = {doc["main"] for doc in bench_docs if doc.get("main")}
     mains = set(roster.keys()) | bench_mains
@@ -148,8 +150,12 @@ def _collect_attendance_stats(db) -> Tuple[List[str], List[PlayerAttendance]]:
                 continue
 
             bench_doc = bench_by_key.get((night_id, main))
-            played_total = float(bench_doc.get("played_total_min", 0) or 0) if bench_doc else 0.0
-            bench_total = float(bench_doc.get("bench_total_min", 0) or 0) if bench_doc else 0.0
+            played_total = (
+                float(bench_doc.get("played_total_min", 0) or 0) if bench_doc else 0.0
+            )
+            bench_total = (
+                float(bench_doc.get("bench_total_min", 0) or 0) if bench_doc else 0.0
+            )
             if bench_doc:
                 total_played += played_total
                 total_bench += bench_total
@@ -234,3 +240,43 @@ def build_attendance_rows(db) -> List[List]:
 
     return rows
 
+
+def build_attendance_projection(db) -> dict[str, dict]:
+    """Serialize eligible attendance statistics for immutable public player rows.
+
+    Minute values use the same normalization as the Sheets presentation. Rates
+    retain the existing numeric ratio, or None when there is no possible time.
+    Only aggregate values and ordered weekly status letters are exposed.
+
+    Parameters
+    ----------
+    db
+        Mongo database containing the current roster, night QA and bench totals.
+
+    Returns
+    -------
+    dict[str, dict]
+        Eligible mains mapped to normalized minute totals, a raw attendance ratio
+        (None without possible time), and ordered Tuesday-week P/B/O statuses.
+    """
+    week_ids, players = _collect_attendance_stats(db)
+    return {
+        player.main: {
+            "played": _normalize_minutes(player.total_played),
+            "bench": _normalize_minutes(player.total_bench),
+            "possible": _normalize_minutes(player.total_possible),
+            "rate": player.attendance_probability,
+            "weeks": [
+                {
+                    "week": week,
+                    "status": "".join(
+                        letter
+                        for letter in STATUS_ORDER
+                        if letter in player.week_status.get(week, set())
+                    ),
+                }
+                for week in week_ids
+            ],
+        }
+        for player in players
+    }

@@ -1,0 +1,6 @@
+# Only package inputs enter the build context, including remote builds.
+**
+!Dockerfile.web
+!pyproject.toml
+!README.md
+!pebble/**/*.py

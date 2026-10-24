@@ -5,17 +5,15 @@ import logging
 import time
 from typing import Optional
 
+import redis
 import requests
 from requests.auth import HTTPBasicAuth
 from tenacity import (
-    before_sleep_log,
     retry,
     retry_if_exception,
     stop_after_attempt,
     wait_exponential,
 )
-
-import redis
 
 logger = logging.getLogger(__name__)
 
@@ -26,9 +24,19 @@ CACHE_TTL_LONG = 60 * 60 * 24 * 30 * 6  # ~6 months
 _FRESH_MS = 24 * 60 * 60 * 1000
 
 
+def _log_retry(state):
+    logger.warning(
+        "Retrying WCL request (%s), attempt %s",
+        type(state.outcome.exception()).__name__,
+        state.attempt_number,
+    )
+
+
 def _is_retryable(exc: Exception) -> bool:
     if isinstance(exc, requests.HTTPError):
-        return exc.response is not None and exc.response.status_code in _RETRY_STATUS_CODES
+        return (
+            exc.response is not None and exc.response.status_code in _RETRY_STATUS_CODES
+        )
     return isinstance(exc, (requests.ConnectionError, requests.Timeout))
 
 
@@ -51,26 +59,38 @@ class WCLClient:
         self._token_url = token_url
         self._token: Optional[str] = None
         self._token_exp: float = 0.0
+        self._owns_redis = redis_client is None
         if redis_client is not None:
             self._redis = redis_client
         elif redis_url:
-            self._redis = redis.from_url(redis_url)
+            self._redis = redis.from_url(
+                redis_url,
+                socket_connect_timeout=5,
+                socket_timeout=5,
+                retry=redis.retry.Retry(redis.backoff.NoBackoff(), 0),
+            )
         else:
             self._redis = None
         self._cache_prefix = cache_prefix
+
+    def close(self) -> None:
+        """Release sockets owned by this client after a report set finishes."""
+        self._session.close()
+        if self._owns_redis and self._redis is not None:
+            self._redis.close()
 
     @retry(
         reraise=True,
         retry=retry_if_exception(_is_retryable),
         wait=wait_exponential(multiplier=1, min=1, max=10),
         stop=stop_after_attempt(5),
-        before_sleep=before_sleep_log(logger, logging.WARNING),
+        before_sleep=_log_retry,
     )
     def _ensure_token(self) -> None:
         now = time.time()
         if self._token and now < (self._token_exp - 60):
             return
-        logger.info("Requesting WCL access token", extra={"url": self._token_url})
+        logger.info("Requesting WCL access token")
         try:
             r = self._session.post(
                 self._token_url,
@@ -79,13 +99,13 @@ class WCLClient:
                 timeout=30,
             )
             r.raise_for_status()
-        except Exception:
-            logger.warning("WCL token request failed", exc_info=True)
+        except Exception as exc:
+            logger.warning("WCL token request failed (%s)", type(exc).__name__)
             raise
         data = r.json()
         token = data.get("access_token")
         if not token:
-            raise RuntimeError(f"WCL token response missing access_token: {data}")
+            raise RuntimeError("WCL token response missing access_token")
         expires_in = int(data.get("expires_in", 3600))
         self._token = token
         self._token_exp = now + max(60, expires_in)
@@ -100,26 +120,26 @@ class WCLClient:
         retry=retry_if_exception(_is_retryable),
         wait=wait_exponential(multiplier=1, min=1, max=10),
         stop=stop_after_attempt(5),
-        before_sleep=before_sleep_log(logger, logging.WARNING),
+        before_sleep=_log_retry,
     )
     def _post(self, query: str, variables: Optional[dict] = None) -> dict:
         self._ensure_token()
         payload = {"query": query, "variables": variables or {}}
         logger.info(
             "WCL request",
-            extra={"url": self._base_url, "has_variables": bool(variables)},
+            extra={"has_variables": bool(variables)},
         )
         start = time.time()
         try:
             r = self._session.post(self._base_url, json=payload, timeout=60)
             r.raise_for_status()
-        except Exception:
-            logger.warning("WCL request failed", exc_info=True)
+        except Exception as exc:
+            logger.warning("WCL request failed (%s)", type(exc).__name__)
             raise
         data = r.json()
         if "errors" in data:
-            logger.warning("WCL GraphQL errors", extra={"errors": data["errors"]})
-            raise RuntimeError(data["errors"])  # surface graph errors
+            logger.warning("WCL GraphQL request rejected")
+            raise RuntimeError("WCL rejected the report query")
         dur = time.time() - start
         logger.info("WCL request succeeded", extra={"elapsed": round(dur, 3)})
         return data
@@ -156,11 +176,17 @@ class WCLClient:
           }
         }
         """
-        report = self._post(q, {"code": code, "translate": translate})["data"]["reportData"]["report"]
+        report = self._post(q, {"code": code, "translate": translate})["data"][
+            "reportData"
+        ]["report"]
         if self._redis:
             start_ms = int(report.get("startTime") or 0)
             now_ms = int(time.time() * 1000)
-            ttl = CACHE_TTL_SHORT if start_ms and (now_ms - start_ms) < _FRESH_MS else CACHE_TTL_LONG
+            ttl = (
+                CACHE_TTL_SHORT
+                if start_ms and (now_ms - start_ms) < _FRESH_MS
+                else CACHE_TTL_LONG
+            )
             try:
                 self._redis.setex(cache_key, ttl, json.dumps(report))
                 logger.info(
@@ -171,7 +197,6 @@ class WCLClient:
                 logger.warning(
                     "Failed to cache WCL report",
                     extra={"code": code, "cache_key": cache_key},
-                    exc_info=True,
                 )
                 raise
         return report

@@ -1,31 +1,30 @@
-# Pebble
+# Quartz Pebble
 
-This is a small bot to help our team with tracking bench time. It uses a list of Warcraft Logs reports to figure out who is present when we're fighting mythic bosses, computes time spent on the bench vs. being absent, and lets officers make tweaks to the results as necessary.
+Pebble helps our World of Warcraft raid team keep track of bench time. It uses
+Warcraft Logs reports to work out who played, who sat out, and how time on the
+bench is shared across the team.
 
-For a plain-English and formula-backed explanation of the attendance probability tables on the Google Sheet, see [Attendance_Probability.md](Attendance_Probability.md).
+## What can I see?
 
-ChatGPT generated 95%+ of the code via Codex under my careful guidance. I've reviewed all of it and tested it extensively since TWW S2.
+The web app shows published bench-time results and attendance without requiring
+an account. You can browse raid nights, look at a player's time breakdown, and
+share a link to a result.
 
-## Continuous processing loop
+Officers sign in with Google to manage reports, the roster, main/alt mappings,
+and adjustments for availability or raid timing. After saving changes, an officer
+runs Pebble to update the published results.
 
-Use the `loop` command to continuously ingest new data and recompute exports. Each iteration runs the full ingest, compute, and week phases and reloads configuration so changes are picked up without restarting the process.
+## What about the Google Sheet?
 
-```bash
-pebble loop --config config.yaml --trigger-timeout 180
-```
+The existing spreadsheet and its bot continue to work while officers transition
+to the web app. Officers keep the inputs aligned manually during this period;
+changes in one tool do not automatically appear in the other.
 
-The loop continues until interrupted. Use `--max-errors 0` to keep it running regardless of transient failures.
+## Learn more
 
-## Docker
-
-A Docker image is provided for running the loop in a container. Build and run it with:
-
-```bash
-docker build -t pebble-loop .
-docker run --rm \
-  -v "$PWD/config.yaml:/app/config.yaml:ro" \
-  -v "$PWD/service-account.json:/app/service-account.json:ro" \
-  pebble-loop loop --config /app/config.yaml --interval 300
-```
-
-Mount any required credentials (e.g., Google service account JSON) and override the command arguments as needed.
+- [Attendance probabilities](Attendance_Probability.md): how the spreadsheet's
+  attendance probability tables work, with explanations and formulas.
+- [Web app development](apps/web/README.md): local setup, checks, and links to
+  backend and deployment guides.
+- [Sheets worker operations](docs/legacy-sheets-worker.md): running and maintaining
+  the existing spreadsheet bot.

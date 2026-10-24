@@ -1,0 +1,233 @@
+@layer pages {
+  .override-next {
+    margin-left: auto;
+    max-width: 100%;
+  }
+  .override-next .flow-actions {
+    margin: 0;
+    justify-content: flex-end;
+  }
+  .override-filter {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    margin: 0 var(--panel-padding) var(--space-3);
+    color: var(--color-muted);
+  }
+  .override-filter input {
+    width: auto;
+    margin: 0;
+  }
+  .override-toolbar {
+    margin-bottom: var(--space-5);
+  }
+  .night-select {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    color: var(--color-muted);
+  }
+  .night-select .select-control {
+    min-width: 13rem;
+  }
+  .override-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.1fr) minmax(18rem, 1fr);
+    align-items: start;
+    gap: var(--space-5);
+  }
+  .player-card > .panel-header {
+    padding: var(--panel-padding) var(--panel-padding) 0;
+  }
+  .player-card > .search-field {
+    margin: 0 var(--panel-padding) var(--space-4);
+  }
+  .player-list {
+    overflow-x: auto;
+  }
+  .override-player-columns,
+  .override-player-row {
+    display: grid;
+    grid-template-columns: minmax(7rem, 1fr) 4rem repeat(3, 3.5rem) 1rem;
+    align-items: center;
+    gap: var(--space-2);
+    min-width: 26.5rem;
+    padding-inline: var(--space-3);
+  }
+  .override-player-columns {
+    padding-block: var(--space-2);
+    color: var(--color-muted);
+    font-size: var(--text-caption);
+  }
+  .override-player-columns > span:nth-child(2) {
+    grid-column: 3 / 6;
+  }
+  .override-player-columns > span:not(:first-child) {
+    text-align: center;
+  }
+  .override-sort-halves {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: var(--space-2);
+    margin-top: var(--space-1);
+  }
+  .override-sort-halves .result-sort-button {
+    justify-content: end;
+    gap: 0;
+  }
+  .override-player-row {
+    width: 100%;
+    min-height: var(--row-height);
+    padding-block: 0;
+    border: 0;
+    border-top: 1px solid var(--color-border);
+    border-left: 2px solid transparent;
+    background: transparent;
+    text-align: left;
+  }
+  .override-player-row:hover {
+    background: var(--color-hover);
+  }
+  .override-player-row.selected {
+    border-left-color: var(--color-accent);
+    background: var(--color-accent-soft);
+  }
+  .override-player-row > * {
+    grid-row: 1;
+  }
+  .override-player-row .player-description {
+    grid-column: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .player-description strong {
+    font-weight: var(--weight-strong);
+    white-space: nowrap;
+  }
+  .override-player-row .badge {
+    grid-column: 2;
+    justify-self: center;
+  }
+  .override-minute {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    border-radius: var(--radius-small);
+    padding-inline: var(--space-1);
+  }
+  .override-affected {
+    color: var(--color-purple);
+    background: var(--color-purple-soft);
+  }
+  .override-player-row > svg {
+    grid-column: 6;
+    color: var(--color-subtle);
+  }
+  .adjustment-card {
+    position: sticky;
+    top: var(--space-5);
+  }
+  .availability-halves,
+  .availability-played {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-4);
+    margin-block: var(--space-4);
+  }
+  .availability-played dt {
+    color: var(--color-muted);
+    font-size: var(--text-caption);
+  }
+  .availability-played dd {
+    margin: 0;
+  }
+  .availability-halves .select-control {
+    width: 100%;
+    min-width: 0;
+  }
+  .availability-notes {
+    margin-block: var(--space-4);
+  }
+  .availability-notes summary {
+    color: var(--color-muted);
+  }
+  .availability-notes .field {
+    margin-top: var(--space-3);
+  }
+  .editor-intro,
+  .timing-help {
+    color: var(--color-muted);
+    margin-bottom: var(--space-4);
+  }
+  .editor-actions .primary {
+    flex: 1;
+  }
+  .editor-actions {
+    flex-wrap: wrap;
+  }
+  .editor-actions .reset-link {
+    margin: 0;
+  }
+  .timing-table {
+    margin-block: var(--space-4);
+  }
+  .timing-table tbody th {
+    white-space: nowrap;
+  }
+  .timing-table td {
+    vertical-align: middle;
+  }
+  .timing-table input {
+    margin: 0;
+  }
+  .timing-detected {
+    color: var(--color-muted);
+  }
+  .timing-card .card-action-row {
+    padding-top: var(--space-4);
+    border-top: 1px solid var(--color-border);
+  }
+
+  @media (max-width: 70rem) {
+    .override-grid {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    .adjustment-card {
+      position: static;
+    }
+    .player-list {
+      max-height: 24rem;
+      overflow-y: auto;
+    }
+  }
+  @media (max-width: 40rem) {
+    .availability-halves {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    .timing-table,
+    .timing-table tbody {
+      display: block;
+    }
+    .timing-table thead {
+      display: none;
+    }
+    .timing-table tr {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: var(--space-2);
+      padding-block: var(--space-3);
+      border-bottom: 1px solid var(--color-border);
+    }
+    .timing-table th,
+    .timing-table td {
+      padding: 0;
+      border: 0;
+    }
+    .timing-table .field {
+      grid-column: 1 / -1;
+    }
+    .timing-detected {
+      text-align: right;
+    }
+  }
+}

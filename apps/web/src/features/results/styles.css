@@ -1,0 +1,121 @@
+@layer pages {
+  .results-toolbar {
+    padding: var(--panel-padding);
+  }
+  .results-toolbar .text-button {
+    margin-left: auto;
+  }
+  .result-period-select {
+    min-width: 13rem;
+  }
+  .result-player-name {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    min-width: 0;
+  }
+  .result-player-name .badge {
+    flex-shrink: 0;
+  }
+  .results-table {
+    --table-min-width: 44rem;
+    table-layout: fixed;
+  }
+  .results-table > thead > tr > th:first-child {
+    width: 3rem;
+  }
+  .results-table > thead > tr > th:nth-child(2) {
+    width: 27%;
+  }
+  .results-table > thead > tr > th:nth-child(3),
+  .results-table > thead > tr > th:nth-child(4) {
+    width: 15%;
+  }
+  .results-table > thead > tr > th:last-child {
+    width: 3rem;
+  }
+  .result-name {
+    max-width: 100%;
+    min-width: 0;
+  }
+  .result-name strong {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .rank {
+    font-family: var(--font-mono);
+    color: var(--color-muted);
+  }
+  .bench-value {
+    color: var(--color-accent);
+  }
+  .result-breakdown {
+    display: grid;
+    grid-template-columns: minmax(4rem, 1fr) max-content;
+    align-items: center;
+    gap: var(--space-3);
+  }
+  .result-breakdown > span {
+    font: inherit;
+    white-space: nowrap;
+  }
+  .time-bar {
+    height: 0.375rem;
+    display: flex;
+    overflow: hidden;
+    background: var(--color-bench);
+    border-radius: var(--radius-pill);
+  }
+  .time-bar > span {
+    height: 100%;
+    background: var(--color-accent);
+  }
+  .result-detail > td > div {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: start;
+    gap: var(--space-5) var(--space-8);
+  }
+  .break-summary th {
+    white-space: nowrap;
+  }
+  .player-time-details {
+    flex: 0 1 auto;
+    min-width: 14rem;
+  }
+  .result-detail .text-button {
+    margin-left: auto;
+  }
+  .attendance-summary {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: var(--space-2) var(--space-3);
+    margin-bottom: var(--space-3);
+  }
+  .attendance-summary > span {
+    color: var(--color-muted);
+    font-size: var(--text-caption);
+  }
+  .result-adjusted-time {
+    color: var(--color-purple);
+  }
+  .attendance-weeks th,
+  .attendance-weeks td {
+    padding-block: var(--space-1);
+  }
+  .attendance-weeks {
+    max-width: 30rem;
+  }
+  .additional-attendance {
+    padding: var(--panel-padding);
+    border-top: 1px solid var(--color-border);
+  }
+  .additional-attendance > p {
+    color: var(--color-muted);
+  }
+  .additional-attendance > details {
+    margin-top: var(--space-4);
+  }
+}

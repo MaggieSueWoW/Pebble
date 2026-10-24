@@ -1,0 +1,352 @@
+@layer layout {
+  .app-shell {
+    min-height: 100dvh;
+  }
+  .sidebar {
+    position: fixed;
+    inset: 0 auto 0 0;
+    width: var(--sidebar-width);
+    padding: var(--space-8) var(--space-4) 0;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    background: var(--color-sidebar);
+    border-right: 1px solid var(--color-border);
+  }
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding-inline: var(--space-2);
+    font-family: var(--font-heading);
+    font-size: var(--text-brand);
+    font-weight: 800;
+    letter-spacing: -0.04em;
+  }
+  .brand img {
+    border-radius: var(--radius-panel);
+    transform: rotate(-7deg);
+  }
+  .brand-subtitle {
+    padding: var(--space-3) var(--space-2) var(--space-6);
+    font-size: var(--text-caption);
+    color: var(--color-muted);
+  }
+  .season-card {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    margin-bottom: var(--space-6);
+    padding: var(--space-3);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-small);
+    background: var(--color-panel);
+  }
+  .season-icon {
+    display: grid;
+    place-items: center;
+    color: var(--color-purple);
+  }
+  .nav-item {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    width: 100%;
+    min-height: 2.75rem;
+    margin-block: var(--space-1);
+    padding: var(--space-2) var(--space-3);
+    border: 1px solid transparent;
+    border-radius: var(--radius-small);
+    background: transparent;
+    color: var(--color-muted);
+    text-align: left;
+  }
+  .nav-item > span:first-of-type {
+    flex: 1;
+  }
+  .nav-item:hover {
+    background: var(--color-hover);
+    color: var(--color-text);
+  }
+  .nav-item.active {
+    color: var(--color-accent);
+    background: var(--color-accent-soft);
+  }
+  .nav-count {
+    color: var(--color-accent);
+  }
+  .sidebar-warnings {
+    margin-top: var(--space-4);
+    padding: var(--space-3);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-small);
+  }
+  .sidebar-warnings h2 {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    margin: 0 0 var(--space-2);
+    color: var(--color-warning);
+    font-size: var(--text-caption);
+  }
+  .sidebar-warnings ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    max-height: 12rem;
+    overflow-y: auto;
+  }
+  .sidebar-warnings button {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: var(--space-2);
+    width: 100%;
+    min-height: 2rem;
+    padding: var(--space-1) 0;
+    border: 0;
+    background: transparent;
+    color: var(--color-text);
+    font-size: var(--text-caption);
+    text-align: left;
+  }
+  .sidebar-warnings button:hover {
+    color: var(--color-accent);
+  }
+  .sidebar-warnings button > span:last-child,
+  .sidebar-warnings small {
+    color: var(--color-muted);
+    font-size: var(--text-caption);
+  }
+  .sidebar-run {
+    margin-top: var(--space-5);
+  }
+  .sidebar-run .run-button {
+    width: 100%;
+  }
+  .sidebar-footer {
+    margin-top: auto;
+    padding-top: var(--space-8);
+  }
+  .connection {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    color: var(--color-accent);
+    font-size: var(--text-caption);
+  }
+  .connection.offline {
+    color: var(--color-warning);
+  }
+  .officer {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    margin-top: var(--space-4);
+    padding-block: var(--space-5);
+    border-top: 1px solid var(--color-border);
+  }
+  .officer > div {
+    flex: 1;
+    min-width: 0;
+  }
+  .officer strong {
+    display: block;
+    overflow-wrap: anywhere;
+    font-weight: var(--weight-medium);
+  }
+  .officer div > span {
+    display: block;
+    color: var(--color-muted);
+    font-size: var(--text-caption);
+  }
+  .officer > svg {
+    color: var(--color-subtle);
+  }
+  .avatar {
+    display: grid;
+    place-items: center;
+    flex-shrink: 0;
+    width: 2rem;
+    height: 2rem;
+    border-radius: var(--radius-pill);
+    background: var(--color-purple-soft);
+    color: var(--color-purple);
+    font-size: var(--text-caption);
+  }
+  .account-actions {
+    display: flex;
+    flex-wrap: wrap;
+    margin-top: var(--space-2);
+  }
+  .account-actions .text-button {
+    font-size: var(--text-caption);
+  }
+  .demo-controls {
+    margin-bottom: var(--space-4);
+    font-size: var(--text-caption);
+  }
+  .demo-controls summary {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    color: var(--color-muted);
+  }
+  .demo-controls summary > svg:last-child {
+    margin-left: auto;
+  }
+  .demo-controls p {
+    margin-block: var(--space-3);
+    color: var(--color-muted);
+  }
+  .control-line {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-block: var(--space-2);
+    gap: var(--space-2);
+  }
+  .app-shell > main {
+    margin-left: var(--sidebar-width);
+  }
+  .content {
+    max-width: var(--content-width);
+    padding: var(--space-8);
+    margin-inline: auto;
+  }
+  .page-heading {
+    margin-bottom: var(--space-6);
+  }
+  .reports-status {
+    margin-bottom: var(--space-5);
+  }
+  .run-steps {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-4);
+    margin-block: var(--space-4);
+    color: var(--color-subtle);
+    font-size: var(--text-caption);
+  }
+  .run-steps > span {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+  }
+  .run-steps .current {
+    color: var(--color-accent);
+  }
+  .run-steps .done {
+    color: var(--color-muted);
+  }
+  .step-dot {
+    width: 0.375rem;
+    height: 0.375rem;
+    border-radius: var(--radius-pill);
+    background: currentColor;
+  }
+  .run-history {
+    margin-top: var(--space-6);
+  }
+  .run-history summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+    padding: var(--panel-padding);
+    list-style: none;
+  }
+  .run-history summary > div {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+  }
+  .run-history[open] summary {
+    border-bottom: 1px solid var(--color-border);
+  }
+  .history-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-3) var(--panel-padding);
+    border-bottom: 1px solid var(--color-border);
+  }
+  .history-row > div {
+    flex: 1;
+    min-width: min(100%, 12rem);
+  }
+  .history-row p,
+  .history-row > .small {
+    color: var(--color-muted);
+  }
+  .history-row:last-child {
+    border-bottom: 0;
+  }
+  .setup-screen {
+    max-width: 40rem;
+    padding: var(--space-8);
+    margin: var(--space-10) auto;
+  }
+  .setup-screen h1,
+  .setup-screen p {
+    margin-block: var(--space-4);
+  }
+
+  @media (max-width: 60rem) {
+    .content {
+      padding: var(--space-5);
+    }
+  }
+  @media (max-width: 40rem) {
+    .sidebar {
+      position: static;
+      width: 100%;
+      padding: var(--space-4);
+      border-right: 0;
+      border-bottom: 1px solid var(--color-border);
+    }
+    .brand {
+      padding: 0;
+    }
+    .brand-subtitle {
+      padding-inline: 0;
+      padding-bottom: var(--space-4);
+    }
+    .season-card {
+      margin-bottom: var(--space-3);
+    }
+    .sidebar nav {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: var(--space-1);
+    }
+    .nav-item {
+      flex-direction: column;
+      justify-content: center;
+      gap: var(--space-1);
+      padding: var(--space-2) 0;
+      font-size: var(--text-caption);
+    }
+    .nav-item > svg:last-child:not(:first-child),
+    .nav-count {
+      display: none;
+    }
+    .sidebar-footer {
+      padding-top: var(--space-4);
+    }
+    .officer {
+      padding-bottom: 0;
+    }
+    .app-shell > main {
+      margin-left: 0;
+    }
+    .content {
+      padding: var(--space-5) var(--space-4);
+    }
+    .page-heading {
+      margin-bottom: var(--space-5);
+    }
+  }
+}

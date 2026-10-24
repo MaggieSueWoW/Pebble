@@ -2,6 +2,12 @@
 
 This document is for Codex agents contributing to the project. It captures coding style, libraries, and best practices.
 
+## Privacy
+
+- Keep personal names, email addresses, usernames, local home paths, and private
+  account/project identifiers out of documentation, issues, and pull-request text.
+  Use generic examples and repository-local issue references instead.
+
 ## Language & Tools
 
 - **Python** (3.12+ preferred)
@@ -18,11 +24,11 @@ This document is for Codex agents contributing to the project. It captures codin
 ## GitHub CLI
 
 - Use `./gh-project` instead of plain `gh` for this repository's issues and PRs.
-  It selects MaggieSueWoW's credentials, verifies the authenticated account, and
-  targets `MaggieSueWoW/Pebble` without changing the global active account.
+  It selects the repository's configured credentials, verifies the authenticated
+  account, and targets this repository without changing the global active account.
 - One-time setup: run `gh auth login --hostname github.com --git-protocol ssh
-  --skip-ssh-key --web` and authorize as **MaggieSueWoW** in the browser. Then run
-  `gh auth switch --hostname github.com --user <OTHER USER>` to restore the default
+  --skip-ssh-key --web` and authorize the project account in the browser. Then run
+  `gh auth switch --hostname github.com --user <OTHER_USER>` to restore the default
   account for other projects.
 - Verify with `./gh-project api user --jq .login`, `./gh-project issue list`, and
   `./gh-project pr list`. Credentials stay in gh's credential storage.

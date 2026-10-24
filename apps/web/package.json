@@ -1,0 +1,52 @@
+{
+  "name": "pebble-web",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "npm run lint && npm run typecheck && vite build",
+    "preview": "vite preview --host 127.0.0.1",
+    "test": "vitest run",
+    "format": "prettier --write .",
+    "test:browser": "firebase emulators:exec --project demo-pebble-reports --config ../../firebase.browser.json --only auth,firestore,functions \"playwright test\"",
+    "lint:css": "stylelint \"src/**/*.css\"",
+    "lint": "eslint . --max-warnings 0 && npm run lint:css",
+    "lint:fix": "eslint . --fix",
+    "format:check": "prettier --check .",
+    "typecheck": "tsc -b",
+    "check": "npm run lint && npm run typecheck && npm run format:check"
+  },
+  "dependencies": {
+    "firebase": "^12.19.0",
+    "lucide-react": "^0.468.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@firebase/rules-unit-testing": "^5.0.2",
+    "@playwright/test": "^1.64.1",
+    "@testing-library/react": "^16.3.3",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^4.3.4",
+    "eslint": "^10.13.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "eslint-plugin-react-refresh": "^0.5.7",
+    "globals": "^17.13.0",
+    "jsdom": "^29.1.1",
+    "prettier": "^3.4.2",
+    "stylelint": "^17.16.0",
+    "typescript": "~5.7.2",
+    "typescript-eslint": "^8.72.0",
+    "vite": "^6.4.4",
+    "vitest": "^5.0.5"
+  },
+  "engines": {
+    "node": "^22.13.0 || ^24.0.0 || >=26.0.0"
+  },
+  "overrides": {
+    "@grpc/grpc-js": "^1.13.6"
+  }
+}

@@ -1,0 +1,134 @@
+@layer pages {
+  .raid-time-summary {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-4) var(--space-8);
+    margin: 0;
+  }
+  .raid-time-summary dt {
+    color: var(--color-muted);
+  }
+  .raid-time-summary dd {
+    margin: 0;
+    font-weight: var(--weight-strong);
+  }
+  .raid-time-summary dd > span {
+    display: block;
+    color: var(--color-muted);
+    font-size: var(--text-caption);
+    font-weight: normal;
+  }
+  .timing-disclosure {
+    margin-top: var(--space-4);
+    border-top: 1px solid var(--color-border);
+    padding-top: var(--space-3);
+  }
+  .timing-disclosure > summary {
+    color: var(--color-accent);
+  }
+  .timing-disclosure > summary .badge {
+    margin-left: var(--space-2);
+  }
+  .timing-disclosure > .timing-card {
+    border: 0;
+    padding: var(--space-4) 0 0;
+    background: transparent;
+  }
+  .missing-players-card {
+    min-width: 0;
+  }
+  .missing-player-list {
+    max-width: 100%;
+    overflow-x: auto;
+  }
+  .missing-player {
+    display: grid;
+    grid-template-columns: minmax(12rem, 1fr) minmax(36rem, 3fr);
+    align-items: center;
+    gap: var(--space-3);
+    min-width: 52rem;
+    min-height: 3.5rem;
+    padding-block: var(--space-2);
+    border-top: 1px solid var(--color-border);
+  }
+  .missing-player-heading,
+  .missing-player-actions,
+  .missing-player-form {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    white-space: nowrap;
+    min-width: 0;
+  }
+  .missing-player-heading > span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .missing-player-controls {
+    min-width: 0;
+  }
+  .missing-player-form label {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+  }
+  .missing-player-form .select-control {
+    width: 10rem;
+  }
+  .missing-player-status {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .night-review {
+    display: grid;
+    gap: var(--space-5);
+  }
+  .night-flow ol {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    padding: 0;
+    list-style: none;
+  }
+  .night-flow li {
+    flex: 1 1 8rem;
+  }
+  .night-flow button {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    width: 100%;
+    padding: var(--space-3);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-small);
+    background: var(--color-panel);
+    color: var(--color-muted);
+  }
+  .night-flow [aria-current="step"] {
+    border-color: var(--color-accent);
+    color: var(--color-accent);
+    background: var(--color-accent-soft);
+  }
+  .flow-number {
+    display: inline-grid;
+    place-items: center;
+    flex-shrink: 0;
+    width: 1.5rem;
+    height: 1.5rem;
+    border: 1px solid currentcolor;
+    border-radius: var(--radius-pill);
+  }
+  .flow-actions .button {
+    white-space: normal;
+  }
+  .flow-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-4);
+    margin-block: var(--space-5);
+  }
+}

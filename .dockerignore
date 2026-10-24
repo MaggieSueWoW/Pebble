@@ -1,14 +1,10 @@
-.git
-__pycache__
-*.pyc
-*.pyo
-*.pyd
-.env
-venv
-build
-dist
-.eggs
-*.egg-info
-tests
-Dockerfile
-.idea
+# Legacy Sheets build inputs only. Web builds use Dockerfile.web.dockerignore.
+**
+!Dockerfile
+!pyproject.toml
+!README.md
+!pebble/**/*.py
+!config-*.yaml
+!service-account.json
+# Web configuration must never be baked into the legacy Sheets image.
+config-web*.yaml
