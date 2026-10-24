@@ -6,5 +6,6 @@ if [[ $# -ne 1 || -z "$1" ]]; then
   exit 2
 fi
 cd "$(dirname "$0")/.."
-firebase deploy --project "$1" --only functions:officers,firestore:rules
+# Firebase must also install its initial image cleanup policy noninteractively.
+firebase deploy --project "$1" --only functions:officers,firestore:rules --force
 firebase functions:artifacts:setpolicy --project "$1" --location us-central1 --days 1 --force

@@ -170,8 +170,13 @@ export async function manageOfficers(db, request) {
             "permission-denied",
             `Sign in with ${data.email} to accept this invitation.`,
           );
-        if (data.status === "accepted" && data.acceptedBy === actor.uid)
-          return { accepted: true };
+        if (data.status === "accepted" && data.acceptedBy === actor.uid) {
+          if (isOfficer) return { accepted: true };
+          fail(
+            "failed-precondition",
+            "This invitation has already been used. Ask a current officer for a new invitation.",
+          );
+        }
         if (!pending(data, now.toMillis()))
           fail(
             "failed-precondition",
@@ -183,18 +188,21 @@ export async function manageOfficers(db, request) {
             "failed-precondition",
             "The inviting officer no longer has access. Ask a current officer for a new invitation.",
           );
-        tx.set(
-          actorRef,
-          {
-            enabled: true,
-            email: actor.email,
-            name: actor.name,
-            grantedBy: data.invitedBy,
-            grantedByName: data.invitedByName,
-            grantedAt: now,
-          },
-          { merge: true },
-        );
+        // A pending invite can outlive a separate administrator grant. Preserve
+        // the original grant attribution when the account already has access.
+        if (!isOfficer)
+          tx.set(
+            actorRef,
+            {
+              enabled: true,
+              email: actor.email,
+              name: actor.name,
+              grantedBy: data.invitedBy,
+              grantedByName: data.invitedByName,
+              grantedAt: now,
+            },
+            { merge: true },
+          );
         tx.update(ref, {
           status: "accepted",
           acceptedBy: actor.uid,

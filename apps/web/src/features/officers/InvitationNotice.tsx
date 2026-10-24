@@ -56,14 +56,21 @@ export function InvitationNotice({
       setBusy(false);
     }
   }
-  if (officer && !invitationId && !error) return null;
+  const linked = session?.invitation;
+  // Membership can arrive before the acceptance RPC returns and remount us.
+  // An already accepted link must not leave a stale invitation on that session.
+  if (
+    officer &&
+    ((!invitationId && !error) ||
+      (linked?.matchesAccount && linked.status === "accepted"))
+  )
+    return null;
   if (accepted)
     return (
       <section className="notice" role="status">
         Invitation accepted. Loading officer access…
       </section>
     );
-  const linked = session?.invitation;
   const invitations = linked ? [linked] : session?.invitations || [];
   if (!error && !invitations.length && !invitationId) return null;
   return (

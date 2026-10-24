@@ -23,13 +23,11 @@ const call = (uid, data, email) =>
 const rejects = (promise, code) =>
   assert.rejects(promise, (e) => e.code === code);
 const seed = (uid) =>
-  db
-    .doc(`officers/${uid}`)
-    .set({
-      enabled: true,
-      email: `${uid}@example.test`,
-      name: `Officer ${uid}`,
-    });
+  db.doc(`officers/${uid}`).set({
+    enabled: true,
+    email: `${uid}@example.test`,
+    name: `Officer ${uid}`,
+  });
 const invite = async (email = "recipient@example.test") =>
   (await call("first", { action: "invite", email })).invitationId;
 before(() => db.settings({ ignoreUndefinedProperties: false }));
@@ -168,10 +166,32 @@ test("removal cancels outstanding invitations without revoking existing descenda
   assert.equal((await db.doc("officers/recipient").get()).data().enabled, true);
   await seed("second");
   await call("second", { action: "remove", uid: "recipient" });
-  await call("recipient", { action: "accept", invitationId: id });
+  await rejects(
+    call("recipient", { action: "accept", invitationId: id }),
+    "failed-precondition",
+  );
   assert.equal(
     (await db.doc("officers/recipient").get()).data().enabled,
     false,
+  );
+});
+
+test("accepting a pending invite after an administrator grant preserves attribution", async () => {
+  const id = await invite();
+  const original = {
+    enabled: true,
+    email: "recipient@example.test",
+    name: "Recipient",
+    grantedBy: "administrator",
+    grantedByName: "Administrator",
+    grantedAt: Timestamp.fromMillis(1000),
+  };
+  await db.doc("officers/recipient").set(original);
+  await call("recipient", { action: "accept", invitationId: id });
+  assert.deepEqual((await db.doc("officers/recipient").get()).data(), original);
+  assert.equal(
+    (await db.doc(`officerInvitations/${id}`).get()).data().status,
+    "accepted",
   );
 });
 

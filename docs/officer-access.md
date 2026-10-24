@@ -49,6 +49,8 @@ scripts/deploy-officers.sh FIREBASE_PROJECT_ID
 
 The script deploys only the `officers` Functions codebase and Firestore rules, then
 applies a one-day Artifact Registry image cleanup policy in `us-central1`.
+Deployment uses `--force` so Firebase can create its initial image cleanup policy
+without exiting before the explicit retention step.
 Cleanup affects old deployment images, not deployed running functions. A cleanup
 failure fails the script; fix it before considering rollout complete. This is a
 repository-wide policy for function images in that region, so review it if other
