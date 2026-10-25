@@ -661,7 +661,6 @@ test("defaults to report-only dates, follows late metadata and retains explicit 
   await expect(raidDate(page)).toHaveValue("2026-10-15");
   await loggedNight("2026-10-16");
   await expect(raidDate(page)).toHaveValue("2026-10-16");
-  await page.locator(".availability-notes > summary").click();
   const notes = page.getByRole("textbox", { name: "Availability notes" });
   await notes.fill("Keep this night draft");
   await loggedNight("2026-10-17");
@@ -705,7 +704,6 @@ test("keeps the default night during a held save and preserves its acknowledged 
 }) => {
   await overrides(page);
   await expect(raidDate(page)).toHaveValue(nights.baseline);
-  await page.locator(".availability-notes > summary").click();
   const notes = page.getByRole("textbox", { name: "Availability notes" });
   await notes.fill("Saved for the original night");
   await reportNight(nights.latest);

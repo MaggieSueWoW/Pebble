@@ -35,7 +35,6 @@ test("guides an officer through four steps, recalculates edits, and finishes on 
     { timeout: 20000 },
   );
   await expect(night).toHaveValue("2026-10-14");
-  await page.locator(".availability-notes > summary").click();
   await page
     .getByRole("textbox", { name: "Availability notes" })
     .fill("Reviewed availability");

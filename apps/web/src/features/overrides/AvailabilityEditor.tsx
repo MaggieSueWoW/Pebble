@@ -190,32 +190,24 @@ export function AvailabilityEditor({
           onChange={(post) => setEdit((old) => ({ ...old, post }))}
         />
       </div>
-      <details className="availability-notes">
-        <summary>
-          Notes{" "}
-          <span className="optional">
-            optional · private{edit.notes ? " · Added" : ""}
-          </span>
-        </summary>
-        <div className="field">
-          <label>
-            <span className="sr-only">Availability notes</span>
-            <textarea
-              rows={2}
-              maxLength={500}
-              placeholder="Anything helpful to remember…"
-              aria-label="Availability notes"
-              value={edit.notes}
-              onChange={(e) =>
-                setEdit((old) => ({
-                  ...old,
-                  notes: e.target.value,
-                }))
-              }
-            />
-          </label>
-        </div>
-      </details>
+      <div className="field availability-notes">
+        <label>
+          Notes <span className="optional">optional · private</span>
+          <textarea
+            rows={2}
+            maxLength={500}
+            placeholder="Anything helpful to remember…"
+            aria-label="Availability notes"
+            value={edit.notes}
+            onChange={(e) =>
+              setEdit((old) => ({
+                ...old,
+                notes: e.target.value,
+              }))
+            }
+          />
+        </label>
+      </div>
       {adjustmentError && (
         <p id="availability-validation" role="alert" className="field-error">
           <CircleAlert size={14} />

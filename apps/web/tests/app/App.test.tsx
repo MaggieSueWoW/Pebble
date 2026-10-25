@@ -120,8 +120,6 @@ it("keeps connected sessions out of sample storage and submits runs through the 
 
 function overrides() {
   fireEvent.click(screen.getByRole("button", { name: "Overrides" }));
-  const summary = document.querySelector(".availability-notes > summary");
-  if (summary) fireEvent.click(summary);
 }
 beforeEach(() => {
   window.history.replaceState(null, "", "/");

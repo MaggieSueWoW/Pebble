@@ -49,8 +49,7 @@ async function open(page: Page) {
   ).toBeVisible();
   await expect(
     page.getByRole("textbox", { name: "Availability notes" }),
-  ).toBeHidden();
-  await page.locator(".availability-notes > summary").click();
+  ).toBeVisible();
   await expect(
     page.getByRole("textbox", { name: "Availability notes" }),
   ).toHaveValue("Saved Alpha");
@@ -189,7 +188,7 @@ test("keeps the next step prominent and filters current saved overrides without 
   await page
     .getByRole("combobox", { name: "Raid night", exact: true })
     .selectOption(first);
-  await expect(notes(page)).toBeHidden();
+  await expect(notes(page)).toBeVisible();
   await expect(
     page.getByText("1 player adjusted", { exact: true }),
   ).toBeVisible();
@@ -660,7 +659,6 @@ test("preserves a removed player's draft and recovers after cancel without writi
   await expect(
     page.getByRole("heading", { name: "Example Alpha", exact: true }),
   ).toBeVisible();
-  await page.locator(".availability-notes > summary").click();
   await expect(notes(page)).toHaveValue("Retained roster draft");
   await removeAlpha();
   await page.getByRole("button", { name: "Cancel edits", exact: true }).focus();
@@ -668,7 +666,6 @@ test("preserves a removed player's draft and recovers after cancel without writi
   await expect(
     page.getByRole("heading", { name: "Example Beta", exact: true }),
   ).toBeVisible();
-  await page.locator(".availability-notes > summary").click();
   await expect(notes(page)).toHaveValue("Other player");
   await admin(async (ctx) => {
     expect((await getDoc(doc(ctx.firestore(), path))).data()?.notes).toBe(

@@ -148,12 +148,6 @@
   .availability-notes {
     margin-block: var(--space-4);
   }
-  .availability-notes summary {
-    color: var(--color-muted);
-  }
-  .availability-notes .field {
-    margin-top: var(--space-3);
-  }
   .editor-intro,
   .timing-help {
     color: var(--color-muted);
