@@ -7,7 +7,8 @@ run, contacts WCL/Mongo/Redis, or changes the legacy bot.
 
 ## Scope
 
-The backup contains all project officer-membership documents, the configured
+The backup contains all project officer-membership, invitation, callable-audit
+and recovered invitation-history documents, the configured
 season root, reports/roster/mappings/availability/timing/settings, terminal run
 history, complete result sets with their child collections, and that season's
 public pointer. Incomplete staging and derived `bot/status` health are omitted.
@@ -18,7 +19,8 @@ native types and timestamp nanoseconds rather than converting dates to plain
 strings. Document create/update metadata is assigned by the destination; stored
 fields such as `updatedAt`, attribution and captured input versions are preserved.
 
-These files contain private notes, membership IDs and officer-only run metadata.
+These files contain private notes, identities, invitation links, audit attribution
+and officer-only run metadata.
 The command creates a new file exclusively with mode **600**, refuses overwrites
 and prints only a document count. `.pebble-backups/` is ignored by Git. Keep the
 parent directory protected and include these files in the separately protected
@@ -26,10 +28,47 @@ host/off-host backup arrangement; do not attach them to issues or PRs.
 
 This is a quiescent logical backup, not a managed point-in-time Firestore export.
 The operator must avoid edits, imports and administrative cleanup while it runs.
-It refuses queued/running requests and rechecks officer/input/run/pointer state
+It refuses queued/running requests and rechecks officer membership, invitation,
+audit, recovered-history, input, run and pointer state
 before writing a file. Completed results are read once under their immutable
 publication contract. A changed source causes a failed backup, not a partial file.
 There is no need to stop an idle worker; heartbeat updates are excluded.
+
+## Officer history and retention policy
+
+Each backup includes **all available** project-wide `officerInvitations` and
+`officerAudit` documents, without filtering by age, status or season. It also
+includes `officerInvitationHistory` from any prior recovery. There is no TTL,
+automatic pruning, or live-data deletion in these tools. Take a fresh protected
+backup after officer-access changes and before planned recovery operations.
+Keep the two most recent verified recovery generations in the protected off-host
+backup arrangement, plus the last pre-incident generation until recovery is
+accepted. Verify a replacement before deleting an older copy. These are manual
+retention instructions; the CLI does not schedule exports or upload files.
+
+Restore preserves every audit record and its attribution exactly. Invitations
+are preserved with their original IDs, statuses, timestamps and fields under
+`officerInvitationHistory/{id}`, **never** in `officerInvitations/{id}`. This
+administrator-only collection is denied to every browser role by the existing
+rules and is not read by the officer callable. Thus even a formerly pending
+invitation cannot grant access in the recovered project; consumed, cancelled,
+expired and revoked-inviter links remain unusable. Existing history is retained
+on subsequent backup/restore cycles. A collision between a live invitation ID
+and an existing history ID fails restore before any writes, rather than silently
+discarding either record; retain the original archive for administrative review.
+
+Memberships are restored as captured, including disabled memberships; a backup
+predating a revocation cannot contain that later decision. Before any real
+cutover, reconcile membership grants/revocations since the snapshot and review
+the complete history. Cancel/reissue any required invitations with fresh links
+through the normal officer workflow. Never copy recovered invitations back into
+the active collection. The original source project and its links are untouched
+by this tooling; retiring its access requires a separate operational decision.
+
+New archives use `pebble-firestore-backup/v2`. Older v1 files do not contain the
+complete officer history and are rejected by this restore command. Keep their
+protected copies and use the matching historical tooling only for separately
+reviewed recovery; take a fresh v2 backup for current rehearsals.
 
 ## Create a backup
 
@@ -54,7 +93,8 @@ wait for an idle period and retry with a new output filename.
 Create a protected target configuration with a distinct `demo-` project ID,
 the original season ID, and disposable placeholder Mongo/WCL settings. Only
 Firestore configuration is used by these commands. Restore preserves the season
-ID and document paths; it does not rename or migrate a season.
+ID and document paths except for the deliberate invitation-to-history mapping
+above; it does not rename or migrate a season.
 
 With the dedicated Firestore emulator already running on its assigned port:
 

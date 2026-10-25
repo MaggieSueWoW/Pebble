@@ -319,3 +319,14 @@ test('officer directory, invitations and audit are private and browser writes st
   await assertFails(getDoc(doc(officer, 'officerManagement/state')));
   await assertFails(setDoc(doc(officer, 'officerManagement/state'), { version: 1 }));
 });
+
+test('recovered invitation history is inaccessible to every browser role', async () => {
+  await env.withSecurityRulesDisabled(ctx => setDoc(doc(ctx.firestore(), 'officerInvitationHistory/example'), { email: 'recipient@example.test', status: 'pending' }));
+  for (const db of [env.authenticatedContext('officer').firestore(), env.authenticatedContext('member').firestore(), env.unauthenticatedContext().firestore()]) {
+    const ref = doc(db, 'officerInvitationHistory/example');
+    await assertFails(getDoc(ref));
+    await assertFails(getDocs(collection(db, 'officerInvitationHistory')));
+    await assertFails(setDoc(ref, { status: 'pending' }));
+    await assertFails(deleteDoc(ref));
+  }
+});

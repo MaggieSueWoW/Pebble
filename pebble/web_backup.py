@@ -14,8 +14,14 @@ from google.cloud.firestore_v1.types import Document
 from .web_models import ID, INPUT_MODELS
 from .web_publication import publication_batches
 
-FORMAT = "pebble-firestore-backup/v1"
+FORMAT = "pebble-firestore-backup/v2"
 INPUT_COLLECTIONS = (*INPUT_MODELS, "settings")
+OFFICER_COLLECTIONS = (
+    "officers",
+    "officerInvitations",
+    "officerAudit",
+    "officerInvitationHistory",
+)
 
 
 class RecoveryError(ValueError):
@@ -36,7 +42,11 @@ def _walk(collection):
 
 def _controls(client, season_id):
     season = client.document(f"seasons/{season_id}")
-    snapshots = list(client.collection("officers").stream(timeout=30))
+    snapshots = [
+        snapshot
+        for name in OFFICER_COLLECTIONS
+        for snapshot in client.collection(name).stream(timeout=30)
+    ]
     for name in (*INPUT_COLLECTIONS, "runs"):
         snapshots.extend(season.collection(name).stream(timeout=30))
     snapshots.extend(
@@ -80,7 +90,7 @@ def _check_pointer(records, season_id):
 
 
 def backup_firestore(client, season_id: str, filename: str | Path) -> int:
-    """Read one idle season and officer membership into a new mode-600 file.
+    """Read one idle season and all officer history into a new mode-600 file.
 
     Completed results are immutable. Control documents are re-read to reject
     edits or worker transitions during the export; operators must also avoid
@@ -103,7 +113,7 @@ def backup_firestore(client, season_id: str, filename: str | Path) -> int:
     _check_pointer(records, season_id)
     if _fingerprint(controls) != _fingerprint(_controls(client, season_id)):
         raise RecoveryError(
-            "Source inputs or run state changed; retry during an idle period."
+            "Source inputs, officer history or run state changed; retry during an idle period."
         )
     archive = {
         "format": FORMAT,
@@ -144,7 +154,7 @@ def _allowed_path(path, season_id):
     if any(not part for part in parts) or len(parts) % 2:
         return False
     if len(parts) == 2:
-        return parts[0] == "officers" or path in {
+        return parts[0] in OFFICER_COLLECTIONS or path in {
             f"seasons/{season_id}",
             f"publicSeasons/{season_id}",
         }
@@ -205,7 +215,16 @@ def _read_archive(client, filename, target_project):
             raise RecoveryError(
                 "Backup pointer does not match a complete successful result."
             )
-    return prepared
+    recovered = {}
+    for path, data in prepared.items():
+        # Historical links must never enter the callable's active namespace,
+        # even if they were pending or already accepted when the backup was made.
+        if path.startswith("officerInvitations/"):
+            path = path.replace("officerInvitations/", "officerInvitationHistory/", 1)
+        if path in recovered:
+            raise RecoveryError("Backup contains conflicting invitation history paths.")
+        recovered[path] = data
+    return recovered
 
 
 def restore_firestore(client, filename: str | Path, target_project: str) -> int:
@@ -213,7 +232,8 @@ def restore_firestore(client, filename: str | Path, target_project: str) -> int:
 
     Create-only batches never overwrite an existing document. A failed partial
     restore is left for inspection; use a fresh empty target for another attempt.
-    No worker is started and no request is submitted.
+    Invitations retain their exact fields in administrator-only history, never
+    in the active invitation collection. No worker or request is started.
     """
     prepared = _read_archive(client, filename, target_project)
     if next(client.collections(timeout=30), None) is not None:

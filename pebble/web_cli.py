@@ -177,5 +177,6 @@ def restore_firestore(config, filename, target_project):
         if client is not None:
             client.close()
     click.echo(
-        f"Restored and verified {count} Firestore documents in the empty target."
+        f"Restored and verified {count} Firestore documents in the empty target. "
+        "Invitation history is inactive; reissue any required invitations."
     )

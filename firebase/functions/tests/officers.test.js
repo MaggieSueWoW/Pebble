@@ -35,6 +35,7 @@ beforeEach(async () => {
   for (const name of [
     "officers",
     "officerInvitations",
+    "officerInvitationHistory",
     "officerAudit",
     "officerManagement",
   ])
@@ -221,4 +222,50 @@ test("session refreshes identity metadata but cannot enable a revoked account", 
   await db.doc("officers/first").update({ enabled: false });
   await call("first", { action: "session" });
   assert.equal((await db.doc("officers/first").get()).data().enabled, false);
+});
+
+test("recovered invitation history cannot grant or restore access through old links", async () => {
+  await db.doc("officers/recipient").set({ enabled: false });
+  await db.doc("officers/revoked").set({ enabled: false });
+  for (const [index, status] of [
+    "pending",
+    "accepted",
+    "cancelled",
+    "expired",
+    "revoked-inviter",
+  ].entries()) {
+    const id = String(index).repeat(48);
+    const history = {
+      email: "recipient@example.test",
+      status: status === "revoked-inviter" ? "pending" : status,
+      invitedBy: status === "revoked-inviter" ? "revoked" : "first",
+      acceptedBy: "recipient",
+      expiresAt: Timestamp.fromMillis(
+        Date.now() + (status === "expired" ? -60000 : 60000),
+      ),
+    };
+    const ref = db.doc(`officerInvitationHistory/${id}`);
+    await ref.set(history);
+    await rejects(
+      call("recipient", { action: "session", invitationId: id }),
+      "not-found",
+    );
+    await rejects(
+      call("recipient", { action: "accept", invitationId: id }),
+      "not-found",
+    );
+    assert.deepEqual((await ref.get()).data(), history);
+    assert.equal(
+      (await db.doc("officers/recipient").get()).data().enabled,
+      false,
+    );
+  }
+  assert.deepEqual(
+    (await call("recipient", { action: "session" })).invitations,
+    [],
+  );
+  assert.equal((await db.collection("officerAudit").get()).size, 0);
+  const fresh = await invite();
+  await call("recipient", { action: "accept", invitationId: fresh });
+  assert.equal((await db.doc("officers/recipient").get()).data().enabled, true);
 });

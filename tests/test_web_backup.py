@@ -6,6 +6,7 @@ import base64
 import json
 import os
 import stat
+from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
@@ -163,6 +164,187 @@ def test_backup_refuses_active_work_without_creating_file(projects, tmp_path, st
     with pytest.raises(ValueError, match="terminal"):
         backup_firestore(source, SEASON, filename)
     assert not filename.exists()
+
+
+def test_officer_history_roundtrip_preserves_values_without_restoring_live_links(
+    projects, tmp_path
+):
+    source, target = projects
+    source.document("officers/revoked").set({"enabled": False})
+    invitations = {}
+    audits = {}
+    for index, status in enumerate(
+        ["pending", "accepted", "cancelled", "expired", "pending"], start=1
+    ):
+        invitation_id = f"{index:048x}"
+        invitations[invitation_id] = {
+            "email": "recipient@example.test",
+            "status": status,
+            "invitedBy": "revoked" if index == 5 else "test-officer",
+            "createdAt": STAMP,
+            "expiresAt": STAMP,
+            "acceptedBy": "revoked" if status == "accepted" else None,
+        }
+        audits[invitation_id] = {
+            "action": "invite",
+            "actorUid": "test-officer",
+            "invitationId": invitation_id,
+            "at": STAMP,
+        }
+        source.document(f"officerInvitations/{invitation_id}").set(
+            invitations[invitation_id]
+        )
+        source.document(f"officerAudit/{invitation_id}").set(audits[invitation_id])
+        # Compare with stored values: Firestore normalizes timestamp precision
+        # on the initial write, before the recovery tooling reads anything.
+        invitations[invitation_id] = (
+            source.document(f"officerInvitations/{invitation_id}").get().to_dict()
+        )
+        audits[invitation_id] = (
+            source.document(f"officerAudit/{invitation_id}").get().to_dict()
+        )
+
+    filename = tmp_path / "history.json"
+    assert backup_firestore(source, SEASON, filename) == 21
+    assert stat.S_IMODE(filename.stat().st_mode) == 0o600
+    archive = json.loads(filename.read_text())
+    archived = {
+        record["path"]: base64.b64decode(record["fields"])
+        for record in archive["documents"]
+    }
+    for invitation_id, data in invitations.items():
+        assert archived[f"officerInvitations/{invitation_id}"] == web_backup._wire(data)
+
+    assert restore_firestore(target, filename, target.project) == 21
+    assert not list(target.collection("officerInvitations").stream())
+    assert target.document("officers/revoked").get().get("enabled") is False
+    for invitation_id, data in invitations.items():
+        recovered = (
+            target.document(f"officerInvitationHistory/{invitation_id}").get().to_dict()
+        )
+        assert web_backup._wire(recovered) == web_backup._wire(data)
+        audit = target.document(f"officerAudit/{invitation_id}").get().to_dict()
+        assert web_backup._wire(audit) == web_backup._wire(audits[invitation_id])
+        assert (
+            source.document(f"officerInvitations/{invitation_id}").get().to_dict()
+            == data
+        )
+
+    # A subsequent backup/restore must keep recovered history, too.
+    next_backup = tmp_path / "next-history.json"
+    assert backup_firestore(target, SEASON, next_backup) == 21
+    next_target = firestore_client(f"demo-recovery-next-{uuid4().hex[:8]}")
+    try:
+        assert restore_firestore(next_target, next_backup, next_target.project) == 21
+        assert not list(next_target.collection("officerInvitations").stream())
+        for path in archived:
+            recovered_path = path.replace(
+                "officerInvitations/", "officerInvitationHistory/", 1
+            )
+            data = next_target.document(recovered_path).get().to_dict()
+            assert web_backup._wire(data) == archived[path]
+    finally:
+        next_target.close()
+
+
+@pytest.mark.parametrize(
+    "collection", ["officerInvitations", "officerAudit", "officerInvitationHistory"]
+)
+@pytest.mark.parametrize("operation", ["create", "update", "delete"])
+def test_backup_refuses_concurrent_officer_history_changes(
+    projects, tmp_path, monkeypatch, collection, operation
+):
+    source, _ = projects
+    record = source.document(f"{collection}/example")
+    if operation != "create":
+        record.set({"status": "pending", "at": STAMP})
+    original = web_backup._controls
+    calls = 0
+
+    def changing_history(client, season):
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            if operation == "delete":
+                record.delete()
+            else:
+                record.set({"status": "cancelled", "at": STAMP})
+        return original(client, season)
+
+    monkeypatch.setattr(web_backup, "_controls", changing_history)
+    filename = tmp_path / "changed-history.json"
+    with pytest.raises(ValueError, match="officer history.*changed"):
+        backup_firestore(source, SEASON, filename)
+    assert not filename.exists()
+
+
+def test_restore_rejects_conflicting_invitation_history_before_writes(
+    projects, tmp_path
+):
+    source, target = projects
+    source.document("officerInvitations/example").set({"status": "pending"})
+    source.document("officerInvitationHistory/example").set({"status": "cancelled"})
+    filename = tmp_path / "conflicting-history.json"
+    backup_firestore(source, SEASON, filename)
+    with pytest.raises(ValueError, match="conflicting invitation history"):
+        restore_firestore(target, filename, target.project)
+    assert not list(target.collections())
+
+
+def test_restore_rejects_older_archives_without_writing(projects, tmp_path):
+    source, target = projects
+    filename = tmp_path / "old-format.json"
+    backup_firestore(source, SEASON, filename)
+    archive = json.loads(filename.read_text())
+    archive["format"] = "pebble-firestore-backup/v1"
+    filename.write_text(json.dumps(archive))
+    with pytest.raises(ValueError, match="Unsupported"):
+        restore_firestore(target, filename, target.project)
+    assert not list(target.collections())
+
+
+def test_cli_history_backup_restore_reports_counts_and_reissue_without_identities(
+    projects, tmp_path, monkeypatch
+):
+    source, target = projects
+    source.document("officerInvitations/private-link").set(
+        {"email": "private@example.test", "status": "pending"}
+    )
+    config = tmp_path / "target.yaml"
+    config.write_text("placeholder")
+    filename = tmp_path / "private-backup.json"
+    settings = SimpleNamespace(firestore=SimpleNamespace(season_id=SEASON))
+    monkeypatch.setattr(web_cli, "resources", lambda _: (settings, source))
+    monkeypatch.setattr(source, "close", lambda: None)
+    runner = CliRunner()
+    backup = runner.invoke(web_cli.web, ["backup-firestore", "--file", str(filename)])
+    assert backup.exit_code == 0
+    assert "11 Firestore documents" in backup.output
+    monkeypatch.setattr(web_cli, "resources", lambda _: (settings, target))
+    monkeypatch.setattr(target, "close", lambda: None)
+    restore = runner.invoke(
+        web_cli.web,
+        [
+            "restore-firestore",
+            "--config",
+            str(config),
+            "--file",
+            str(filename),
+            "--target-project",
+            target.project,
+        ],
+    )
+    assert restore.exit_code == 0
+    assert "11 Firestore documents" in restore.output
+    assert "reissue" in restore.output
+    for output in [backup.output, restore.output]:
+        for private in [
+            "private@example.test",
+            "private-link",
+            source.project,
+            target.project,
+        ]:
+            assert private not in output
 
 
 def test_backup_refuses_changed_inputs_bad_pointer_and_file_overwrite(

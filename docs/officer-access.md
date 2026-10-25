@@ -86,11 +86,15 @@ Verify the account in Firebase Authentication first. This trusted recovery path
 bypasses application protections; do not run it concurrently with normal access
 administration. Keep credentials out of the browser and the repository.
 
-Existing logical backups include membership documents. Pending invitations and
-callable audit records are additional collections; preserve them separately with
-an administrative export if their history is required during disaster recovery.
-Cancel/reissue invitations after a membership restore rather than relying on old
-links.
+Logical backups include memberships, all available invitations and callable audit
+records, and previously recovered invitation history. See the
+[recovery and retention policy](web-recovery.md#officer-history-and-retention-policy).
+Restore preserves audit records exactly and places invitations in
+administrator-only `officerInvitationHistory`, outside the callable's active
+invitation collection. Review grants/revocations since the snapshot and
+cancel/reissue required invitations with fresh links after membership recovery;
+never reactivate historical links. Protected backups contain identities and
+invitation links and must not be attached to issues or PRs.
 
 ## Verification
 
