@@ -108,3 +108,58 @@ attribution, stale acceptance replay, and concurrent final-officer removal.
 Firestore rule tests cover private directory/invitation/audit reads and denied
 browser writes. Browser tests cover the real callable, multiple Google sessions,
 normal sign-in discovery, wrong-account recovery, expiration, and live revocation.
+
+## Callable dependency review (#52, 2026-10-25)
+
+The callable now requires `firebase-admin ^14.5.0` and
+`firebase-functions ^7.4.0`. The lockfile resolves Admin 14.5.0, Functions 7.4.0,
+Firestore 9.4.0 and Storage 8.4.0. Updates use the supported upstream dependency
+ranges, without forced audit fixes or transitive overrides. The deployment runtime
+remains Node 22.
+
+Reviewed compatibility changes:
+
+- [Admin 14](https://firebase.google.com/support/release-notes/admin/node)
+  requires Node 22+, removes legacy namespace/Instance ID/messaging APIs and
+  expands error handling. This code already uses modular imports and none of
+  those removed services. The identity-seeding helper's `auth/user-not-found`
+  check remains valid under the documented
+  [service-prefixed error codes](https://firebase.google.com/docs/reference/admin/error-handling).
+  Callable authorization continues to throw Functions `HttpsError` values.
+- [Functions 7](https://github.com/firebase/firebase-functions/releases/tag/v7.0.0)
+  removes `functions.config()`, Node 16 support and the v1 `Event` type, raises
+  TypeScript requirements and changes unhandled async `onRequest` emulator
+  errors. This is JavaScript ESM using v2 `onCall`, without runtime config or v1
+  events. Functions 7.4.0 explicitly supports Admin 14 as a peer dependency.
+- [Firestore 8](https://github.com/googleapis/nodejs-firestore/releases/tag/v8.0.0)
+  changes TypeScript data types and requires Node 18+. The subsequent
+  [Firestore 9](https://github.com/googleapis/google-cloud-node/blob/main/handwritten/firestore/CHANGELOG.md),
+  [Storage 8](https://github.com/googleapis/google-cloud-node/blob/main/handwritten/storage/CHANGELOG.md)
+  and [Google Auth 11](https://github.com/googleapis/google-cloud-node/blob/main/core/packages/google-auth-library-nodejs/CHANGELOG.md)
+  major releases require Node 22+. The callable uses ordinary Firestore
+  transactions, queries and timestamps; it does not use Storage APIs or custom
+  auth transports.
+
+Before updating, `npm --prefix firebase/functions audit --omit=dev` reported
+8 moderate findings and no high/critical findings. All eight package entries
+traced to [GHSA-w5hq-g745-h8pq](https://github.com/advisories/GHSA-w5hq-g745-h8pq):
+`uuid` v3/v5/v6 methods can silently partially write a caller-provided buffer with
+invalid bounds. Affected paths ran through Admin's Firestore → google-gax and
+Storage → retry-request/teeny-request, with gaxios also depending on uuid. The
+callable does not directly use uuid or accept UUID output buffers from clients;
+this limits direct exposure, but retaining vulnerable transitive packages was
+unnecessary. The upgraded tree contains no uuid package, and a fresh production
+audit reports **0 vulnerabilities**. No advisories remain to defer.
+
+Validation used the isolated demo emulators with Firebase CLI 15.22.4 and Node
+24.11.1: 8 callable transaction tests, 24 Firestore rules tests, and 7 officer/auth
+browser tests. These cover Google-only verified identities, email-bound
+acceptance, audit attribution, stale replay, concurrent final-officer protection,
+private reads, denied browser authority writes, invitation recovery and live
+revocation. The deployment-script test also passes. Inspection of the generated
+callable endpoint confirms region `us-central1`, 0 minimum/2 maximum instances,
+256 MiB memory, `gcf_gen1` CPU, concurrency 1 and a 30-second timeout.
+
+This is a dependency maintenance change. Backend deployment is a separate
+operation requiring explicit authorization; emulator checks do not establish
+hosted acceptance or change the rollout status of #14.
