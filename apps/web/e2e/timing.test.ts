@@ -337,7 +337,7 @@ test("handles unknown detection, Pacific DST validation, and keyboard draft prot
     () =>
       page
         .getByRole("navigation")
-        .getByRole("button", { name: /^Results/ })
+        .getByRole("button", { name: /^Bench Time/ })
         .click(),
   ]) {
     await leave();
@@ -375,7 +375,7 @@ test("keeps timing edits working in standalone sample mode", async ({
   await saved(page);
   await page
     .getByRole("navigation")
-    .getByRole("button", { name: /^Results/ })
+    .getByRole("button", { name: /^Bench Time/ })
     .click();
   await expect(page.getByRole("dialog")).not.toBeVisible();
   await page

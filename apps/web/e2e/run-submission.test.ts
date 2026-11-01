@@ -72,7 +72,7 @@ function capture(page: Page) {
 async function previousResults(page: Page) {
   await page
     .getByRole("navigation")
-    .getByRole("button", { name: /^Results/ })
+    .getByRole("button", { name: /^Bench Time/ })
     .click();
   await expect(page.getByText("Example Player", { exact: true })).toBeVisible();
 }

@@ -3,7 +3,7 @@ const flow = [
   ["reports", "Add report"],
   ["review", "Review Night"],
   ["overrides", "Overrides"],
-  ["results", "Results"],
+  ["results", "Bench Time"],
 ] as const;
 export function NightFlow({
   page,

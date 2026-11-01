@@ -132,7 +132,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-it("lets public readers open About and return to Results without sign-in or writes", () => {
+it("lets public readers open About and return to Bench Time without sign-in or writes", () => {
   const live = { ...connection(), officer: false };
   render(<App connection={live} />);
   fireEvent.click(screen.getByRole("button", { name: "About" }));
@@ -142,8 +142,8 @@ it("lets public readers open About and return to Results without sign-in or writ
   expect(screen.queryByText(/No completed results yet/)).toBeNull();
   expect(screen.queryByRole("button", { name: "Reports" })).toBeNull();
   expect(screen.queryByRole("button", { name: "Run Pebble" })).toBeNull();
-  fireEvent.click(screen.getByRole("button", { name: "Results" }));
-  expect(screen.getByRole("heading", { name: "Results" })).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "Bench Time" }));
+  expect(screen.getByRole("heading", { name: "Bench Time" })).toBeTruthy();
   expect(live.signIn).not.toHaveBeenCalled();
   expect(live.saveInputs).not.toHaveBeenCalled();
   expect(live.requestRun).not.toHaveBeenCalled();
@@ -261,7 +261,7 @@ it("waits for a removed player's pending save before selecting a replacement", a
 });
 
 it.each([true, false])(
-  "shows published warning text on Results for officer=%s and hides empty warnings",
+  "shows published warning text on Bench Time for officer=%s and hides empty warnings",
   (officer) => {
     const c = connection();
     c.officer = officer;
@@ -274,7 +274,7 @@ it.each([true, false])(
     ];
     const { rerender } = render(<App connection={c} />);
     if (officer)
-      fireEvent.click(screen.getByRole("button", { name: /^Results/ }));
+      fireEvent.click(screen.getByRole("button", { name: /^Bench Time/ }));
     if (officer) {
       fireEvent.click(
         screen.getAllByRole("button", {
@@ -527,7 +527,7 @@ it.each([true, false])(
     c.officer = officer;
     const { rerender } = render(<App connection={c} />);
     if (officer)
-      fireEvent.click(screen.getByRole("button", { name: /^Results/ }));
+      fireEvent.click(screen.getByRole("button", { name: /^Bench Time/ }));
     expect(screen.getByText(/No completed results yet/).textContent).toContain(
       officer ? "Add or include reports" : "after an officer runs Pebble",
     );
@@ -553,7 +553,7 @@ it.each([true, false])(
     c.hasResults = true;
     render(<App connection={c} />);
     if (officer)
-      fireEvent.click(screen.getByRole("button", { name: /^Results/ }));
+      fireEvent.click(screen.getByRole("button", { name: /^Bench Time/ }));
     expect(
       screen.getByRole("heading", { name: "No player time for this period" }),
     ).toBeTruthy();
@@ -666,7 +666,7 @@ it.each([true, false])(
     ];
     const { rerender } = render(<App connection={c} />);
     if (officer)
-      fireEvent.click(screen.getByRole("button", { name: /^Results/ }));
+      fireEvent.click(screen.getByRole("button", { name: /^Bench Time/ }));
     if (officer)
       fireEvent.click(
         screen.getAllByRole("button", {
@@ -717,7 +717,7 @@ it("links both result disclosure controls to stable hidden detail content", () =
     },
   ];
   render(<App connection={c} />);
-  fireEvent.click(screen.getByRole("button", { name: /^Results/ }));
+  fireEvent.click(screen.getByRole("button", { name: /^Bench Time/ }));
   const detail = screen.getByRole("button", {
     name: "Details for Example Alpha",
   });
@@ -792,7 +792,7 @@ it("connects report/availability validation and names the discard dialog", () =>
   expect(document.getElementById("report-validation")?.textContent).toContain(
     "invalid",
   );
-  fireEvent.click(screen.getByRole("button", { name: /^Results/ }));
+  fireEvent.click(screen.getByRole("button", { name: /^Bench Time/ }));
   const dialog = document.querySelector("dialog")!;
   expect(
     document.getElementById(dialog.getAttribute("aria-labelledby")!)
@@ -1118,7 +1118,7 @@ it("lists mains with alts and scopes a new alt to the clicked main", () => {
   ).toBe(alpha.name);
 });
 
-it("toggles Results column sorting while keeping details on the selected player", () => {
+it("toggles Bench Time column sorting while keeping details on the selected player", () => {
   const c = connection([alpha, beta]);
   c.hasResults = true;
   c.saved.results.players = [
@@ -1144,7 +1144,7 @@ it("toggles Results column sorting while keeping details on the selected player"
     },
   ];
   render(<App connection={c} />);
-  fireEvent.click(screen.getByRole("button", { name: "Results" }));
+  fireEvent.click(screen.getByRole("button", { name: "Bench Time" }));
   const names = () =>
     [...document.querySelectorAll(".result-name strong")].map(
       (el) => el.textContent,
@@ -1272,7 +1272,7 @@ it("keeps failed-run status visible on every page after compacting the headers",
     },
   ];
   render(<App connection={c} />);
-  for (const page of ["Results", "Overrides", "Roster", "Settings"]) {
+  for (const page of ["Bench Time", "Overrides", "Roster", "Settings"]) {
     fireEvent.click(screen.getByRole("button", { name: page }));
     expect(
       screen.getByRole("status", { name: "Run status" }).textContent,
@@ -1295,7 +1295,7 @@ it("guards roster navigation, sign-out and reload during a pending mutation", ()
   fireEvent.click(screen.getByRole("button", { name: "Roster" }));
   fireEvent.click(screen.getByRole("button", { name: `Edit ${alpha.name}` }));
   rerender(<App connection={{ ...c, busy: true }} />);
-  fireEvent.click(screen.getByRole("button", { name: "Results" }));
+  fireEvent.click(screen.getByRole("button", { name: "Bench Time" }));
   fireEvent.click(screen.getByRole("button", { name: `Edit ${beta.name}` }));
   fireEvent.click(screen.getByRole("button", { name: "Sign out" }));
   expect(c.signOut).not.toHaveBeenCalled();
@@ -1313,9 +1313,9 @@ it("guards roster navigation, sign-out and reload during a pending mutation", ()
   window.dispatchEvent(unloading);
   expect(unloading.defaultPrevented).toBe(true);
   rerender(<App connection={c} />);
-  fireEvent.click(screen.getByRole("button", { name: "Results" }));
+  fireEvent.click(screen.getByRole("button", { name: "Bench Time" }));
   expect(
-    screen.getByRole("heading", { name: "Results", level: 1 }),
+    screen.getByRole("heading", { name: "Bench Time", level: 1 }),
   ).toBeTruthy();
 });
 
@@ -1374,7 +1374,7 @@ it("walks through four numbered steps and carries the reviewed night to results"
     screen.getByRole("button", { name: "Next: Review overrides →" }),
   );
   expect(raidPicker().value).toBe("2026-10-14");
-  fireEvent.click(screen.getByRole("button", { name: "Next: Results →" }));
+  fireEvent.click(screen.getByRole("button", { name: "Next: Bench Time →" }));
   expect(
     (
       screen.getByRole("combobox", {
@@ -1719,7 +1719,7 @@ it("keeps published warning nights in the officer sidebar across panels and guar
     (screen.getByRole("combobox", { name: "Raid night" }) as HTMLSelectElement)
       .value,
   ).toBe("2026-10-15");
-  fireEvent.click(screen.getByRole("button", { name: "Results" }));
+  fireEvent.click(screen.getByRole("button", { name: "Bench Time" }));
   expect(warningPanel()).toBeTruthy();
   expect(screen.queryByRole("status", { name: "Night completion" })).toBeNull();
   rerender(

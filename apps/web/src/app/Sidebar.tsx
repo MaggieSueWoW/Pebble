@@ -88,7 +88,7 @@ export function Sidebar({
             { id: "reports", name: "Reports", icon: FileText },
             { id: "review", name: "Review Night", icon: ClipboardCheck },
             { id: "overrides", name: "Overrides", icon: SlidersHorizontal },
-            { id: "results", name: "Results", icon: BarChart3 },
+            { id: "results", name: "Bench Time", icon: BarChart3 },
             { id: "about", name: "About", icon: Info },
             ...(connection?.officer
               ? [

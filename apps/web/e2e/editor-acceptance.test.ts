@@ -147,7 +147,7 @@ test("saved roster, mapping and settings feed one explicit run and remain stale 
     });
     await page
       .getByRole("navigation")
-      .getByRole("button", { name: /^Results/ })
+      .getByRole("button", { name: /^Bench Time/ })
       .click();
     await expect(page.getByText("Previous", { exact: true })).toBeVisible();
     await expect(status).toContainText("Changes ready for the next run");
@@ -181,7 +181,7 @@ test("saved roster, mapping and settings feed one explicit run and remain stale 
     await expect(status).toContainText("Calculating results");
     await page
       .getByRole("navigation")
-      .getByRole("button", { name: "Results", exact: true })
+      .getByRole("button", { name: "Bench Time", exact: true })
       .click();
     await expect(page.getByText("Previous", { exact: true })).toBeVisible();
     const gate = new Promise<void>((resolve) => {

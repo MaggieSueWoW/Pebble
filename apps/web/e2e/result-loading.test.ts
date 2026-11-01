@@ -104,7 +104,7 @@ async function resultsPage(page: Page, signedIn = true) {
     await officer(page, emulator.environment);
     await page
       .getByRole("navigation")
-      .getByRole("button", { name: /^Results/ })
+      .getByRole("button", { name: /^Bench Time/ })
       .click();
   } else await page.goto("/");
   await expect(
@@ -271,7 +271,7 @@ test("makes completion and officer actions obvious while keeping details and adj
   );
   await page
     .getByRole("navigation", { name: "Main navigation" })
-    .getByRole("button", { name: "Results", exact: true })
+    .getByRole("button", { name: "Bench Time", exact: true })
     .click();
   await page.setViewportSize({ width: 390, height: 844 });
   expect(
@@ -442,7 +442,7 @@ test("an edit saved during computation still needs another run after completion 
   ).toHaveCount(0);
   await page
     .getByRole("navigation")
-    .getByRole("button", { name: /^Results/ })
+    .getByRole("button", { name: /^Bench Time/ })
     .click();
   const held = await holdReads(page, id);
   await seedResult(id, "Completed Player", nights.latest);

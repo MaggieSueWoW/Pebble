@@ -655,8 +655,8 @@ export function Workspace({
                 ? "Recalculate and review overrides →"
                 : "Next: Review overrides →"
               : unprocessed
-                ? "Recalculate and view Results →"
-                : "Next: Results →"}
+                ? "Recalculate and view Bench Time →"
+                : "Next: Bench Time →"}
           </button>
         </>
       )}

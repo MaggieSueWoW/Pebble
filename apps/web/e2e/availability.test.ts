@@ -194,7 +194,7 @@ test("keeps the next step prominent and filters current saved overrides without 
   ).toBeVisible();
   await expect(page.getByText(/Selected raid night:/)).toHaveCount(0);
   const next = page.getByRole("button", {
-    name: /^(Next: Results|Recalculate and view Results) →$/,
+    name: /^(Next: Bench Time|Recalculate and view Bench Time) →$/,
   });
   await expect(next).toHaveCount(1);
   const nextBox = (await next.boundingBox())!;
@@ -518,7 +518,7 @@ test("protects player/night/tab/page drafts and supports keyboard navigation on 
     () =>
       page
         .getByRole("navigation")
-        .getByRole("button", { name: /^Results/ })
+        .getByRole("button", { name: /^Bench Time/ })
         .click(),
   ]) {
     await leave();

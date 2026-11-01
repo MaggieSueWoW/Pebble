@@ -124,7 +124,7 @@ test("holds a pending save, preserves newer text, and blocks navigation/run", as
   ).toBeDisabled();
   await page
     .getByRole("navigation")
-    .getByRole("button", { name: /^Results/ })
+    .getByRole("button", { name: /^Bench Time/ })
     .click();
   await expect(
     page.getByRole("textbox", { name: "Warcraft Logs reports" }),
@@ -196,7 +196,7 @@ test("protects drafts with a keyboard-accessible dialog at a narrow viewport", a
   await input.fill(c);
   await page
     .getByRole("navigation")
-    .getByRole("button", { name: /^Results/ })
+    .getByRole("button", { name: /^Bench Time/ })
     .click();
   await expect(page.getByRole("dialog")).toBeVisible();
   await expect(
@@ -206,7 +206,7 @@ test("protects drafts with a keyboard-accessible dialog at a narrow viewport", a
   await expect(input).toHaveValue(c);
   await page
     .getByRole("navigation")
-    .getByRole("button", { name: /^Results/ })
+    .getByRole("button", { name: /^Bench Time/ })
     .click();
   await page.getByRole("button", { name: "Discard edits" }).click();
   await expect(page.getByRole("dialog")).not.toBeVisible();

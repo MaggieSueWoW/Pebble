@@ -104,7 +104,7 @@ test("public recorded explanations and officer-only diagnostics survive selectio
   await officer(page, emulator.environment);
   await page
     .getByRole("navigation")
-    .getByRole("button", { name: "Results", exact: true })
+    .getByRole("button", { name: "Bench Time", exact: true })
     .click();
   await page
     .getByRole("combobox", { name: "Result period" })
@@ -129,7 +129,7 @@ test("public recorded explanations and officer-only diagnostics survive selectio
   ).toBe(true);
   await page
     .getByRole("navigation", { name: "Main navigation" })
-    .getByRole("button", { name: "Results", exact: true })
+    .getByRole("button", { name: "Bench Time", exact: true })
     .click();
   await expect(diagnostics).toHaveCount(0);
   await page

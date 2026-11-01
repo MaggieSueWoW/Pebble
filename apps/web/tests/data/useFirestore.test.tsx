@@ -1547,7 +1547,7 @@ describe("public result loading", () => {
     await publicResults();
     expect(screen.queryByRole("alert")).toBeNull();
     expect(
-      screen.getByRole("heading", { name: "Results", level: 1 }),
+      screen.getByRole("heading", { name: "Bench Time", level: 1 }),
     ).toBeTruthy();
   });
 });

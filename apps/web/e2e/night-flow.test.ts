@@ -42,11 +42,14 @@ test("guides an officer through four steps, recalculates edits, and finishes on 
     .getByRole("button", { name: "Save availability", exact: true })
     .click();
   await page
-    .getByRole("button", { name: "Recalculate and view Results →" })
+    .getByRole("button", { name: "Recalculate and view Bench Time →" })
     .click();
-  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Results", {
-    timeout: 20000,
-  });
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText(
+    "Bench Time",
+    {
+      timeout: 20000,
+    },
+  );
   await expect(
     page.getByRole("combobox", { name: "Result period" }),
   ).toHaveValue("2026-10-14");

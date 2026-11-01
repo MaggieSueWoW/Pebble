@@ -1,6 +1,6 @@
 # Pebble web app
 
-React + TypeScript frontend for Reports, Review Night, Overrides, Results, Roster, Officers and Settings.
+React + TypeScript frontend for Reports, Review Night, Overrides, Bench Time, Roster, Officers and Settings.
 The public About page explains Pebble’s purpose, how the team uses bench time,
 and how reports become shared results. It is available from the sidebar to all
 readers and directly at `?view=about`, without signing in.
@@ -84,7 +84,7 @@ Firestore/security (#3), and officer/public UX (#4).
   similarly keeps result sorting and link selection alive across navigation.
 - `app/` also owns the shell, sidebar, navigation and run history. `components/`
   contains shared controls, tables, panel headers, status and feedback components.
-- `features/` groups Reports, Results, Overrides, Roster and Settings. Each folder
+- `features/` groups Reports, Bench Time, Overrides, Roster and Settings. Each folder
   owns its page, feature components, editor hooks, domain helpers and `styles.css`.
   Pages receive typed data, editor state and callbacks; saves and guarded
   transitions go through the workspace. Shared UI belongs in `components/`;
@@ -123,11 +123,11 @@ The public-hook tests and browser workflows exercise these boundaries together.
 ## Current interface
 
 The sidebar holds navigation, the season, Run Pebble, bot status and account actions.
-Page headers contain only the page name. Results and Overrides show run status and
+Page headers contain only the page name. Bench Time and Overrides show run status and
 the displayed publication's completion time in their toolbars. Reports, Roster and
 Settings use a compact status line. Saving never starts a calculation.
 
-Results rows expand by clicking the row or either detail button. Bench precedes
+Bench Time rows expand by clicking the row or either detail button. Bench precedes
 Played; zero durations use `-` and durations below an hour omit `0h`. Player,
 Bench, Played and Time Played sort by their displayed values; the default preserves
 the published ranking. The `#` value stays with the published season player.
@@ -176,7 +176,7 @@ Keep native table/form semantics and existing accessible labels when composing
 these components. Inline styles are reserved for data-driven values such as
 player class colors and percentage bars.
 
-Results, Roster and Overrides use `--row-height` for their collapsed player rows,
+Bench Time, Roster and Overrides use `--row-height` for their collapsed player rows,
 including borders and detail controls. The token is 28px on desktop and changes
 to 36px below 40rem for touch use; both values are defined in `tokens.css`.
 Expanded details keep their own content spacing.
@@ -199,7 +199,7 @@ It uses localStorage and illustrative calculations, independently of Firestore.
 Prototype controls simulate offline/failing runs and reset sample data. The
 production Python fairness engine remains authoritative in the connected app.
 
-Sample mode illustrates Reports, Overrides and Results. The connected officer
+Sample mode illustrates Reports, Overrides and Bench Time. The connected officer
 app additionally exposes the real Roster and Settings editors.
 
 ## Officer workflow browser acceptance
@@ -275,7 +275,7 @@ and heartbeat; they never start or contact a worker. Previous completed results
 and unrelated input versions are checked throughout these cases.
 
 Officers follow a four-step guide: Add report → Review Night → Overrides →
-Results. The numbered navigation and next-step buttons sit alongside
+Bench Time. The numbered navigation and next-step buttons sit alongside
 free sidebar navigation. The run step happens inline on Reports; its Next button
 sits below the add-report form and above the list, which defaults to newest raid
 night first. Reports does not show a selected night until the logs have been
@@ -307,9 +307,9 @@ count use current saved availability modes, including resets before a rerun.
 Available includes time spent benched. Before/after-break choices sit together,
 optional private notes start collapsed, and Save availability, Cancel, and Reset
 to detected share one action group. Saved changes recalculate through the top
-Next button before Results opens.
+Next button before Bench Time opens.
 
-Results keeps the main table with Bench, Played, and Played %; displayed durations
+Bench Time keeps the main table with Bench, Played, and Played %; displayed durations
 round to whole minutes while sorting and percentages retain published precision.
 Adjusted badges appear only for a selected night. Its period breakdown marks
 adjusted times and includes per-period reasons directly in the table; missing
@@ -321,7 +321,7 @@ update status, and Copy result link. Reports remains available in the sidebar. O
 by date with a warning count and direct navigation to that night. General warnings
 appear once under Other warnings. The list follows the displayed completed run,
 remains during pending/failed updates, and clears when a clean run loads. Public
-readers retain the published warning text. Results has no extra readiness line;
+readers retain the published warning text. Bench Time has no extra readiness line;
 its existing run status still reports loading, failures, and stale inputs.
 
 Ignores use versioned character inputs with `ignored: true` and an empty `playerId`.
@@ -332,7 +332,7 @@ to the same main count once per fight. Browser rules keep decisions officer-only
 new ignore inputs require the matching worker and rules release. Overrides focuses
 on player availability. Saved changes are recalculated before advancing from review
 to overrides or from overrides to the selected night's results; failed runs leave
-the officer on the current step. Results retains a compact link back to review
+the officer on the current step. Bench Time retains a compact link back to review
 when warnings remain. Public readers continue to see recorded warning text without
 private source links or officer navigation. Warning text is rendered from the
 completed publication, and source links/diagnostics use its existing private
@@ -383,7 +383,7 @@ to the demo emulator, with its original rules restored afterward.
 These automated checks verify DOM/accessibility semantics, browser focus and
 keyboard behavior. Actual screen-reader listening remains part of final acceptance.
 
-Results offers season totals and individual raid nights. The toolbar shows the
+Bench Time offers season totals and individual raid nights. The toolbar shows the
 completion time for the displayed results and the season's raid-night count.
 Loading and retry preserve the previous completed results and their timestamp.
 Run Pebble is available in the sidebar throughout the officer flow. Reports also offers a Next action that runs Pebble and opens Review Night after success. Older weekly result links fall back to season

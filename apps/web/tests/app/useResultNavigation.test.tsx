@@ -10,7 +10,7 @@ import {
 beforeEach(() => history.replaceState(null, "", "/"));
 afterEach(cleanup);
 
-it("restores About and Results through public browser history", async () => {
+it("restores About and Bench Time through public browser history", async () => {
   history.replaceState(null, "", "/?view=about");
   expect(readResultLocation("results").page).toBe("about");
   const { result } = renderHook(() =>
