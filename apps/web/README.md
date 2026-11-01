@@ -320,8 +320,8 @@ words. Attendance details remain season-only. The top toolbar groups the period 
 update status, and Copy result link. Reports remains available in the sidebar. Officers see a persistent Nights to review sidebar list, grouped newest first
 by date with a warning count and direct navigation to that night. General warnings
 appear once under Other warnings. The list follows the displayed completed run,
-remains during pending/failed updates, and clears when a clean run loads. Public
-readers retain the published warning text. Bench Time has no extra readiness line;
+remains during pending/failed updates, and clears when a clean run loads. Bench Time
+shows published warning text only to officers. Bench Time has no extra readiness line;
 its existing run status still reports loading, failures, and stale inputs.
 
 Ignores use versioned character inputs with `ignored: true` and an empty `playerId`.
@@ -332,8 +332,8 @@ to the same main count once per fight. Browser rules keep decisions officer-only
 new ignore inputs require the matching worker and rules release. Overrides focuses
 on player availability. Saved changes are recalculated before advancing from review
 to overrides or from overrides to the selected night's results; failed runs leave
-the officer on the current step. Bench Time retains a compact link back to review
-when warnings remain. Public readers continue to see recorded warning text without
+the officer on the current step. Officers see recorded warning text on Bench Time
+and can open Review Night from the sidebar. Public readers see no result warnings,
 private source links or officer navigation. Warning text is rendered from the
 completed publication, and source links/diagnostics use its existing private
 metadata subscription, with no additional service reads.
@@ -367,7 +367,7 @@ When a completed result has warnings, officers can follow source report
 links on Review Night using that run's recorded titles and report codes. The existing private
 run-metadata listener supplies them; newer input/history metadata cannot relabel
 an older displayed result. Missing titles fall back to codes and missing metadata
-omits the list. Public readers retain warning text without private source links.
+omits the list. Public readers see neither warnings nor private source links.
 Acceptance checks replacement/loading, stale history, fallback labels, public
 visibility, keyboard link focus and narrow layout without contacting Warcraft Logs.
 

@@ -519,11 +519,6 @@ test("keeps officer warnings with displayed rows during loading and clears them 
     );
   });
   await resultsPage(page);
-  await page
-    .getByRole("region", { name: "Nights to review" })
-    .getByRole("button")
-    .first()
-    .click();
   const region = page.getByRole("region", { name: "Result warnings" });
   await expect(
     region.getByRole("heading", { name: "Result warnings" }),
@@ -545,13 +540,11 @@ test("keeps officer warnings with displayed rows during loading and clears them 
   await expect(region.getByRole("listitem")).toHaveText(["New source warning"]);
   await seedResult("latest", "Latest Player", nights.latest);
   await publish("latest");
-  await expect(
-    page.getByText("No warnings recorded for this night."),
-  ).toBeVisible();
+  await expect(page.getByText("Latest Player", { exact: true })).toBeVisible();
   await expect(region).toHaveCount(0);
 });
 
-test("public warnings survive a failed load and change on keyboard retry at narrow width", async ({
+test("public warnings stay hidden through a failed load and keyboard retry at narrow width", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 390, height: 844 });
@@ -564,7 +557,10 @@ test("public warnings survive a failed load and change on keyboard retry at narr
   });
   await resultsPage(page, false);
   const region = page.getByRole("region", { name: "Result warnings" });
-  await expect(region).toContainText("Baseline source warning");
+  await expect(region).toHaveCount(0);
+  await expect(
+    page.getByText("Baseline source warning", { exact: true }),
+  ).toHaveCount(0);
   const warning =
     "2026-10-16: unknown characters: Example One, Example Two, Example Three, Example Four";
   await seedResult("staging", "Staging Player", nights.latest, false, 2, [
@@ -574,7 +570,7 @@ test("public warnings survive a failed load and change on keyboard retry at narr
   await expect(page.getByRole("alert")).toContainText(
     "Couldn’t load the latest results",
   );
-  await expect(region).toContainText("Baseline source warning");
+  await expect(region).toHaveCount(0);
   await expect(page.getByText(warning, { exact: true })).toHaveCount(0);
   await expect(
     page.getByText("Baseline Player", { exact: true }),
@@ -589,7 +585,8 @@ test("public warnings survive a failed load and change on keyboard retry at narr
   await page.getByRole("button", { name: "Retry loading results" }).focus();
   await page.keyboard.press("Enter");
   await expect(page.getByText("Staging Player", { exact: true })).toBeVisible();
-  await expect(region.getByRole("listitem")).toHaveText([warning]);
+  await expect(region).toHaveCount(0);
+  await expect(page.getByText(warning, { exact: true })).toHaveCount(0);
   expect(
     await page.evaluate(
       () => document.documentElement.scrollWidth <= window.innerWidth,
@@ -1065,7 +1062,7 @@ test("officer warning sources stay with displayed results instead of newer histo
   await expect(sources).toHaveCount(0);
 });
 
-test("public warnings do not expose private source metadata", async ({
+test("public results hide warnings and private source metadata", async ({
   page,
 }) => {
   await sourceMetadata("baseline", {
@@ -1080,8 +1077,11 @@ test("public warnings do not expose private source metadata", async ({
   });
   await resultsPage(page, false);
   await expect(
+    page.getByRole("region", { name: "Result warnings" }),
+  ).toHaveCount(0);
+  await expect(
     page.getByText("Public result warning", { exact: true }),
-  ).toBeVisible();
+  ).toHaveCount(0);
   await expect(
     page.getByRole("list", { name: "Source reports for this warning" }),
   ).toHaveCount(0);

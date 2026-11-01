@@ -55,7 +55,7 @@ export function ResultsPage({
         )}
       {hasResults && (
         <>
-          {!canManage && (
+          {canManage && (
             <ResultWarnings
               warnings={warningsForNight(results.warnings)}
               sources={[]}

@@ -261,7 +261,7 @@ it("waits for a removed player's pending save before selecting a replacement", a
 });
 
 it.each([true, false])(
-  "shows published warning text on Bench Time for officer=%s and hides empty warnings",
+  "shows Bench Time warnings only to officers (officer=%s) and hides empty warnings",
   (officer) => {
     const c = connection();
     c.officer = officer;
@@ -275,22 +275,20 @@ it.each([true, false])(
     const { rerender } = render(<App connection={c} />);
     if (officer)
       fireEvent.click(screen.getByRole("button", { name: /^Bench Time/ }));
-    if (officer) {
-      fireEvent.click(
-        screen.getAllByRole("button", {
-          name: /^Review (warnings for|other warnings)/,
-        })[0],
-      );
-      fireEvent.change(screen.getByRole("combobox", { name: "Raid night" }), {
-        target: { value: "2026-10-14" },
-      });
-    }
-    const region = screen.getByRole("region", { name: "Result warnings" });
-    expect(region.querySelectorAll("li")).toHaveLength(officer ? 1 : 2);
-    expect(region.textContent).toContain(
-      officer ? "Unknown players: <Example>" : warning,
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe(
+      "Bench Time",
     );
-    expect(region.querySelector("example")).toBeNull();
+    if (officer) {
+      const region = screen.getByRole("region", { name: "Result warnings" });
+      expect(region.querySelectorAll("li")).toHaveLength(2);
+      expect(region.textContent).toContain(warning);
+      expect(region.querySelector("example")).toBeNull();
+    } else {
+      expect(
+        screen.queryByRole("region", { name: "Result warnings" }),
+      ).toBeNull();
+      expect(screen.queryByText(warning)).toBeNull();
+    }
     rerender(
       <App
         connection={{
@@ -673,10 +671,10 @@ it.each([true, false])(
           name: /^Review (warnings for|other warnings)/,
         })[0],
       );
-    expect(
-      screen.getByRole("region", { name: "Result warnings" }),
-    ).toBeTruthy();
     if (officer) {
+      expect(
+        screen.getByRole("region", { name: "Result warnings" }),
+      ).toBeTruthy();
       const source = screen.getByRole("link", {
         name: "Example source report",
       });
@@ -687,16 +685,20 @@ it.each([true, false])(
       expect(
         screen.getByRole("list", { name: "Source reports for this warning" }),
       ).toBeTruthy();
-    } else
+    } else {
+      expect(
+        screen.queryByRole("region", { name: "Result warnings" }),
+      ).toBeNull();
       expect(
         screen.queryByRole("link", { name: "Example source report" }),
       ).toBeNull();
+    }
     expect(screen.queryByRole("link", { name: "Unrelated report" })).toBeNull();
     rerender(<App connection={{ ...c, resultSources: [] }} />);
     expect(
       screen.queryByRole("list", { name: "Source reports for this warning" }),
     ).toBeNull();
-    expect(screen.getByText("Recorded warning")).toBeTruthy();
+    expect(Boolean(screen.queryByText("Recorded warning"))).toBe(officer);
   },
 );
 
