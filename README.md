@@ -1,8 +1,11 @@
 # Quartz Pebble
 
-Pebble helps our World of Warcraft raid team keep track of bench time. It uses
-Warcraft Logs reports to work out who played, who sat out, and how time on the
-bench is shared across the team.
+This is a small bot to help our team with tracking bench time. It uses a list of Warcraft Logs reports to figure out who
+is present when we're fighting mythic bosses, computes time spent on the bench vs. being absent, and lets officers make
+tweaks to the results as necessary.
+
+ChatGPT and Claude generated 98%+ of the code under my careful guidance. I've reviewed all of it and tested it
+extensively since TWW S2.
 
 ## What can I see?
 
