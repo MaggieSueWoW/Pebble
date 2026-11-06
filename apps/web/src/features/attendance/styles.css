@@ -92,23 +92,25 @@
     text-align: center;
   }
   .attendance-status {
+    background: color-mix(
+      in srgb,
+      var(--attendance-status-color, transparent) 28%,
+      transparent
+    );
+    color: var(--attendance-status-color, inherit);
     font-weight: var(--weight-strong);
   }
   .attendance-status[data-status="P"] {
-    background: var(--color-accent-soft);
-    color: var(--color-accent);
+    --attendance-status-color: var(--color-accent);
   }
   .attendance-status[data-status="B"] {
-    background: var(--color-purple-soft);
-    color: var(--color-purple);
+    --attendance-status-color: var(--color-purple);
   }
   .attendance-status[data-status="PB"] {
-    background: var(--color-warning-soft);
-    color: var(--color-warning);
+    --attendance-status-color: var(--color-warning);
   }
   .attendance-status[data-status$="O"] {
-    background: var(--color-danger-soft);
-    color: var(--color-danger);
+    --attendance-status-color: var(--color-danger);
   }
   .attendance-models {
     display: grid;
