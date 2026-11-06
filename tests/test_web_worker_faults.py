@@ -30,6 +30,7 @@ config = fixtures.config
 emulator = fixtures.emulator
 
 OUTPUT = {
+    "attendanceByPlayer": {},
     "players": [{"id": "test-player", "name": "Test"}],
     "nights": [],
     "weeks": [],

@@ -3,6 +3,7 @@ import {
   CircleAlert,
   Sparkles,
   ClipboardCheck,
+  CalendarCheck,
   FileText,
   SlidersHorizontal,
   BarChart3,
@@ -89,6 +90,15 @@ export function Sidebar({
             { id: "review", name: "Review Night", icon: ClipboardCheck },
             { id: "overrides", name: "Overrides", icon: SlidersHorizontal },
             { id: "results", name: "Bench Time", icon: BarChart3 },
+            ...(connection?.officer
+              ? [
+                  {
+                    id: "attendance" as const,
+                    name: "Attendance",
+                    icon: CalendarCheck,
+                  },
+                ]
+              : []),
             { id: "about", name: "About", icon: Info },
             ...(connection?.officer
               ? [

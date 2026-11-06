@@ -17,6 +17,7 @@ class PlayerAttendance:
     total_bench: float
     total_possible: float
     week_status: Dict[str, set[str]]
+    night_status: dict[str, str]
     attendance_probability: float | None
 
     @property
@@ -51,6 +52,29 @@ def _has_out_minutes(doc: dict | None) -> bool:
         if minutes > 0:
             return True
     return False
+
+
+def _night_letters(
+    night: NightMeta, doc: dict | None, played: float, bench: float
+) -> set[str]:
+    if doc is None:
+        return {"O"} if night.total_minutes > 0 else set()
+
+    letters = set()
+    if played > 0:
+        letters.add("P")
+    if bench > 0:
+        letters.add("B")
+    if _has_out_minutes(doc) or any(
+        getattr(night, half).minutes > 0 and not doc.get(f"avail_{half}")
+        for half in ("pre", "post")
+    ):
+        letters.add("O")
+    return letters
+
+
+def _status_text(letters: set[str]) -> str:
+    return "".join(letter for letter in STATUS_ORDER if letter in letters)
 
 
 def _normalize_minutes(minutes: float) -> float | int:
@@ -143,6 +167,7 @@ def _collect_attendance_stats(db) -> Tuple[List[str], List[PlayerAttendance]]:
         total_possible = 0.0
 
         week_status: Dict[str, set[str]] = {week: set() for week in week_ids}
+        night_status: dict[str, str] = {}
 
         for night_id in membership_nights:
             night_meta = night_meta_by_id.get(night_id)
@@ -162,28 +187,10 @@ def _collect_attendance_stats(db) -> Tuple[List[str], List[PlayerAttendance]]:
             total_possible += night_meta.total_minutes
 
             week = week_id_from_night_id(night_id)
-            letters = week_status.setdefault(week, set())
-
-            if bench_doc is None:
-                if night_meta.total_minutes > 0:
-                    letters.add("O")
-                continue
-
-            if played_total > 0:
-                letters.add("P")
-            if bench_total > 0:
-                letters.add("B")
-
-            if _has_out_minutes(bench_doc):
-                letters.add("O")
-            else:
-                for half in ("pre", "post"):
-                    half_minutes = getattr(night_meta, half).minutes
-                    if half_minutes <= 0:
-                        continue
-                    if not bool(bench_doc.get(f"avail_{half}", False)):
-                        letters.add("O")
-                        break
+            letters = _night_letters(night_meta, bench_doc, played_total, bench_total)
+            week_status[week].update(letters)
+            if letters:
+                night_status[night_id] = _status_text(letters)
 
         available = total_played + total_bench
         attendance_probability = (
@@ -197,6 +204,7 @@ def _collect_attendance_stats(db) -> Tuple[List[str], List[PlayerAttendance]]:
                 total_bench=total_bench,
                 total_possible=total_possible,
                 week_status=week_status,
+                night_status=night_status,
                 attendance_probability=attendance_probability,
             )
         )
@@ -231,10 +239,7 @@ def build_attendance_rows(db) -> List[List]:
             _normalize_minutes(player.total_possible),
         ]
 
-        for week in week_ids:
-            letters = player.week_status.get(week, set())
-            status_str = "".join(letter for letter in STATUS_ORDER if letter in letters)
-            row.append(status_str)
+        row.extend(_status_text(player.week_status[week]) for week in week_ids)
 
         rows.append(row)
 
@@ -242,11 +247,18 @@ def build_attendance_rows(db) -> List[List]:
 
 
 def build_attendance_projection(db) -> dict[str, dict]:
-    """Serialize eligible attendance statistics for immutable public player rows.
+    """Return the public season and weekly attendance projection."""
+    public, _ = build_attendance_projections(db)
+    return public
+
+
+def build_attendance_projections(
+    db,
+) -> tuple[dict[str, dict], dict[str, dict[str, str]]]:
+    """Serialize attendance for one immutable run, keyed by eligible main.
 
     Minute values use the same normalization as the Sheets presentation. Rates
     retain the existing numeric ratio, or None when there is no possible time.
-    Only aggregate values and ordered weekly status letters are exposed.
 
     Parameters
     ----------
@@ -255,12 +267,12 @@ def build_attendance_projection(db) -> dict[str, dict]:
 
     Returns
     -------
-    dict[str, dict]
-        Eligible mains mapped to normalized minute totals, a raw attendance ratio
-        (None without possible time), and ordered Tuesday-week P/B/O statuses.
+    tuple[dict[str, dict], dict[str, dict[str, str]]]
+        Public minute totals, rates and weekly statuses, followed by private
+        nightly P/B/O statuses. Nights without a marking are omitted.
     """
     week_ids, players = _collect_attendance_stats(db)
-    return {
+    public = {
         player.main: {
             "played": _normalize_minutes(player.total_played),
             "bench": _normalize_minutes(player.total_bench),
@@ -269,14 +281,11 @@ def build_attendance_projection(db) -> dict[str, dict]:
             "weeks": [
                 {
                     "week": week,
-                    "status": "".join(
-                        letter
-                        for letter in STATUS_ORDER
-                        if letter in player.week_status.get(week, set())
-                    ),
+                    "status": _status_text(player.week_status[week]),
                 }
                 for week in week_ids
             ],
         }
         for player in players
     }
+    return public, {player.main: player.night_status for player in players}

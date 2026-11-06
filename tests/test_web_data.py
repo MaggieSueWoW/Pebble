@@ -336,6 +336,7 @@ def test_oversized_publication_never_creates_staging_or_changes_pointer(db):
     ref = worker.season.collection("runs").document("oversized")
     ref.set({"status": "running"})
     output = {
+        "attendanceByPlayer": {},
         "players": [],
         "nights": [
             {

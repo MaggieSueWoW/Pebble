@@ -6,6 +6,7 @@ const titles: Record<Page, string> = {
   review: "Review Night",
   overrides: "Overrides",
   results: "Bench Time",
+  attendance: "Attendance",
   roster: "Roster",
   settings: "Settings",
   officers: "Officers",

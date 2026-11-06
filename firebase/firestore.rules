@@ -135,6 +135,7 @@ service cloud.firestore {
         match /players/{id} { allow read: if officer() || complete(season, run); }
         match /nights/{night} { allow read: if officer() || complete(season, run); }
         match /weeks/{week} { allow read: if officer() || complete(season, run); }
+        match /officer/attendance { allow get: if officer() && complete(season, run); }
       }
     }
   }

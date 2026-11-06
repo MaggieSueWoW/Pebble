@@ -165,8 +165,9 @@ reviewed dry-run inventory and normal backup/recovery procedures.
 3. Pause only the designated **web** worker during an approved cleanup window,
    then re-read the public pointer and statuses and subtract protected IDs again.
    Do not touch `pebble-loop`, shared Mongo/Redis configuration or legacy data.
-4. Delete each approved result's players/nights/weeks subcollections before its
-   root; deleting a Firestore parent does not delete children. Delete the matching
+4. Delete each approved result's `players`, `nights`, `weeks`, and `officer`
+   subcollections before its root. Firestore leaves child documents behind when
+   deleting a parent. Delete the matching
    old terminal run and web Mongo input snapshot by the reviewed run ID. Limit
    batches to the documented budgets. Never clear a whole database or cache.
 5. Verify the protected complete result and public pointer still match, record

@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
-import { doc, setDoc, Timestamp } from "firebase/firestore";
+import { doc, getDoc, setDoc, Timestamp } from "firebase/firestore";
 import { setupEmulator } from "./support/emulator";
+import { signIn } from "./support/officer";
 const emulator = setupEmulator();
 const season = "seasons/test-reports";
 const attendance = {
@@ -67,7 +68,7 @@ test.beforeEach(async () => {
         weeks: [],
       },
     });
-    await setDoc(doc(db, `${root}/nights/2026-10-15`), {
+    const night = {
       night: "2026-10-15",
       duration: 120,
       reports: 1,
@@ -79,6 +80,18 @@ test.beforeEach(async () => {
         notes: "",
       },
       players: [row("eligible", "Example")],
+    };
+    await setDoc(doc(db, `${root}/nights/2026-10-15`), night);
+    await setDoc(doc(db, `${root}/nights/2026-10-13`), {
+      ...night,
+      night: "2026-10-13",
+    });
+    await setDoc(doc(db, `${root}/officer/attendance`), {
+      byPlayer: {
+        absent: { "2026-10-13": "O", "2026-10-15": "O" },
+        eligible: { "2026-10-15": "PBO" },
+        zero: {},
+      },
     });
     await setDoc(doc(db, `${root}/weeks/2026-10-13`), {
       players: [
@@ -210,4 +223,202 @@ test("makes fully absent published attendance reachable outside the fairness ran
     .getByLabel("Result period", { exact: true })
     .selectOption("2026-10-15");
   await expect(additional).toHaveCount(0);
+});
+
+test("officers see nightly attendance and can model a smaller roster", async ({
+  page,
+}) => {
+  const uid = await signIn(page);
+  const attendanceLink = page.getByRole("button", {
+    name: "Attendance",
+    exact: true,
+  });
+  await expect(attendanceLink).toHaveCount(0);
+  await emulator.admin(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), `officers/${uid}`), { enabled: true });
+  });
+  await attendanceLink.click();
+  const table = page.getByRole("table", {
+    name: "Season attendance by player",
+  });
+  await expect(table.getByRole("columnheader")).toHaveText([
+    "Player",
+    "Attendance %",
+    "Played",
+    "Bench",
+    "Total possible",
+    "2026-10-13",
+    "2026-10-15",
+  ]);
+  await expect(table.getByRole("rowheader")).toHaveText([
+    "Absent",
+    "Example",
+    "Zero",
+  ]);
+  const players = table.getByRole("rowheader");
+  const header = (name: string) =>
+    table.getByRole("columnheader", { name, exact: true });
+  await expect(header("Player")).toHaveAttribute("aria-sort", "ascending");
+  await header("Player").getByRole("button").click();
+  await expect(players).toHaveText(["Zero", "Example", "Absent"]);
+  for (const [name, ascending, descending] of [
+    [
+      "Attendance %",
+      ["Absent", "Example", "Zero"],
+      ["Example", "Absent", "Zero"],
+    ],
+    ["Played", ["Absent", "Zero", "Example"], ["Example", "Absent", "Zero"]],
+    ["Bench", ["Absent", "Zero", "Example"], ["Example", "Absent", "Zero"]],
+    [
+      "Total possible",
+      ["Zero", "Absent", "Example"],
+      ["Absent", "Example", "Zero"],
+    ],
+  ] as const) {
+    await header(name).getByRole("button").click();
+    await expect(header(name)).toHaveAttribute("aria-sort", "ascending");
+    await expect(players).toHaveText(ascending);
+    await header(name).getByRole("button").click();
+    await expect(header(name)).toHaveAttribute("aria-sort", "descending");
+    await expect(players).toHaveText(descending);
+  }
+  const example = table.getByRole("row").filter({ hasText: "Example" });
+  await expect(example.getByText("Example", { exact: true })).toHaveCSS(
+    "color",
+    "rgb(185, 199, 216)",
+  );
+  const legend = page.getByRole("list", { name: "Nightly attendance legend" });
+  await expect(legend.getByRole("listitem")).toHaveCount(4);
+  await expect(example.getByText("50.0%", { exact: true })).toBeVisible();
+  await expect(example.getByText("1h 00m", { exact: true })).toBeVisible();
+  await expect(example.getByText("20m", { exact: true })).toBeVisible();
+  await expect(example.getByText("2h 40m", { exact: true })).toBeVisible();
+  await expect(example.getByTitle("No applicable status")).toBeVisible();
+  await expect(example.getByText("PBO", { exact: true })).toBeVisible();
+  await expect(
+    table
+      .getByRole("row")
+      .filter({ hasText: "Absent" })
+      .getByText("O", { exact: true }),
+  ).toHaveCount(2);
+  const current = page.getByRole("table", {
+    name: "Current roster probabilities",
+  });
+  await expect(current.getByRole("row").nth(1).getByRole("cell")).toHaveText([
+    "97.8%",
+    "50.0%",
+    "-47.8 pp",
+  ]);
+  const scenario = page.getByRole("table", {
+    name: "What-if roster probabilities",
+  });
+  await expect(
+    scenario.getByRole("rowheader", { name: "20", exact: true }),
+  ).toBeVisible();
+  await page.getByRole("spinbutton", { name: "Roster size" }).fill("1");
+  await expect(scenario.getByRole("row").nth(1).getByRole("cell")).toHaveText([
+    "85.0%",
+    "50.0%",
+    "-35.0 pp",
+  ]);
+  await page.getByLabel("When shrinking, drop").selectOption("highest");
+  await expect(scenario.getByRole("row").nth(1).getByRole("cell")).toHaveText([
+    "85.0%",
+    "0.0%",
+    "-85.0 pp",
+  ]);
+  await page.getByRole("spinbutton", { name: "Roster size" }).fill("3");
+  const newPlayer = page.getByRole("combobox", {
+    name: "New player attendance",
+  });
+  await expect(newPlayer.getByRole("option")).toHaveText([
+    "Average",
+    "50%",
+    "55%",
+    "60%",
+    "65%",
+    "70%",
+    "75%",
+    "80%",
+    "85%",
+    "90%",
+    "95%",
+    "100%",
+  ]);
+  const chanceOfTwo = scenario.getByRole("row").nth(2).getByRole("cell").nth(1);
+  await expect(chanceOfTwo).toHaveText("50.0%");
+  await newPlayer.selectOption("average");
+  await expect(chanceOfTwo).toHaveText("12.5%");
+  await newPlayer.selectOption("50");
+  await expect(chanceOfTwo).toHaveText("25.0%");
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth,
+    ),
+  ).toBe(true);
+  await emulator.admin(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), `officers/${uid}`), { enabled: false });
+  });
+  await expect(table).toHaveCount(0);
+  await expect(attendanceLink).toHaveCount(0);
+});
+
+test("keeps summary columns pinned while scrolling across 14 raid nights on desktop", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const uid = await signIn(page);
+  await emulator.admin(async (ctx) => {
+    const db = ctx.firestore();
+    const nights = `${season}/results/published/nights`;
+    const sample = (await getDoc(doc(db, `${nights}/2026-10-15`))).data();
+    await Promise.all([
+      setDoc(doc(db, `officers/${uid}`), { enabled: true }),
+      ...Array.from({ length: 12 }, (_, index) => {
+        const night = `2026-10-${16 + index}`;
+        return setDoc(doc(db, `${nights}/${night}`), { ...sample, night });
+      }),
+    ]);
+  });
+  await page.reload();
+  await page.getByRole("button", { name: "Attendance", exact: true }).click();
+  const grid = page.getByRole("region", { name: "Attendance grid" });
+  await expect(grid.getByRole("columnheader")).toHaveCount(19);
+
+  const measureScroll = () =>
+    grid.evaluate((region) => {
+      region.scrollLeft = 0;
+      const headers = [...region.querySelectorAll("thead th")];
+      const firstRow = [...region.querySelectorAll("tbody tr:first-child > *")];
+      const cells = [...headers.slice(0, 5), ...firstRow.slice(0, 5)];
+      const before = cells.map((cell) => cell.getBoundingClientRect().left);
+      region.scrollLeft = region.scrollWidth;
+      return {
+        distance: region.scrollLeft,
+        offsets: cells.map(
+          (cell, index) => cell.getBoundingClientRect().left - before[index],
+        ),
+        latestDateVisible:
+          headers.at(-1)!.getBoundingClientRect().right <=
+          region.getBoundingClientRect().right + 1,
+      };
+    });
+  const desktop = await measureScroll();
+  expect(desktop.distance).toBeGreaterThan(0);
+  expect(desktop.latestDateVisible).toBe(true);
+  for (const offset of desktop.offsets)
+    expect(Math.abs(offset)).toBeLessThan(1);
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  const mobile = await measureScroll();
+  expect(mobile.latestDateVisible).toBe(true);
+  expect(Math.abs(mobile.offsets[0])).toBeLessThan(1);
+  expect(mobile.offsets[1]).toBeLessThan(-1);
+  await expect(
+    page.getByRole("link", { name: "attendance probability guide" }),
+  ).toHaveAttribute(
+    "href",
+    "https://github.com/MaggieSueWoW/Pebble/blob/main/Attendance_Probability.md",
+  );
 });

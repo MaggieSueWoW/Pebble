@@ -26,7 +26,7 @@ from redis.exceptions import AuthenticationError, AuthorizationError
 from redis.exceptions import ConnectionError as RedisConnectionError
 from redis.exceptions import TimeoutError as RedisTimeoutError
 
-from .attendance import build_attendance_projection
+from .attendance import build_attendance_projections
 from .ingest import WOW_CLASS_COLORS, persist_report_fights
 from .mongo_client import ensure_indexes
 from .pipeline import compute_results
@@ -352,10 +352,12 @@ def calculate_snapshot(
         for p in inputs["players"].values()
         if p.active
     ]
-    attendance = build_attendance_projection(db)
+    attendance, night_statuses = build_attendance_projections(db)
+    attendance_by_player = {}
     for player in totals:
         if player["name"] in attendance:
             player["attendance"] = attendance[player["name"]]
+            attendance_by_player[player["id"]] = night_statuses[player["name"]]
     rankings = {
         row["main"]: {
             "rank": row["rank"],
@@ -444,6 +446,7 @@ def calculate_snapshot(
         "reportCount": len(enabled),
         "reportSummaries": summaries,
         "nightDiagnostics": diagnostics,
+        "attendanceByPlayer": attendance_by_player,
         "warnings": warnings,
     }
 
@@ -651,6 +654,12 @@ class Worker:
             (root.collection("weeks").document(week), {"players": rows})
             for week, rows in weeks.items()
         ]
+        writes.append(
+            (
+                root.collection("officer").document("attendance"),
+                {"byPlayer": output["attendanceByPlayer"]},
+            )
+        )
         # Validate every document before creating staging data or uploading a batch.
         try:
             publication_batches(

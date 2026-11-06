@@ -5,6 +5,7 @@ export type Page =
   | "review"
   | "overrides"
   | "results"
+  | "attendance"
   | "roster"
   | "settings"
   | "about"

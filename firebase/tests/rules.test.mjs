@@ -71,6 +71,23 @@ test('public readers can query completed results but never staging output or pri
   await assertFails(getDocs(collection(db, `${season}/results/staging/players`)));
   for (const path of [`${season}/players/p1`, `${season}/runs/private`, 'bot/status']) await assertFails(getDoc(doc(db, path)));
 });
+test('nightly attendance can only be read by officers after publication', async () => {
+  const path = (id) => `${season}/results/${id}/officer/attendance`;
+  await env.withSecurityRulesDisabled(async ctx => {
+    for (const [id, complete] of [['ready', true], ['staging', false]]) {
+      const db = ctx.firestore();
+      await setDoc(doc(db, `${season}/results/${id}`), { complete });
+      await setDoc(doc(db, path(id)), { byPlayer: { p1: { '2026-10-15': 'PO' } } });
+    }
+  });
+  const officer = env.authenticatedContext('officer').firestore();
+  await assertSucceeds(getDocFromServer(doc(officer, path('ready'))));
+  await assertFails(getDocFromServer(doc(officer, path('staging'))));
+  await assertFails(setDoc(doc(officer, path('ready')), { byPlayer: {} }));
+  for (const reader of [env.authenticatedContext('member'), env.unauthenticatedContext()]) {
+    await assertFails(getDocFromServer(doc(reader.firestore(), path('ready'))));
+  }
+});
 test('availability has typed bounded minutes and a valid player identity', async () => {
   const db = env.authenticatedContext('officer').firestore();
   const base = { nightId: '2026-10-15', playerId: 'p1', pre: { mode: 'automatic' }, post: { mode: 'partial', minutes: 45 }, ...meta() };

@@ -282,6 +282,13 @@ def test_real_firestore_run_publish_failure_and_revocation(
         p.to_dict()["attendance"] == projected[p.to_dict()["name"]]
         for p in published_players
     )
+    root = season.collection("results").document("first")
+    assert root.collection("officer").document("attendance").get().to_dict() == {
+        "byPlayer": {
+            "maggie": {"2026-10-14": "P", "2026-10-15": "P"},
+            "solace": {"2026-10-14": "O", "2026-10-15": "B"},
+        }
+    }
     assert not worker.process_next(), "completed requests must not run twice"
 
     def interrupted(run_ref, _output):
@@ -772,6 +779,7 @@ def test_attendance_payload_is_preflighted_before_publication(config, emulator):
     run = season.collection("runs").document("oversized-attendance")
     run.set({"status": "running"})
     output = {
+        "attendanceByPlayer": {},
         "players": [
             {
                 "id": "example",

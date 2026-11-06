@@ -5,7 +5,11 @@ import json
 import mongomock
 import pytest
 
-from pebble.attendance import build_attendance_projection, build_attendance_rows
+from pebble.attendance import (
+    build_attendance_projection,
+    build_attendance_projections,
+    build_attendance_rows,
+)
 
 
 def test_projection_matches_sheets_minutes_rate_rounding_and_tuesday_weeks():
@@ -58,6 +62,15 @@ def test_projection_matches_sheets_minutes_rate_rounding_and_tuesday_weeks():
     assert "PRIVATE" not in json.dumps(value)
     assert set(value) == {"played", "bench", "possible", "rate", "weeks"}
 
+    db.night_qa.insert_one(
+        {"night_id": "2026-10-15", "mythic_pre_min": 30, "mythic_post_min": 0}
+    )
+    public, nightly = build_attendance_projections(db)
+    assert public["Example"]["weeks"][-1] == {"week": "2026-10-13", "status": "PO"}
+    assert nightly == {
+        "Example": {"2026-10-12": "PBO", "2026-10-13": "PO", "2026-10-15": "O"}
+    }
+
 
 def test_projection_preserves_existing_membership_and_active_eligibility():
     db = mongomock.MongoClient().db
@@ -77,7 +90,7 @@ def test_projection_preserves_existing_membership_and_active_eligibility():
             {"main": "Inactive", "active": False},
         ]
     )
-    values = build_attendance_projection(db)
+    values, nightly = build_attendance_projections(db)
     assert (
         set(values)
         == {row[0] for row in build_attendance_rows(db)[1:]}
@@ -89,6 +102,8 @@ def test_projection_preserves_existing_membership_and_active_eligibility():
         {"week": "2026-10-06", "status": ""},
         {"week": "2026-10-13", "status": "O"},
     ]
+    assert nightly["Joined"] == {"2026-10-13": "O"}
+    assert set(nightly) == set(values)
 
 
 @pytest.mark.parametrize("observed", [False, True])

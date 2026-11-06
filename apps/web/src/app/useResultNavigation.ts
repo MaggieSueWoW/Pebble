@@ -11,6 +11,7 @@ const pages: Page[] = [
   "review",
   "overrides",
   "results",
+  "attendance",
   "roster",
   "settings",
   "officers",

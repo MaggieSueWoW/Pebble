@@ -27,6 +27,7 @@ import {
 } from "../features/overrides/OverridesPage";
 import { ReportsPage } from "../features/reports/ReportsPage";
 import { ResultsPage } from "../features/results/ResultsPage";
+import { AttendancePage } from "../features/attendance/AttendancePage";
 import { RosterPage } from "../features/roster/RosterPage";
 import { OfficersPage } from "../features/officers/OfficersPage";
 import { SettingsPage } from "../features/settings/SettingsPage";
@@ -104,7 +105,12 @@ export function Workspace({
     () => unsaved || Boolean(connection?.busy),
     (action) => guard(action),
   );
-  const page = navigation.page;
+  const page =
+    navigation.page === "attendance" && !connection?.officer
+      ? connection
+        ? "results"
+        : "reports"
+      : navigation.page;
   const navigate = navigation.navigate;
   const [overrideSort, setOverrideSort] = useState<OverrideSort>({
     key: "name",
@@ -780,12 +786,17 @@ export function Workspace({
       }
     >
       {canManage &&
-        !["roster", "settings", "officers", "about"].includes(page) && (
-          <NightFlow page={page} go={go} />
-        )}
-      {!["results", "overrides", "review", "officers", "about"].includes(
-        page,
-      ) && (
+        !["roster", "settings", "officers", "about", "attendance"].includes(
+          page,
+        ) && <NightFlow page={page} go={go} />}
+      {![
+        "results",
+        "overrides",
+        "review",
+        "officers",
+        "about",
+        "attendance",
+      ].includes(page) && (
         <div
           className={`reports-status toolbar ${active || connection?.submitting || waitingForResults ? "is-running" : ""} ${(lastFailed || resultLoadFailed) && !active && !connection?.submitting ? "has-error" : ""}`}
         >
@@ -800,6 +811,9 @@ export function Workspace({
       )}
 
       {page === "about" && <AboutPage />}
+      {page === "attendance" && connection?.officer && (
+        <AttendancePage key={results.signature} results={results} />
+      )}
       {page === "reports" && (
         <ReportsPage
           reports={inputs.reports}
@@ -931,7 +945,7 @@ export function Workspace({
         />
       )}
 
-      {canManage && page !== "officers" && page !== "about" && (
+      {canManage && !["officers", "about", "attendance"].includes(page) && (
         <RunHistory history={history} connected={Boolean(connection)} />
       )}
     </AppShell>
