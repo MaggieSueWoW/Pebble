@@ -41,6 +41,10 @@ def compute_results(
         if r.get("main") and r.get("active", True) is not False
     ]
     resolver = NameResolver(active_mains, roster_map)
+    # A player can be known to the roster without being eligible for bench totals.
+    qa_resolver = NameResolver(
+        [r["main"] for r in roster_docs if r.get("main")], roster_map
+    )
 
     overrides_by_night = overrides_by_night or {}
     overrides_unmatched = overrides_unmatched or {}
@@ -102,8 +106,6 @@ def compute_results(
             continue
         fights_m = [f for f in fights_all if f.get("is_mythic")]
 
-        night_unmatched_start = set(resolver.not_on_roster)
-
         reports = list(db["reports"].find({"night_id": night}, {"_id": 0}))
         report_codes = sorted(r.get("code") for r in reports)
         report_start_ms = min(r.get("start_ms") for r in reports)
@@ -160,9 +162,11 @@ def compute_results(
             end_extension_ms = max(0, mythic_override_end_ms - auto_env_end)
         env = (env_start, env_end)
 
+        qa_resolver.not_on_roster.clear()
         mains_by_report: dict[str, set[str]] = {code: set() for code in report_codes}
         for f in fights_all:
-            if int(f.get("encounter_id", 0)) <= 0:
+            is_boss = int(f.get("encounter_id", 0)) > 0
+            if not is_boss and not f.get("is_mythic"):
                 continue
             code = f.get("report_code")
             if code not in mains_by_report:
@@ -171,11 +175,16 @@ def compute_results(
                 name = p.get("name")
                 if not name:
                     continue
-                main = resolver.resolve(name)
-                if not main:
+                main = qa_resolver.resolve(name)
+                if not main or not is_boss:
                     continue
                 mains_by_report[code].add(main)
         report_mains = [len(mains_by_report[c]) for c in report_codes]
+        unmatched = qa_resolver.not_on_roster.copy()
+        for name in overrides_unmatched.get(night, ()):
+            if not qa_resolver.resolve(name):
+                unmatched.add(name)
+        not_on_roster = sorted(unmatched)
         override_pair = next(
             (
                 (r.get("break_override_start_ms"), r.get("break_override_end_ms"))
@@ -350,19 +359,6 @@ def compute_results(
                         continue
                     bucket.add(main)
 
-        mythic_mains: set[str] = set()
-        for f in fights_m:
-            for p in f.get("participants", []) or []:
-                name = p.get("name")
-                if not name:
-                    continue
-                main = resolver.resolve(name)
-                if not main:
-                    continue
-                mythic_mains.add(main)
-        new_unmatched = set(resolver.not_on_roster) - night_unmatched_start
-        override_unmatched = overrides_unmatched.get(night, set())
-        not_on_roster = sorted(new_unmatched | set(override_unmatched))
         not_on_roster_str = ", ".join(not_on_roster)
 
         night_qa_rows.append(

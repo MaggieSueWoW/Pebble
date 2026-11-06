@@ -136,6 +136,7 @@ def test_run_pipeline_includes_not_on_roster(monkeypatch):
             "participants": [
                 {"name": "Alice-Illidan"},
                 {"name": "Bobalt-Illidan"},
+                {"name": "Retiredalt-Illidan"},
             ],
             "encounter_id": 1,
             "is_mythic": True,
@@ -143,7 +144,12 @@ def test_run_pipeline_includes_not_on_roster(monkeypatch):
         }
     )
 
-    db["team_roster"].insert_one({"main": "Alice-Illidan", "active": True})
+    db["team_roster"].insert_many(
+        [
+            {"main": "Alice-Illidan", "active": True},
+            {"main": "Retired-Illidan", "active": False},
+        ]
+    )
 
     captured = {}
 
@@ -152,12 +158,22 @@ def test_run_pipeline_includes_not_on_roster(monkeypatch):
         return []
 
     settings = _base_settings()
-    roster_rows = [["Alt", "Main"], ["Bobalt-Illidan", "Bob-Illidan"]]
+    roster_rows = [
+        ["Alt", "Main"],
+        ["Bobalt-Illidan", "Bob-Illidan"],
+        ["Retiredalt-Illidan", "Retired-Illidan"],
+    ]
+    overrides = [
+        ["Night", "Main", "Avail Pre?", "Avail Post?"],
+        [night_id, "Retiredalt-Illidan", "yes", "yes"],
+    ]
 
     monkeypatch.setattr(
         "pebble.cli.build_replace_values_requests", fake_build_requests
     )
-    _setup_pipeline(monkeypatch, db, settings, _sheet_map(settings, roster_rows, []))
+    _setup_pipeline(
+        monkeypatch, db, settings, _sheet_map(settings, roster_rows, overrides)
+    )
 
     cli.run_pipeline(settings, _fake_log())
 
@@ -168,6 +184,7 @@ def test_run_pipeline_includes_not_on_roster(monkeypatch):
     idx = header.index("Not on Roster")
     data_row = captured[settings.sheets.tabs.night_qa][1]
     assert data_row[idx] == "Bob-Illidan"
+    assert db["bench_night_totals"].distinct("main") == ["Alice"]
     ext_idx = header.index("Mythic Post Extension (min)")
     assert data_row[ext_idx] == "0.00"
 

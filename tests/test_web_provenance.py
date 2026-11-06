@@ -4,7 +4,6 @@ import json
 from types import SimpleNamespace
 
 import mongomock
-import pytest
 import test_web_worker as fixtures
 from google.cloud import firestore
 
@@ -264,3 +263,51 @@ def test_missing_identity_actions_keep_exact_realms_and_ignore_only_the_chosen_c
     mapped = calculate_snapshot(config, db, raw)
     assert mapped["warnings"] == []
     assert mapped["nightDiagnostics"]["2026-10-15"]["missingPlayers"] == []
+
+
+def test_deactivating_a_player_preserves_roster_matches(config, wcl, monkeypatch):
+    from pebble.web_worker import WCLClient
+
+    fetch = WCLClient.fetch_report_bundle
+    main_report, alt_report = fixtures.CODES
+
+    def bundle(client, code):
+        value = fetch(client, code)
+        value["region"] = {"compactName": "US"}
+        actors = value["masterData"]["actors"]
+        if code == alt_report:
+            actors[0]["name"] = "KnownAlt"
+        else:
+            actors.append(
+                {
+                    "id": 2,
+                    "name": "Unmapped",
+                    "server": "TestRealm",
+                    "type": "Player",
+                    "subType": "Mage",
+                }
+            )
+            value["fights"][0]["friendlyPlayers"].append(2)
+        return value
+
+    monkeypatch.setattr(WCLClient, "fetch_report_bundle", bundle)
+    raw = fixtures.snapshot()
+    raw["characters"]["known-alt"] = fixtures.meta(
+        name="KnownAlt", realm="TestRealm", region="us", playerId="maggie"
+    )
+    db = mongomock.MongoClient().working
+    before = calculate_snapshot(config, db, raw)
+    assert before["nightDiagnostics"]["2026-10-15"]["missingPlayers"] == [
+        {"name": "Unmapped", "realm": "TestRealm", "region": "us", "className": "Mage"}
+    ]
+    assert before["nightDiagnostics"]["2026-10-14"]["missingPlayers"] == []
+
+    raw["players"]["maggie"]["active"] = False
+    after = calculate_snapshot(config, db, raw)
+
+    assert after["warnings"] == before["warnings"]
+    assert after["nightDiagnostics"] == before["nightDiagnostics"]
+    assert after["reportSummaries"][main_report]["warningIndexes"] == [0]
+    assert not after["reportSummaries"][alt_report].get("warningIndexes")
+    assert {p["id"] for p in after["players"]} == {"solace"}
+    assert all({p["id"] for p in n["players"]} == {"solace"} for n in after["nights"])
