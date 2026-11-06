@@ -89,13 +89,15 @@ export function RosterPanel({
                   <input
                     type="checkbox"
                     aria-label="Active"
+                    aria-describedby="roster-active-help"
                     checked={editor.value.active}
                     onChange={(e) => field("active", e.target.checked)}
                   />{" "}
                   Active
                 </span>
-                <span className="muted small">
-                  Inactive players stay in the roster.
+                <span className="muted small" id="roster-active-help">
+                  Inactive players stay in Roster. After the next run, they’re
+                  hidden from Attendance and Bench Time, including past nights.
                 </span>
               </label>
               <label className="field">
