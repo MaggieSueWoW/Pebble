@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import App from "./App";
+import { Workspace } from "./Workspace";
 import { configured } from "../data/firebase";
 import { useFirestore } from "../data/useFirestore";
 
@@ -22,7 +22,7 @@ function Connected() {
       </main>
     );
   return (
-    <App
+    <Workspace
       key={`${connection.user?.uid || "public"}:${connection.officer}:${connection.accessGeneration}`}
       connection={{
         ...connection,
@@ -35,7 +35,6 @@ function Connected() {
   );
 }
 export default function Root() {
-  if (new URLSearchParams(location.search).get("demo") === "1") return <App />;
   if (configured) return <Connected />;
   return (
     <main className="setup-screen">
@@ -45,9 +44,6 @@ export default function Root() {
         Set the Firebase web configuration in <code>apps/web/.env.local</code>{" "}
         and restart the dev server. See the web app README for setup.
       </p>
-      <a className="button secondary" href="?demo=1">
-        Open sample prototype
-      </a>
     </main>
   );
 }

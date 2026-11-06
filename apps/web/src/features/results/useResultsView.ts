@@ -21,14 +21,12 @@ export function useResultsView({
   players,
   navigation,
   selectionReady,
-  demo,
   notify,
 }: {
   results: Results;
   players: Player[];
   navigation: ReturnType<typeof useResultNavigation>;
   selectionReady: boolean;
-  demo: boolean;
   notify: (text: string, error?: boolean) => void;
 }) {
   const { page, navigate } = navigation;
@@ -121,10 +119,7 @@ export function useResultsView({
   async function copyResultLink() {
     try {
       await navigator.clipboard.writeText(
-        resultLink(
-          { period: visibleResultNight, player: expandedPlayer },
-          demo,
-        ),
+        resultLink({ period: visibleResultNight, player: expandedPlayer }),
       );
       notify("Result link copied.");
     } catch {

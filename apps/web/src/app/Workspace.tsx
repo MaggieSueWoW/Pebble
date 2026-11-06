@@ -2,7 +2,7 @@ import { useMissingPlayerEditor } from "../features/review/useMissingPlayerEdito
 import { NightFlow } from "./NightFlow";
 import { ReviewNightPage } from "../features/review/ReviewNightPage";
 import { Check, CircleAlert, LoaderCircle, Play, X } from "lucide-react";
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { authMessage } from "./authMessages";
 import { adjustmentKey, emptyAdjustment, type Page } from "../shared/model";
 import type { LiveConnection } from "../data/useFirestore";
@@ -15,12 +15,10 @@ import { useAvailabilityEditor } from "../features/overrides/useAvailabilityEdit
 import { useCharacterEditor } from "../features/roster/useCharacterEditor";
 import { useTimingEditor } from "../features/overrides/useTimingEditor";
 
-import { defaultCalculation } from "../features/settings/calculation";
 import { blankTiming } from "../features/overrides/timing";
 import { useCalculationEditor } from "../features/settings/useCalculationEditor";
 import { useRosterEditor } from "../features/roster/useRosterEditor";
 
-import type { DemoSession } from "../demo/useDemoSession";
 import {
   OverridesPage,
   type OverrideSort,
@@ -35,25 +33,14 @@ import { AboutPage } from "../features/about/AboutPage";
 import { useResultsView } from "../features/results/useResultsView";
 import { AppShell } from "./AppShell";
 import { ConnectionNotices } from "./ConnectionNotices";
-import { ConfirmDiscard, Notice } from "../components/Feedback";
+import { ConfirmDiscard } from "../components/Feedback";
 import { RunHistory } from "./RunHistory";
 import { steps } from "./runStages";
 import { Sidebar } from "./Sidebar";
-export function Workspace({
-  connection,
-  demo,
-  renderDemoControls,
-}:
-  | { connection: LiveConnection; demo?: never; renderDemoControls?: never }
-  | {
-      connection?: never;
-      demo: DemoSession;
-      renderDemoControls: (onReset: () => void) => ReactNode;
-    }) {
-  const saved = connection?.saved ?? demo!.saved;
-  const saveInputs = connection?.saveInputs ?? demo!.saveInputs;
+export function Workspace({ connection }: { connection: LiveConnection }) {
+  const { saved, saveInputs, players, nights: knownNights } = connection;
   const { inputs, results, history } = saved;
-  const canManage = !connection || connection.officer;
+  const canManage = connection.officer;
   const [authPending, setAuthPending] = useState(false);
   const authActionPending = useRef(false);
   async function accountAction(action: () => Promise<void>) {
@@ -69,31 +56,26 @@ export function Workspace({
       setAuthPending(false);
     }
   }
-  const players = connection?.players ?? demo!.players;
-  const connected = Boolean(connection);
-  const knownNights = connection?.nights ?? demo!.nights;
   const reports = inputs.reports;
   const nightOptions = useMemo(
     () =>
-      connected
-        ? [
-            ...new Set(
-              [
-                ...knownNights,
-                ...(results.warnings ?? []).flatMap((warning) => {
-                  const date = warning.match(/^(\d{4}-\d{2}-\d{2}):/);
-                  return date ? [date[1]] : [];
-                }),
-                ...reports
-                  .filter((report) => report.fetched)
-                  .map((report) => report.night),
-              ].filter(Boolean),
-            ),
-          ]
-            .sort()
-            .reverse()
-        : knownNights,
-    [connected, knownNights, reports, results.warnings],
+      [
+        ...new Set(
+          [
+            ...knownNights,
+            ...(results.warnings ?? []).flatMap((warning) => {
+              const date = warning.match(/^(\d{4}-\d{2}-\d{2}):/);
+              return date ? [date[1]] : [];
+            }),
+            ...reports
+              .filter((report) => report.fetched)
+              .map((report) => report.night),
+          ].filter(Boolean),
+        ),
+      ]
+        .sort()
+        .reverse(),
+    [knownNights, reports, results.warnings],
   );
   const defaultNight = nightOptions[0] ?? "";
   const firstPlayer =
@@ -102,14 +84,12 @@ export function Workspace({
     )[0]?.id ?? "";
   const navigation = useResultNavigation(
     canManage ? "reports" : "results",
-    () => unsaved || Boolean(connection?.busy),
+    () => unsaved || Boolean(connection.busy),
     (action) => guard(action),
   );
   const page =
-    navigation.page === "attendance" && !connection?.officer
-      ? connection
-        ? "results"
-        : "reports"
+    navigation.page === "attendance" && !connection.officer
+      ? "results"
       : navigation.page;
   const navigate = navigation.navigate;
   const [overrideSort, setOverrideSort] = useState<OverrideSort>({
@@ -140,8 +120,7 @@ export function Workspace({
   } | null>(null);
   const [selected, setSelected] = useState(firstPlayer);
   const [search, setSearch] = useState("");
-  const online = connection?.online ?? demo!.online;
-  const active = connection ? connection.active : demo!.active;
+  const { online, active } = connection;
   const [toast, setToast] = useState<{ text: string; error?: boolean } | null>(
     null,
   );
@@ -152,7 +131,7 @@ export function Workspace({
   const recentlyAddedReports = useRef<string[]>([]);
   const reportEditor = useReportEditor(
     inputs.reports,
-    connection?.versions ?? {},
+    connection.versions,
     async (reports, expected) => {
       await saveInputs({ reports, adjustments: {}, timings: {} }, expected);
       const added = reports.filter(
@@ -161,33 +140,22 @@ export function Workspace({
       if (added.length)
         recentlyAddedReports.current = added.map((report) => report.code);
     },
-    connection?.deleteReport ?? demo!.deleteReport,
-    Boolean(connection?.busy),
-    connection ? "" : defaultNight,
+    connection.deleteReport,
+    connection.busy,
   );
-  let span: { pre: number; post: number } = { pre: 90, post: 80 };
-  try {
-    const liveNight = results.nights.find((n) => n.night === night) as
-      | ((typeof results.nights)[number] & {
-          preMinutes?: number;
-          postMinutes?: number;
-        })
-      | undefined;
-    span = connection
-      ? {
-          pre: liveNight?.preMinutes ?? 720,
-          post: liveNight?.postMinutes ?? 720,
-        }
-      : demo!.timingSpans(night, inputs.timings[night]);
-  } catch {
-    /* The saved timing error is surfaced by the run. */
-  }
+  const latestNight = results.nights.find((item) => item.night === night);
+  const recordedSpan = latestNight as
+    { preMinutes?: number; postMinutes?: number } | undefined;
+  const span = {
+    pre: recordedSpan?.preMinutes ?? 720,
+    post: recordedSpan?.postMinutes ?? 720,
+  };
   const availabilityKey = adjustmentKey(night, selected);
   const availabilityPath = `availabilityOverrides/${night}_${selected}`;
   const availabilityEditor = useAvailabilityEditor(
     availabilityKey,
     inputs.adjustments[availabilityKey] ?? emptyAdjustment(),
-    connection?.versions[availabilityPath] ?? 0,
+    connection.versions[availabilityPath] ?? 0,
     span,
     async (key, adjustment, expected) => {
       const slash = key.indexOf("/");
@@ -200,7 +168,7 @@ export function Workspace({
       );
       return acknowledged[path] ?? 0;
     },
-    Boolean(connection?.busy) || !nightOptions.includes(night),
+    Boolean(connection.busy) || !nightOptions.includes(night),
     players.some((player) => player.id === selected),
   );
   const selectedPlayer = players.find((player) => player.id === selected);
@@ -217,14 +185,11 @@ export function Workspace({
     availabilityEditor.dirty,
     availabilityEditor.saving,
   ]);
-  const detectedTiming = connection
-    ? (results.nights.find((item) => item.night === night)?.timing ??
-      blankTiming())
-    : demo!.detectedTiming(night);
+  const detectedTiming = latestNight?.timing ?? blankTiming();
   const timingEditor = useTimingEditor(
     night,
     inputs.timings[night] ?? blankTiming(),
-    connection?.versions[`nightOverrides/${night}`] ?? 0,
+    connection.versions[`nightOverrides/${night}`] ?? 0,
     detectedTiming,
     async (key, timing, expected) => {
       if (!nightOptions.includes(key))
@@ -235,41 +200,28 @@ export function Workspace({
       );
       return versions[`nightOverrides/${key}`] ?? 0;
     },
-    Boolean(connection?.busy) || !nightOptions.includes(night),
-    demo?.timingSpans,
+    Boolean(connection.busy) || !nightOptions.includes(night),
   );
   const [rosterDetail, setRosterDetail] = useState<"main" | "alt" | null>(null);
   const rosterEditor = useRosterEditor(
-    connection?.roster ?? [],
-    async (id, value, expected) => {
-      if (!connection)
-        throw new Error("Roster editing requires an officer connection.");
-      return connection.savePlayer(id, value, expected);
-    },
-    Boolean(connection?.busy),
-    Boolean(connection?.officer),
+    connection.roster,
+    connection.savePlayer,
+    connection.busy,
+    connection.officer,
   );
   const characterEditor = useCharacterEditor(
-    connection?.characters ?? [],
-    connection?.roster ?? [],
-    async (id, value, expected) => {
-      if (!connection)
-        throw new Error("Character mappings require an officer connection.");
-      return connection.saveCharacter(id, value, expected);
-    },
-    Boolean(connection?.busy),
-    Boolean(connection?.officer),
+    connection.characters,
+    connection.roster,
+    connection.saveCharacter,
+    connection.busy,
+    connection.officer,
   );
   const calculationEditor = useCalculationEditor(
-    connection?.calculation ?? defaultCalculation(),
-    connection?.versions["settings/calculation"] ?? 0,
-    async (value, expected) => {
-      if (!connection)
-        throw new Error("Calculation settings require an officer connection.");
-      return connection.saveCalculation(value, expected);
-    },
-    Boolean(connection?.busy),
-    Boolean(connection?.officer),
+    connection.calculation,
+    connection.versions["settings/calculation"] ?? 0,
+    connection.saveCalculation,
+    connection.busy,
+    connection.officer,
   );
   const missingPlayerEditor = useMissingPlayerEditor(connection);
   const unsaved =
@@ -293,8 +245,7 @@ export function Workspace({
     if (!unsaved && (!nightChosen.current || !nightOptions.includes(night)))
       setNight(defaultNight);
   }, [defaultNight, nightOptions, night, unsaved]);
-  const unprocessed = connection?.unprocessed ?? demo!.unprocessed;
-  const latestNight = results.nights.find((n) => n.night === night);
+  const { unprocessed } = connection;
   const nightlyPlayers = new Map(
     latestNight?.players.map((row) => [row.id, row]),
   );
@@ -338,18 +289,14 @@ export function Workspace({
     window.scrollTo({ top: 0, behavior: "instant" });
   }, [page]);
   useEffect(() => {
-    if (demo?.notification)
-      notify(demo.notification.text, demo.notification.error);
-  }, [demo?.notification]);
-  useEffect(() => {
     const handle = (e: BeforeUnloadEvent) => {
-      if (unsaved || connection?.busy) {
+      if (unsaved || connection.busy) {
         e.preventDefault();
       }
     };
     window.addEventListener("beforeunload", handle);
     return () => window.removeEventListener("beforeunload", handle);
-  }, [unsaved, connection?.busy]);
+  }, [unsaved, connection.busy]);
 
   function clearEdits() {
     missingPlayerEditor.cancel();
@@ -362,7 +309,7 @@ export function Workspace({
   }
   function guard(action: () => void) {
     if (
-      connection?.busy ||
+      connection.busy ||
       missingPlayerEditor.saving ||
       characterEditor.saving ||
       calculationEditor.saving ||
@@ -407,7 +354,7 @@ export function Workspace({
     )
       nightChosen.current = false;
     try {
-      await (connection ? connection.requestRun() : demo!.requestRun());
+      await connection.requestRun();
     } catch (error) {
       notify((error as Error).message, true);
     }
@@ -420,9 +367,9 @@ export function Workspace({
       disabled={
         Boolean(active) ||
         unsaved ||
-        Boolean(connection?.busy) ||
-        Boolean(connection?.submitting) ||
-        Boolean(connection && !connection.queueReady) ||
+        Boolean(connection.busy) ||
+        Boolean(connection.submitting) ||
+        Boolean(!connection.queueReady) ||
         !canManage
       }
       title={
@@ -433,7 +380,7 @@ export function Workspace({
             : "Compute and update results"
       }
     >
-      {active || connection?.submitting ? (
+      {active || connection.submitting ? (
         <LoaderCircle size={16} className="spin" />
       ) : (
         <Play size={15} fill="currentColor" />
@@ -442,7 +389,7 @@ export function Workspace({
         ? active.status === "queued"
           ? "Run queued"
           : "Running Pebble"
-        : connection?.submitting
+        : connection.submitting
           ? "Submitting run…"
           : "Run Pebble"}
     </button>
@@ -451,11 +398,10 @@ export function Workspace({
     results,
     players,
     navigation,
-    selectionReady: !connection?.resultsPending && !connection?.resultsError,
-    demo: Boolean(demo),
+    selectionReady: !connection.resultsPending && !connection.resultsError,
     notify,
   });
-  const { setResultNight, visibleResultNight } = resultsView;
+  const { visibleResultNight } = resultsView;
   function showFlowResults() {
     navigate({
       page: "results",
@@ -464,7 +410,7 @@ export function Workspace({
     });
   }
   async function advanceFlow(target: "review" | "overrides" | "results") {
-    if (unsaved || active || connection?.busy || connection?.submitting) return;
+    if (unsaved || active || connection.busy || connection.submitting) return;
     if (target === "review" || unprocessed) {
       if (target === "review") nightChosen.current = false;
       setPendingFlow({
@@ -486,7 +432,7 @@ export function Workspace({
         historyId: history[0]?.id,
       });
       try {
-        await (connection ? connection.requestRun() : demo!.requestRun());
+        await connection.requestRun();
       } catch (error) {
         setPendingFlow(null);
         notify((error as Error).message, true);
@@ -499,7 +445,7 @@ export function Workspace({
       setPendingFlow(null);
       return;
     }
-    if (!pendingFlow || active || connection?.submitting) return;
+    if (!pendingFlow || active || connection.submitting) return;
     if (
       history[0]?.id !== pendingFlow.historyId &&
       history[0]?.status === "failed"
@@ -509,9 +455,9 @@ export function Workspace({
       return;
     }
     if (
-      connection?.resultsPending ||
-      connection?.resultMetadataPending ||
-      connection?.resultsError
+      connection.resultsPending ||
+      connection.resultMetadataPending ||
+      connection.resultsError
     )
       return;
     if (results.completedAt !== pendingFlow.completedAt) {
@@ -550,10 +496,10 @@ export function Workspace({
     reports,
     defaultNight,
     active,
-    connection?.submitting,
-    connection?.resultsPending,
-    connection?.resultsError,
-    connection?.resultMetadataPending,
+    connection.submitting,
+    connection.resultsPending,
+    connection.resultsError,
+    connection.resultMetadataPending,
     page,
     unsaved,
     history,
@@ -567,17 +513,17 @@ export function Workspace({
     ? active.status === "queued" && !online
       ? "Queued · waiting for your local bot"
       : `${steps[active.stage]}…`
-    : connection?.submitting
+    : connection.submitting
       ? "Submitting run…"
-      : connection?.officer && !connection.queueReady
+      : connection.officer && !connection.queueReady
         ? connection.queueError
           ? "Run queue is unavailable"
           : "Checking run queue…"
-        : connection?.resultsError
+        : connection.resultsError
           ? "Latest results are unavailable"
-          : connection?.resultsPending
+          : connection.resultsPending
             ? "Loading latest results…"
-            : connection?.resultMetadataPending
+            : connection.resultMetadataPending
               ? "Loading night checks…"
               : lastFailed
                 ? "Last run didn’t finish"
@@ -587,13 +533,12 @@ export function Workspace({
                     ? "Changes ready for the next run"
                     : "";
   const waitingForResults = Boolean(
-    connection?.submitting ||
-    connection?.resultsPending ||
-    connection?.resultMetadataPending,
+    connection.submitting ||
+    connection.resultsPending ||
+    connection.resultMetadataPending,
   );
-  const resultLoadFailed = Boolean(connection?.resultsError);
-  const completedAt =
-    !connection || connection.hasResults ? results.completedAt : undefined;
+  const resultLoadFailed = Boolean(connection.resultsError);
+  const completedAt = connection.hasResults ? results.completedAt : undefined;
   const reportNextAction = (
     <div className="flow-actions">
       <p className="muted">
@@ -607,9 +552,9 @@ export function Workspace({
           unsaved ||
           Boolean(active) ||
           Boolean(pendingFlow) ||
-          Boolean(connection?.busy) ||
-          Boolean(connection?.submitting) ||
-          Boolean(connection && !connection.queueReady) ||
+          Boolean(connection.busy) ||
+          Boolean(connection.submitting) ||
+          Boolean(!connection.queueReady) ||
           waitingForResults ||
           !reports.some((report) => report.enabled)
         }
@@ -619,7 +564,7 @@ export function Workspace({
           ? active.status === "queued"
             ? "Run queued…"
             : "Running Pebble…"
-          : pendingFlow || connection?.submitting
+          : pendingFlow || connection.submitting
             ? "Waiting for updated results…"
             : "Next: Run Pebble and go to Review Night"}
       </button>
@@ -647,9 +592,9 @@ export function Workspace({
               Boolean(active) ||
               Boolean(pendingFlow) ||
               waitingForResults ||
-              Boolean(connection?.busy) ||
-              Boolean(connection?.resultsError) ||
-              Boolean(connection && !connection.hasResults) ||
+              Boolean(connection.busy) ||
+              Boolean(connection.resultsError) ||
+              Boolean(!connection.hasResults) ||
               !nightOptions.length
             }
             onClick={() =>
@@ -672,11 +617,9 @@ export function Workspace({
     <>
       <RunStatus
         message={runStatusMessage}
-        completedAt={
-          !connection || connection.hasResults ? results.completedAt : undefined
-        }
+        completedAt={connection.hasResults ? results.completedAt : undefined}
         detail={
-          connection?.submitting
+          connection.submitting
             ? "Waiting for the server to confirm your request."
             : active
               ? "Your last completed results stay visible while Pebble works."
@@ -687,7 +630,7 @@ export function Workspace({
                   : undefined
         }
       />
-      {connection?.officer && connection.queueError && (
+      {connection.officer && connection.queueError && (
         <button
           className="text-button"
           onClick={() => retryWithFocus(connection.retryQueue)}
@@ -723,21 +666,6 @@ export function Workspace({
           authPending={authPending}
           accountAction={accountAction}
           guard={guard}
-          demoControls={
-            demo &&
-            renderDemoControls(() =>
-              guard(() => {
-                demo!.reset();
-                nightChosen.current = false;
-                setNight(defaultNight);
-                setSelected("Example");
-                availabilityEditor.cancel();
-                timingEditor.cancel();
-                setResultNight("season");
-                notify("Sample data reset.");
-              }),
-            )
-          }
         />
       }
       notices={
@@ -749,7 +677,7 @@ export function Workspace({
           authPending={authPending}
           switchAccount={() =>
             guard(() => {
-              if (connection) void accountAction(connection.signIn);
+              void accountAction(connection.signIn);
             })
           }
         />
@@ -798,20 +726,14 @@ export function Workspace({
         "attendance",
       ].includes(page) && (
         <div
-          className={`reports-status toolbar ${active || connection?.submitting || waitingForResults ? "is-running" : ""} ${(lastFailed || resultLoadFailed) && !active && !connection?.submitting ? "has-error" : ""}`}
+          className={`reports-status toolbar ${active || connection.submitting || waitingForResults ? "is-running" : ""} ${(lastFailed || resultLoadFailed) && !active && !connection.submitting ? "has-error" : ""}`}
         >
           {workspaceStatus}
         </div>
       )}
-      {demo?.storageError && (
-        <Notice tone="amber">
-          Browser storage is unavailable. The demo works, but changes won’t
-          survive a reload.
-        </Notice>
-      )}
 
       {page === "about" && <AboutPage />}
-      {page === "attendance" && connection?.officer && (
+      {page === "attendance" && connection.officer && (
         <AttendancePage key={results.signature} results={results} />
       )}
       {page === "reports" && (
@@ -819,7 +741,6 @@ export function Workspace({
           reports={inputs.reports}
           editor={reportEditor}
           nextAction={reportNextAction}
-          sampleReportLink={demo?.sampleReportLink}
         />
       )}
       {page === "review" && (
@@ -829,9 +750,9 @@ export function Workspace({
           nights={nightOptions}
           chooseNight={chooseNight}
           results={results}
-          hasResults={!connection || connection.hasResults}
-          sources={connection?.resultSources ?? []}
-          diagnostics={connection?.resultDiagnostics ?? {}}
+          hasResults={connection.hasResults}
+          sources={connection.resultSources}
+          diagnostics={connection.resultDiagnostics}
           detected={detectedTiming}
           editor={timingEditor}
           connection={connection}
@@ -841,7 +762,7 @@ export function Workspace({
             guard(() => missingPlayerEditor.open(player, night, mode))
           }
           onRoster={
-            connection?.officer
+            connection.officer
               ? () =>
                   guard(() => {
                     setReturnToReview(true);
@@ -866,16 +787,16 @@ export function Workspace({
           </button>
         </div>
       )}
-      {page === "officers" && connection?.officer && (
+      {page === "officers" && connection.officer && (
         <OfficersPage
           key={connection.accessGeneration}
           user={connection.user!}
         />
       )}
-      {page === "settings" && connection?.officer && (
+      {page === "settings" && connection.officer && (
         <SettingsPage editor={calculationEditor} />
       )}
-      {page === "roster" && connection?.officer && (
+      {page === "roster" && connection.officer && (
         <RosterPage
           connection={connection}
           players={players}
@@ -899,7 +820,7 @@ export function Workspace({
             message: runStatusMessage,
             completedAt,
             retryQueue:
-              connection?.officer && connection.queueError
+              connection.officer && connection.queueError
                 ? () => retryWithFocus(connection.retryQueue)
                 : undefined,
           }}
@@ -925,9 +846,8 @@ export function Workspace({
           results={results}
           players={players}
           view={resultsView}
-          hasResults={!connection || connection.hasResults}
+          hasResults={connection.hasResults}
           canManage={canManage}
-          demo={Boolean(demo)}
           runStatusMessage={runStatusMessage}
           completedAt={completedAt}
           onEditAvailability={(id) =>
@@ -946,7 +866,7 @@ export function Workspace({
       )}
 
       {canManage && !["officers", "about", "attendance"].includes(page) && (
-        <RunHistory history={history} connected={Boolean(connection)} />
+        <RunHistory history={history} />
       )}
     </AppShell>
   );

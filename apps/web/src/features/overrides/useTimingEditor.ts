@@ -12,22 +12,12 @@ export function useTimingEditor(
     expected: number,
   ) => Promise<number>,
   busy = false,
-  validateSample?: (night: string, value: Timing) => void,
 ) {
   return useVersionedEditor({
     key: night,
     saved,
     version,
-    validate: (value) => {
-      const error = validateTiming(value, detected);
-      if (error || !validateSample) return error;
-      try {
-        validateSample(night, value);
-        return null;
-      } catch (cause) {
-        return (cause as Error).message;
-      }
-    },
+    validate: (value) => validateTiming(value, detected),
     saveValue,
     resetValue: blankTiming,
     busy,

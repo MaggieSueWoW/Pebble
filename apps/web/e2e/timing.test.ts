@@ -359,36 +359,6 @@ test("handles unknown detection, Pacific DST validation, and keyboard draft prot
     ),
   ).toBe(true);
 });
-test("keeps timing edits working in standalone sample mode", async ({
-  page,
-}) => {
-  await page.goto("/?demo=1");
-  await page
-    .getByRole("navigation")
-    .getByRole("button", { name: "Review Night", exact: true })
-    .click();
-  await page
-    .getByText("Times look wrong? Adjust timing", { exact: true })
-    .click();
-  await notes(page).fill("Sample timing notes");
-  await save(page).click();
-  await saved(page);
-  await page
-    .getByRole("navigation")
-    .getByRole("button", { name: /^Bench Time/ })
-    .click();
-  await expect(page.getByRole("dialog")).not.toBeVisible();
-  await page
-    .getByRole("navigation")
-    .getByRole("button", { name: "Review Night", exact: true })
-    .click();
-  await expect(notes(page)).toBeHidden();
-  await page
-    .getByText("Times look wrong? Adjust timing", { exact: true })
-    .click();
-  await expect(notes(page)).toHaveValue("Sample timing notes");
-});
-
 test("guards keyboard navigation from night review to overrides at narrow width", async ({
   page,
 }) => {

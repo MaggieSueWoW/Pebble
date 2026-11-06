@@ -32,7 +32,7 @@ it("reads public result IDs and copies only public selection for the configured 
   history.replaceState(
     null,
     "",
-    "/?demo=1&privateOption=ignored&view=results&period=week%3A2026-10-13&player=public%2Fid#old",
+    "/?privateOption=ignored&view=results&period=week%3A2026-10-13&player=public%2Fid#old",
   );
   expect(readResultLocation("reports")).toEqual({
     page: "results",
@@ -44,11 +44,6 @@ it("reads public result IDs and copies only public selection for the configured 
   ).searchParams;
   expect([...params.keys()]).toEqual(["view", "period", "player"]);
   expect(params.get("player")).toBe("public/id");
-  expect(
-    new URL(
-      resultLink({ period: "season", player: null }, true),
-    ).searchParams.get("demo"),
-  ).toBe("1");
 });
 
 it("restores period and player through back/forward without rewriting history", async () => {

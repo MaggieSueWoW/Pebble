@@ -9,7 +9,6 @@ that the live or preview URL has been published or accepted.
 
 | Environment | Browser/backend | Credentials and writes |
 | --- | --- | --- |
-| Local demo | `?demo=1`, illustrative localStorage data | No Firebase or worker |
 | Automated acceptance | Demo project, loopback Auth/Firestore emulators, synthetic accounts/data | No live credentials; disposable services for worker faults |
 | Hosted test | Separate real Firebase test project and isolated worker/data | Public test web config; administrator maintains test Auth/rules |
 | Hosted live | Intended Firebase project/season and existing designated web worker | Public live web config; normal officer writes reach live inputs/queue |

@@ -112,12 +112,14 @@ export function OverridesPage({
                 ))}
               </SelectControl>
             </label>
-            <RunStatus message={runStatusMessage} completedAt={completedAt} />
-            {retryQueue && (
-              <button className="text-button" onClick={retryQueue}>
-                Retry run queue
-              </button>
-            )}
+            <div>
+              <RunStatus message={runStatusMessage} completedAt={completedAt} />
+              {retryQueue && (
+                <button className="text-button" onClick={retryQueue}>
+                  Retry run queue
+                </button>
+              )}
+            </div>
             <div className="override-next">{nextAction}</div>
           </div>
           <div className="override-grid" id="override-panel">

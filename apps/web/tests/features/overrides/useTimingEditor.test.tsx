@@ -1,7 +1,6 @@
 // @vitest-environment jsdom
 import { act, cleanup, renderHook } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
-import { timingSpans } from "../../../src/demo/model";
 import { blankTiming } from "../../../src/features/overrides/timing";
 import type { Timing } from "../../../src/shared/model";
 import { useTimingEditor } from "../../../src/features/overrides/useTimingEditor";
@@ -93,20 +92,12 @@ it("ignores abandoned-night acknowledgements and retains automatic reset as a dr
   expect(result.current.dirty).toBe(false);
   expect(result.current.message).toBe("");
 });
-it("does not write invalid or busy drafts and keeps demo timing validation", async () => {
+it("does not write invalid or busy drafts", async () => {
   const write = save();
   const { result, rerender } = renderHook(
-    ({ busy, demo }) =>
-      useTimingEditor(
-        night,
-        blankTiming(),
-        0,
-        blankTiming(),
-        write,
-        busy,
-        demo ? timingSpans : undefined,
-      ),
-    { initialProps: { busy: false, demo: false } },
+    (busy) =>
+      useTimingEditor(night, blankTiming(), 0, blankTiming(), write, busy),
+    { initialProps: false },
   );
   act(() =>
     result.current.change({ ...blankTiming(), breakStart: `${night}T20:00` }),
@@ -114,13 +105,7 @@ it("does not write invalid or busy drafts and keeps demo timing validation", asy
   await act(() => result.current.save());
   expect(result.current.validation).toContain("both break boundaries");
   act(() => result.current.change(value("Valid notes")));
-  rerender({ busy: true, demo: false });
+  rerender(true);
   await act(() => result.current.save());
-  rerender({ busy: false, demo: true });
-  act(() =>
-    result.current.change({ ...blankTiming(), start: `${night}T23:00` }),
-  );
-  await act(() => result.current.save());
-  expect(result.current.validation).toContain("Timing must follow");
   expect(write).not.toHaveBeenCalled();
 });

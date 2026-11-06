@@ -1,24 +1,26 @@
 import { describe, expect, it } from "vitest";
-import { demoCode, freshState } from "../../src/demo/model";
 import { parseReports, stableJSON } from "../../src/shared/model";
+
+const reportCode = "AAAAAAAAAAAAAAAA";
+const disabledCode = "BBBBBBBBBBBBBBBB";
 
 describe("report entry", () => {
   it("normalizes report URLs and skips duplicate URLs/codes without accepting other hosts", () => {
     const rows = parseReports(
-      `https://www.warcraftlogs.com/reports/${demoCode}#fight=last\n${demoCode}\nhttps://evil.example/reports/${demoCode}`,
+      `https://www.warcraftlogs.com/reports/${reportCode}#fight=last\n${reportCode}\nhttps://evil.example/reports/${reportCode}`,
       [],
     );
     expect(rows.map((r) => r.state)).toEqual(["ready", "duplicate", "invalid"]);
-    expect(rows[0].code).toBe(demoCode);
+    expect(rows[0].code).toBe(reportCode);
   });
   it("distinguishes included, excluded, and malformed reports", () => {
-    const { inputs } = freshState();
+    const details = { night: "", title: "", fetched: false };
     expect(
-      parseReports(
-        inputs.reports.map((r) => r.code).join("\n") + "\ntoo-short",
-        inputs.reports,
-      ).map((r) => r.state),
-    ).toEqual(["existing", "existing", "existing", "disabled", "invalid"]);
+      parseReports(`${reportCode}\n${disabledCode}\ntoo-short`, [
+        { ...details, code: reportCode, enabled: true },
+        { ...details, code: disabledCode, enabled: false },
+      ]).map((r) => r.state),
+    ).toEqual(["existing", "disabled", "invalid"]);
   });
 });
 

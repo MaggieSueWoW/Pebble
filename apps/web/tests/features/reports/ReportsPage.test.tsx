@@ -15,13 +15,7 @@ const report: Report = {
 const save = vi.fn().mockResolvedValue(undefined);
 function Panel({ reports }: { reports: Report[] }) {
   const editor = useReportEditor(reports, {}, save, vi.fn());
-  return (
-    <ReportsPage
-      reports={reports}
-      editor={editor}
-      sampleReportLink={undefined}
-    />
-  );
+  return <ReportsPage reports={reports} editor={editor} />;
 }
 afterEach(() => {
   cleanup();

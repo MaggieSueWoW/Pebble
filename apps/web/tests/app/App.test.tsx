@@ -9,9 +9,8 @@ import {
   within,
 } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import App from "../../src/app/App";
+import { Workspace } from "../../src/app/Workspace";
 import { blankPlayer } from "../../src/features/roster/roster";
-import { freshState } from "../../src/demo/model";
 import {
   adjustmentKey,
   emptyAdjustment,
@@ -45,12 +44,17 @@ const beta: Player = {
   role: "Healer",
 };
 function connection(players: Player[] = []): LiveConnection {
-  const saved = freshState();
   return {
     saved: {
-      ...saved,
       inputs: { reports: [], adjustments: {}, timings: {} },
-      results: { ...saved.results, players: [], nights: [] },
+      results: {
+        completedAt: "2026-10-16T05:18:00.000Z",
+        signature: "baseline",
+        players: [],
+        nights: [],
+        reportCount: 0,
+      },
+      history: [],
     },
     players,
     roster: [],
@@ -104,18 +108,13 @@ const notes = () =>
 const editor = () =>
   screen.getByRole("region", { name: "Player availability editor" });
 
-it("keeps connected sessions out of sample storage and submits runs through the live connection", async () => {
+it("submits runs through the live connection", async () => {
   const live = connection();
-  const read = vi.spyOn(Storage.prototype, "getItem");
-  const write = vi.spyOn(Storage.prototype, "setItem");
-  render(<App connection={live} />);
-  expect(screen.queryByText("Prototype controls")).toBeNull();
+  render(<Workspace connection={live} />);
   await act(async () => {
     fireEvent.click(screen.getByRole("button", { name: "Run Pebble" }));
   });
   expect(live.requestRun).toHaveBeenCalledOnce();
-  expect(read).not.toHaveBeenCalled();
-  expect(write).not.toHaveBeenCalled();
 });
 
 function overrides() {
@@ -134,7 +133,7 @@ afterEach(() => {
 
 it("lets public readers open About and return to Bench Time without sign-in or writes", () => {
   const live = { ...connection(), officer: false };
-  render(<App connection={live} />);
+  render(<Workspace connection={live} />);
   fireEvent.click(screen.getByRole("button", { name: "About" }));
   expect(screen.getByRole("heading", { name: "About Pebble" })).toBeTruthy();
   expect(screen.getByRole("heading", { name: "How we use it" })).toBeTruthy();
@@ -153,7 +152,7 @@ it.each([false, true])(
   "opens a shared About link with officer access %s",
   (officer) => {
     history.replaceState(null, "", "/?view=about");
-    render(<App connection={{ ...connection(), officer }} />);
+    render(<Workspace connection={{ ...connection(), officer }} />);
     expect(screen.getByRole("heading", { name: "About Pebble" })).toBeTruthy();
     expect(
       screen.queryByRole("navigation", { name: "Process a raid night" }),
@@ -164,10 +163,10 @@ it.each([false, true])(
 
 it("selects arriving players, keeps search independent and renders only known metadata", () => {
   const c = connection();
-  const { rerender } = render(<App connection={c} />);
+  const { rerender } = render(<Workspace connection={c} />);
   overrides();
   expect(screen.getByText("No players in the roster yet.")).toBeTruthy();
-  rerender(<App connection={{ ...c, players: [beta, alpha] }} />);
+  rerender(<Workspace connection={{ ...c, players: [beta, alpha] }} />);
   expect(
     [...document.querySelectorAll(".player-item strong")].map(
       (el) => el.textContent,
@@ -199,7 +198,7 @@ it("selects arriving players, keeps search independent and renders only known me
   ).toBeTruthy();
   expect(editor().textContent).toContain("Example Beta");
   rerender(
-    <App
+    <Workspace
       connection={{
         ...c,
         players: [{ ...alpha, className: "Unknown", role: "" }],
@@ -212,10 +211,10 @@ it("selects arriving players, keeps search independent and renders only known me
 
 it("retains a removed player's draft until return or explicit cancellation", () => {
   const c = connection([alpha, beta]);
-  const { rerender } = render(<App connection={c} />);
+  const { rerender } = render(<Workspace connection={c} />);
   overrides();
   fireEvent.change(notes(), { target: { value: "Retained draft" } });
-  rerender(<App connection={{ ...c, players: [beta] }} />);
+  rerender(<Workspace connection={{ ...c, players: [beta] }} />);
   expect(
     screen.getByText(/This player is no longer in the roster/),
   ).toBeTruthy();
@@ -226,9 +225,9 @@ it("retains a removed player's draft until return or explicit cancellation", () 
     (screen.getByRole("button", { name: "Run Pebble" }) as HTMLButtonElement)
       .disabled,
   ).toBe(true);
-  rerender(<App connection={c} />);
+  rerender(<Workspace connection={c} />);
   expect(notes().value).toBe("Retained draft");
-  rerender(<App connection={{ ...c, players: [beta] }} />);
+  rerender(<Workspace connection={{ ...c, players: [beta] }} />);
   fireEvent.click(screen.getByRole("button", { name: "Cancel edits" }));
   expect(editor().textContent).toContain("Example Beta");
   expect(notes().value).toBe("");
@@ -244,11 +243,11 @@ it("waits for a removed player's pending save before selecting a replacement", a
         finish = resolve;
       }),
   );
-  const { rerender } = render(<App connection={c} />);
+  const { rerender } = render(<Workspace connection={c} />);
   overrides();
   fireEvent.change(notes(), { target: { value: "Submitted draft" } });
   fireEvent.click(screen.getByRole("button", { name: "Save availability" }));
-  rerender(<App connection={{ ...c, players: [beta] }} />);
+  rerender(<Workspace connection={{ ...c, players: [beta] }} />);
   expect(
     (screen.getByRole("button", { name: "Cancel edits" }) as HTMLButtonElement)
       .disabled,
@@ -272,7 +271,7 @@ it.each([true, false])(
       warning,
       "2026-10-15: no Mythic encounters; no bench totals for this night",
     ];
-    const { rerender } = render(<App connection={c} />);
+    const { rerender } = render(<Workspace connection={c} />);
     if (officer)
       fireEvent.click(screen.getByRole("button", { name: /^Bench Time/ }));
     expect(screen.getByRole("heading", { level: 1 }).textContent).toBe(
@@ -290,7 +289,7 @@ it.each([true, false])(
       expect(screen.queryByText(warning)).toBeNull();
     }
     rerender(
-      <App
+      <Workspace
         connection={{
           ...c,
           saved: { ...c.saved, results: { ...c.saved.results, warnings: [] } },
@@ -336,7 +335,7 @@ it("defaults to the newest report/result date with one ordered deduplicated list
     ["2026-10-14", "2026-10-15"],
     ["", "2026-10-16", "2026-10-15"],
   );
-  render(<App connection={c} />);
+  render(<Workspace connection={c} />);
   overrides();
   expect(raidPicker().value).toBe("2026-10-16");
   expect([...raidPicker().options].map((o) => o.value)).toEqual([
@@ -349,38 +348,38 @@ it("defaults to the newest report/result date with one ordered deduplicated list
 
 it("waits for logged nights and preserves a selected known night", () => {
   const c = dates(connection([alpha]), []);
-  const { rerender } = render(<App connection={c} />);
+  const { rerender } = render(<Workspace connection={c} />);
   overrides();
   expect(screen.getByText(/No raid nights identified yet/)).toBeTruthy();
   expect(
     screen.queryByRole("region", { name: "Player availability editor" }),
   ).toBeNull();
   expect(screen.queryByLabelText("Choose another raid date")).toBeNull();
-  rerender(<App connection={dates(c, [], ["2026-10-15"])} />);
+  rerender(<Workspace connection={dates(c, [], ["2026-10-15"])} />);
   expect(raidPicker().value).toBe("2026-10-15");
-  rerender(<App connection={dates(c, ["2026-10-16", "2026-10-15"])} />);
+  rerender(<Workspace connection={dates(c, ["2026-10-16", "2026-10-15"])} />);
   expect(raidPicker().value).toBe("2026-10-16");
   fireEvent.change(raidPicker(), { target: { value: "2026-10-15" } });
-  rerender(<App connection={dates(c, ["2026-10-17", "2026-10-15"])} />);
+  rerender(<Workspace connection={dates(c, ["2026-10-17", "2026-10-15"])} />);
   expect(raidPicker().value).toBe("2026-10-15");
 });
 
 it("moves a clean selection to a logged night when its metadata disappears", () => {
   const c = dates(connection([alpha]), ["2026-10-16", "2026-10-15"]);
-  const { rerender } = render(<App connection={c} />);
+  const { rerender } = render(<Workspace connection={c} />);
   overrides();
   fireEvent.change(raidPicker(), { target: { value: "2026-10-15" } });
-  rerender(<App connection={dates(c, ["2026-10-17"])} />);
+  rerender(<Workspace connection={dates(c, ["2026-10-17"])} />);
   expect(raidPicker().value).toBe("2026-10-17");
   expect([...raidPicker().options].map((o) => o.value)).toEqual(["2026-10-17"]);
 });
 
 it("blocks a draft whose logged night disappears until cancellation", () => {
   const c = dates(connection([alpha]), ["2026-10-14"]);
-  const { rerender } = render(<App connection={c} />);
+  const { rerender } = render(<Workspace connection={c} />);
   overrides();
   fireEvent.change(notes(), { target: { value: "Night-bound draft" } });
-  rerender(<App connection={dates(c, ["2026-10-15"])} />);
+  rerender(<Workspace connection={dates(c, ["2026-10-15"])} />);
   expect(
     screen
       .getByRole("button", { name: "Save availability" })
@@ -401,11 +400,11 @@ it("keeps a pending save on its date until acknowledgement and afterwards", asyn
         finish = resolve;
       }),
   );
-  const { rerender } = render(<App connection={c} />);
+  const { rerender } = render(<Workspace connection={c} />);
   overrides();
   fireEvent.change(notes(), { target: { value: "Save this night" } });
   fireEvent.click(screen.getByRole("button", { name: "Save availability" }));
-  rerender(<App connection={dates(c, ["2026-10-15"])} />);
+  rerender(<Workspace connection={dates(c, ["2026-10-15"])} />);
   expect(notes().value).toBe("Save this night");
   await act(async () => finish({ "availabilityOverrides/2026-10-14_a": 1 }));
   expect(raidPicker().value).toBe("2026-10-15");
@@ -427,7 +426,7 @@ it.each([
       .mockRejectedValue(
         Object.assign(new Error("PRIVATE account-token payload"), { code }),
       );
-    render(<App connection={c} />);
+    render(<Workspace connection={c} />);
     fireEvent.click(screen.getByRole("button", { name: "Officer sign-in" }));
     await waitFor(() => expect(screen.getByText(message)).toBeTruthy());
     expect(screen.queryByText(/PRIVATE account-token/)).toBeNull();
@@ -448,7 +447,7 @@ it("handles sign-out failure without losing the current session", async () => {
     displayName: "Example member",
   } as NonNullable<LiveConnection["user"]>;
   c.signOut = vi.fn().mockRejectedValue(new Error("PRIVATE sign-out payload"));
-  render(<App connection={c} />);
+  render(<Workspace connection={c} />);
   expect(screen.queryByRole("button", { name: "Officer sign-in" })).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: "Sign out" }));
   await waitFor(() =>
@@ -465,7 +464,7 @@ it("keeps public sign-in and explains non-officer access with collapsed account 
   const c = connection();
   c.officer = false;
   c.hasResults = true;
-  const { rerender } = render(<App connection={c} />);
+  const { rerender } = render(<Workspace connection={c} />);
   expect(
     screen.queryByRole("region", { name: "Officer access not enabled" }),
   ).toBeNull();
@@ -477,7 +476,7 @@ it("keeps public sign-in and explains non-officer access with collapsed account 
     uid: "example-account",
     displayName: "Example Reader",
   } as NonNullable<LiveConnection["user"]>;
-  rerender(<App connection={{ ...c }} />);
+  rerender(<Workspace connection={{ ...c }} />);
   const region = screen.getByRole("region", {
     name: "Officer access not enabled",
   });
@@ -495,7 +494,7 @@ it("keeps public sign-in and explains non-officer access with collapsed account 
   );
   expect(c.signOut).toHaveBeenCalledTimes(1);
   expect(c.saveInputs).not.toHaveBeenCalled();
-  rerender(<App connection={{ ...c, officer: true }} />);
+  rerender(<Workspace connection={{ ...c, officer: true }} />);
   expect(
     screen.queryByRole("region", { name: "Officer access not enabled" }),
   ).toBeNull();
@@ -508,7 +507,7 @@ it("announces an account-switch failure without attempting another sign-in", asy
   c.hasResults = true;
   c.user = { uid: "example-account" } as NonNullable<LiveConnection["user"]>;
   c.signOut = vi.fn().mockRejectedValue(new Error("Sign-out unavailable"));
-  render(<App connection={c} />);
+  render(<Workspace connection={c} />);
   await act(async () =>
     fireEvent.click(screen.getByRole("button", { name: "Sign out" })),
   );
@@ -523,7 +522,7 @@ it.each([true, false])(
   (officer) => {
     const c = connection();
     c.officer = officer;
-    const { rerender } = render(<App connection={c} />);
+    const { rerender } = render(<Workspace connection={c} />);
     if (officer)
       fireEvent.click(screen.getByRole("button", { name: /^Bench Time/ }));
     expect(screen.getByText(/No completed results yet/).textContent).toContain(
@@ -533,10 +532,12 @@ it.each([true, false])(
     expect(
       screen.queryByRole("heading", { name: "No player time for this period" }),
     ).toBeNull();
-    rerender(<App connection={{ ...c, resultsPending: true }} />);
+    rerender(<Workspace connection={{ ...c, resultsPending: true }} />);
     expect(screen.queryByText(/No completed results yet/)).toBeNull();
     rerender(
-      <App connection={{ ...c, resultsError: "Result reads unavailable" }} />,
+      <Workspace
+        connection={{ ...c, resultsError: "Result reads unavailable" }}
+      />,
     );
     expect(screen.queryByText(/No completed results yet/)).toBeNull();
     expect(screen.getByText("Result reads unavailable")).toBeTruthy();
@@ -549,7 +550,7 @@ it.each([true, false])(
     const c = connection();
     c.officer = officer;
     c.hasResults = true;
-    render(<App connection={c} />);
+    render(<Workspace connection={c} />);
     if (officer)
       fireEvent.click(screen.getByRole("button", { name: /^Bench Time/ }));
     expect(
@@ -588,7 +589,7 @@ it("explains empty recent history without hiding active progress or previous res
   c.hasResults = true;
   c.saved.history = [];
   c.active = { id: "queued", status: "queued", stage: 0 };
-  const { rerender } = render(<App connection={c} />);
+  const { rerender } = render(<Workspace connection={c} />);
   expect(screen.getByText("No completed runs in recent history.")).toBeTruthy();
   expect(
     (screen.getByRole("button", { name: "Run queued" }) as HTMLButtonElement)
@@ -598,7 +599,7 @@ it("explains empty recent history without hiding active progress or previous res
     screen.getByRole("status", { name: "Run status" }).textContent,
   ).toContain("Your last completed results stay visible");
   rerender(
-    <App
+    <Workspace
       connection={{
         ...c,
         saved: {
@@ -620,7 +621,7 @@ it("explains empty recent history without hiding active progress or previous res
 });
 
 it("places timing review on Review Night and availability on Overrides", () => {
-  render(<App connection={connection([alpha])} />);
+  render(<Workspace connection={connection([alpha])} />);
   overrides();
   expect(
     screen.getByRole("region", { name: "Player availability editor" }),
@@ -662,7 +663,7 @@ it.each([true, false])(
         warningIndexes: [1],
       },
     ];
-    const { rerender } = render(<App connection={c} />);
+    const { rerender } = render(<Workspace connection={c} />);
     if (officer)
       fireEvent.click(screen.getByRole("button", { name: /^Bench Time/ }));
     if (officer)
@@ -694,7 +695,7 @@ it.each([true, false])(
       ).toBeNull();
     }
     expect(screen.queryByRole("link", { name: "Unrelated report" })).toBeNull();
-    rerender(<App connection={{ ...c, resultSources: [] }} />);
+    rerender(<Workspace connection={{ ...c, resultSources: [] }} />);
     expect(
       screen.queryByRole("list", { name: "Source reports for this warning" }),
     ).toBeNull();
@@ -718,7 +719,7 @@ it("links both result disclosure controls to stable hidden detail content", () =
       nights: 1,
     },
   ];
-  render(<App connection={c} />);
+  render(<Workspace connection={c} />);
   fireEvent.click(screen.getByRole("button", { name: /^Bench Time/ }));
   const detail = screen.getByRole("button", {
     name: "Details for Example Alpha",
@@ -754,10 +755,10 @@ it.each(["results", "queue"] as const)(
       c.queueReady = false;
       c.queueError = "Queue read unavailable";
     }
-    const { rerender } = render(<App connection={c} />);
+    const { rerender } = render(<Workspace connection={c} />);
     const retry = () =>
       rerender(
-        <App
+        <Workspace
           connection={{
             ...c,
             resultsError: "",
@@ -769,7 +770,7 @@ it.each(["results", "queue"] as const)(
       );
     c.retryResults = retry;
     c.retryQueue = retry;
-    rerender(<App connection={{ ...c }} />);
+    rerender(<Workspace connection={{ ...c }} />);
     const button = screen.getByRole("button", {
       name: kind === "results" ? "Retry loading results" : "Retry run queue",
     });
@@ -787,7 +788,7 @@ it.each(["results", "queue"] as const)(
 );
 
 it("connects report/availability validation and names the discard dialog", () => {
-  render(<App connection={connection([alpha])} />);
+  render(<Workspace connection={connection([alpha])} />);
   const input = screen.getByRole("textbox", { name: "Warcraft Logs reports" });
   fireEvent.change(input, { target: { value: "invalid" } });
   expect(input.getAttribute("aria-describedby")).toContain("report-validation");
@@ -828,7 +829,7 @@ it("offers season and night results and falls back from a removed weekly link", 
   const c = connection([alpha]);
   c.hasResults = true;
   c.saved.results.weeks = [{ week: "2026-10-13", players: [] }];
-  render(<App connection={c} />);
+  render(<Workspace connection={c} />);
   const period = screen.getByRole("combobox", {
     name: "Result period",
   }) as HTMLSelectElement;
@@ -851,10 +852,10 @@ it("retains a linked result selection through pending reads and failures until m
   history.replaceState(null, "", "/?view=results&period=2026-10-15&player=a");
   const c = connection([alpha]);
   c.resultsPending = true;
-  const { rerender } = render(<App connection={c} />);
+  const { rerender } = render(<Workspace connection={c} />);
   expect(location.search).toContain("period=2026-10-15");
   rerender(
-    <App
+    <Workspace
       connection={{
         ...c,
         resultsPending: false,
@@ -889,7 +890,9 @@ it("retains a linked result selection through pending reads and failures until m
     players: [row],
   };
   rerender(
-    <App connection={{ ...c, hasResults: true, resultsPending: false }} />,
+    <Workspace
+      connection={{ ...c, hasResults: true, resultsPending: false }}
+    />,
   );
   expect(
     (
@@ -913,13 +916,13 @@ it("explains missing linked periods and players after result readiness", () => {
     "/?view=results&period=2026-01-01&player=missing",
   );
   const c = connection();
-  const { unmount } = render(<App connection={c} />);
+  const { unmount } = render(<Workspace connection={c} />);
   expect(screen.getByText(/This result period is not available/)).toBeTruthy();
   expect(new URLSearchParams(location.search).get("period")).toBe("season");
   expect(new URLSearchParams(location.search).has("player")).toBe(false);
   unmount();
   history.replaceState(null, "", "/?view=results&period=season&player=missing");
-  render(<App connection={c} />);
+  render(<Workspace connection={c} />);
   expect(screen.getByText(/This player is not available/)).toBeTruthy();
   expect(new URLSearchParams(location.search).has("player")).toBe(false);
 });
@@ -959,7 +962,7 @@ it("exposes published attendance for zero-time players outside ranked rows and o
       players: [],
     },
   ];
-  render(<App connection={c} />);
+  render(<Workspace connection={c} />);
   const additional = screen.getByRole("region", {
     name: "Additional attendance",
   });
@@ -1008,7 +1011,7 @@ it("shows nightly audit values and highlights only the recorded override half", 
       ],
     },
   ];
-  const { rerender } = render(<App connection={c} />);
+  const { rerender } = render(<Workspace connection={c} />);
   overrides();
   const row = screen.getByRole("button", { name: /Example Alpha/ });
   expect(row.textContent).not.toContain("Automatic");
@@ -1028,7 +1031,7 @@ it("shows nightly audit values and highlights only the recorded override half", 
   expect(within(editor()).getByText("1h 20m")).toBeTruthy();
   // A saved reset takes precedence over stale published override markers.
   rerender(
-    <App
+    <Workspace
       connection={{
         ...c,
         saved: {
@@ -1068,7 +1071,7 @@ it("lists mains with alts and scopes a new alt to the clicked main", () => {
     },
   ];
   c.characters.push({ ...c.characters[0], id: "alt2", name: "Secondalt" });
-  render(<App connection={c} />);
+  render(<Workspace connection={c} />);
   fireEvent.click(screen.getByRole("button", { name: "Roster" }));
   expect(
     [...document.querySelectorAll(".roster-main-button strong")].map(
@@ -1145,7 +1148,7 @@ it("toggles Bench Time column sorting while keeping details on the selected play
       nights: 1,
     },
   ];
-  render(<App connection={c} />);
+  render(<Workspace connection={c} />);
   fireEvent.click(screen.getByRole("button", { name: "Bench Time" }));
   const names = () =>
     [...document.querySelectorAll(".result-name strong")].map(
@@ -1217,7 +1220,7 @@ it("sorts each Overrides audit column with an explicit active direction and miss
       ],
     },
   ];
-  render(<App connection={c} />);
+  render(<Workspace connection={c} />);
   overrides();
   const order = () =>
     [...document.querySelectorAll(".override-player-row strong")].map(
@@ -1273,7 +1276,7 @@ it("keeps failed-run status visible on every page after compacting the headers",
       message: "Synthetic failure",
     },
   ];
-  render(<App connection={c} />);
+  render(<Workspace connection={c} />);
   for (const page of ["Bench Time", "Overrides", "Roster", "Settings"]) {
     fireEvent.click(screen.getByRole("button", { name: page }));
     expect(
@@ -1293,10 +1296,10 @@ it("guards roster navigation, sign-out and reload during a pending mutation", ()
   c.user = { uid: "officer", displayName: "Example Officer" } as NonNullable<
     LiveConnection["user"]
   >;
-  const { rerender } = render(<App connection={c} />);
+  const { rerender } = render(<Workspace connection={c} />);
   fireEvent.click(screen.getByRole("button", { name: "Roster" }));
   fireEvent.click(screen.getByRole("button", { name: `Edit ${alpha.name}` }));
-  rerender(<App connection={{ ...c, busy: true }} />);
+  rerender(<Workspace connection={{ ...c, busy: true }} />);
   fireEvent.click(screen.getByRole("button", { name: "Bench Time" }));
   fireEvent.click(screen.getByRole("button", { name: `Edit ${beta.name}` }));
   fireEvent.click(screen.getByRole("button", { name: "Sign out" }));
@@ -1314,7 +1317,7 @@ it("guards roster navigation, sign-out and reload during a pending mutation", ()
   const unloading = new Event("beforeunload", { cancelable: true });
   window.dispatchEvent(unloading);
   expect(unloading.defaultPrevented).toBe(true);
-  rerender(<App connection={c} />);
+  rerender(<Workspace connection={c} />);
   fireEvent.click(screen.getByRole("button", { name: "Bench Time" }));
   expect(
     screen.getByRole("heading", { name: "Bench Time", level: 1 }),
@@ -1335,7 +1338,7 @@ it("walks through four numbered steps and carries the reviewed night to results"
     timing: { start: "", end: "", breakStart: "", breakEnd: "", notes: "" },
     players: [],
   }));
-  const { rerender } = render(<App connection={c} />);
+  const { rerender } = render(<Workspace connection={c} />);
   const flow = screen.getByRole("navigation", { name: "Process a raid night" });
   expect(within(flow).getAllByRole("listitem")).toHaveLength(4);
   expect(screen.queryByText(/Selected raid night:/)).toBeNull();
@@ -1348,7 +1351,7 @@ it("walks through four numbered steps and carries the reviewed night to results"
   );
   expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Reports");
   rerender(
-    <App
+    <Workspace
       connection={{
         ...c,
         saved: {
@@ -1392,7 +1395,7 @@ it("recalculates saved changes before advancing and stays on review after a fail
   const c = dates(connection([alpha]), ["2026-10-15"]);
   c.hasResults = true;
   c.unprocessed = true;
-  const { rerender } = render(<App connection={c} />);
+  const { rerender } = render(<Workspace connection={c} />);
   fireEvent.click(screen.getByRole("button", { name: "Review Night" }));
   await act(async () =>
     fireEvent.click(
@@ -1406,12 +1409,12 @@ it("recalculates saved changes before advancing and stays on review after a fail
     "Review Night",
   );
   rerender(
-    <App
+    <Workspace
       connection={{ ...c, active: { id: "new", status: "running", stage: 1 } }}
     />,
   );
   rerender(
-    <App
+    <Workspace
       connection={{
         ...c,
         saved: {
@@ -1449,11 +1452,13 @@ it("recalculates saved changes before advancing and stays on review after a fail
       results: { ...c.saved.results, completedAt: "2026-10-23T05:00:00Z" },
     },
   };
-  rerender(<App connection={{ ...finished, resultMetadataPending: true }} />);
+  rerender(
+    <Workspace connection={{ ...finished, resultMetadataPending: true }} />,
+  );
   expect(screen.getByRole("heading", { level: 1 }).textContent).toBe(
     "Review Night",
   );
-  rerender(<App connection={finished} />);
+  rerender(<Workspace connection={finished} />);
   await waitFor(() =>
     expect(screen.getByRole("heading", { level: 1 }).textContent).toBe(
       "Overrides",
@@ -1465,7 +1470,7 @@ it("stays on Reports through a queued run and result loading, then reviews the n
   const c = dates(connection([alpha]), ["2026-09-30"], [""]);
   c.hasResults = true;
   c.unprocessed = true;
-  const { rerender } = render(<App connection={c} />);
+  const { rerender } = render(<Workspace connection={c} />);
   expect(screen.queryByText(/Selected raid night:/)).toBeNull();
   await act(async () =>
     fireEvent.click(
@@ -1475,7 +1480,7 @@ it("stays on Reports through a queued run and result loading, then reviews the n
     ),
   );
   rerender(
-    <App
+    <Workspace
       connection={{
         ...c,
         online: false,
@@ -1500,11 +1505,13 @@ it("stays on Reports through a queued run and result loading, then reviews the n
     ...finished.saved.results,
     completedAt: "2026-10-23T06:30:00Z",
   };
-  rerender(<App connection={{ ...finished, resultsPending: true }} />);
+  rerender(<Workspace connection={{ ...finished, resultsPending: true }} />);
   expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Reports");
-  rerender(<App connection={{ ...finished, resultMetadataPending: true }} />);
+  rerender(
+    <Workspace connection={{ ...finished, resultMetadataPending: true }} />,
+  );
   expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Reports");
-  rerender(<App connection={finished} />);
+  rerender(<Workspace connection={finished} />);
   await waitFor(() => expect(raidPicker().value).toBe("2026-10-21"));
   expect(c.requestRun).toHaveBeenCalledOnce();
 });
@@ -1515,7 +1522,7 @@ it("keeps Reports available for retry after submission rejection or worker failu
     .fn()
     .mockRejectedValueOnce(new Error("Submission unavailable"))
     .mockResolvedValue(undefined);
-  const { rerender } = render(<App connection={c} />);
+  const { rerender } = render(<Workspace connection={c} />);
   const next = () =>
     screen.getByRole("button", {
       name: "Next: Run Pebble and go to Review Night",
@@ -1525,7 +1532,7 @@ it("keeps Reports available for retry after submission rejection or worker failu
   expect((next() as HTMLButtonElement).disabled).toBe(false);
   await act(async () => fireEvent.click(next()));
   rerender(
-    <App
+    <Workspace
       connection={{
         ...c,
         saved: {
@@ -1589,7 +1596,7 @@ it.each(["main", "alt", "ignore"] as const)(
         },
       },
     ];
-    render(<App connection={c} />);
+    render(<Workspace connection={c} />);
     fireEvent.click(screen.getByRole("button", { name: "Review Night" }));
     expect(screen.getByText("7:00 PM")).toBeTruthy();
     expect(screen.getByText("8:30 PM – 8:40 PM (10 min)")).toBeTruthy();
@@ -1677,7 +1684,7 @@ it("keeps published warning nights in the officer sidebar across panels and guar
     "2026-10-14: Second",
     "General warning",
   ];
-  const { rerender } = render(<App connection={c} />);
+  const { rerender } = render(<Workspace connection={c} />);
   const warningPanel = () =>
     screen.getByRole("region", { name: "Nights to review" });
   expect(
@@ -1725,7 +1732,7 @@ it("keeps published warning nights in the officer sidebar across panels and guar
   expect(warningPanel()).toBeTruthy();
   expect(screen.queryByRole("status", { name: "Night completion" })).toBeNull();
   rerender(
-    <App
+    <Workspace
       connection={{
         ...c,
         saved: { ...c.saved, results: { ...c.saved.results, warnings: [] } },
@@ -1733,14 +1740,14 @@ it("keeps published warning nights in the officer sidebar across panels and guar
     />,
   );
   expect(screen.queryByRole("region", { name: "Nights to review" })).toBeNull();
-  rerender(<App connection={{ ...c, officer: false }} />);
+  rerender(<Workspace connection={{ ...c, officer: false }} />);
   expect(screen.queryByRole("region", { name: "Nights to review" })).toBeNull();
 });
 
 it("reviews a re-added older report even when prior run metadata already marks it fetched", async () => {
   const c = dates(connection([alpha]), ["2026-10-22"], []);
   c.hasResults = true;
-  const { rerender } = render(<App connection={c} />);
+  const { rerender } = render(<Workspace connection={c} />);
   fireEvent.change(
     screen.getByRole("textbox", { name: "Warcraft Logs reports" }),
     { target: { value: "AAAAAAAAAAAAAAAA" } },
@@ -1766,7 +1773,7 @@ it("reviews a re-added older report even when prior run metadata already marks i
       },
     },
   };
-  rerender(<App connection={withReport} />);
+  rerender(<Workspace connection={withReport} />);
   await act(async () =>
     fireEvent.click(
       screen.getByRole("button", {
@@ -1775,7 +1782,7 @@ it("reviews a re-added older report even when prior run metadata already marks i
     ),
   );
   rerender(
-    <App
+    <Workspace
       connection={{
         ...withReport,
         saved: {
@@ -1806,11 +1813,11 @@ it("keeps a missing-player draft cancellable when another officer resolves that 
       ],
     },
   };
-  const { rerender } = render(<App connection={c} />);
+  const { rerender } = render(<Workspace connection={c} />);
   fireEvent.click(screen.getByRole("button", { name: "Review Night" }));
   fireEvent.click(screen.getByRole("button", { name: "Add main" }));
   rerender(
-    <App
+    <Workspace
       connection={{
         ...c,
         roster: [{ ...blankPlayer(), id: "extra", name: "Extra", version: 1 }],
@@ -1853,7 +1860,7 @@ it("lists season ignores, filters identities, and undoes with the displayed vers
       version: 1,
     },
   ];
-  const view = render(<App connection={c} />);
+  const view = render(<Workspace connection={c} />);
   fireEvent.click(screen.getByRole("button", { name: "Roster" }));
   expect(screen.getByText(/Season: Example season/)).toBeTruthy();
   const panel = screen.getByRole("region", { name: "Ignored players (2)" });
@@ -1877,7 +1884,9 @@ it("lists season ignores, filters identities, and undoes with the displayed vers
     ),
   );
   view.rerender(
-    <App connection={{ ...c, ignoredCharacters: [c.ignoredCharacters[1]] }} />,
+    <Workspace
+      connection={{ ...c, ignoredCharacters: [c.ignoredCharacters[1]] }}
+    />,
   );
   expect(
     screen.getByRole("region", { name: "Ignored players (1)" }),
@@ -1905,7 +1914,7 @@ it("keeps failed ignores visible for retry and does not expose them publicly", a
       "This ignore decision changed. Review the latest list and try again.",
     ),
   );
-  const view = render(<App connection={c} />);
+  const view = render(<Workspace connection={c} />);
   fireEvent.click(screen.getByRole("button", { name: "Roster" }));
   fireEvent.click(
     screen.getByRole("button", { name: /Undo ignore for Visitor/ }),
@@ -1921,7 +1930,7 @@ it("keeps failed ignores visible for retry and does not expose them publicly", a
       .hasAttribute("disabled"),
   ).toBe(false);
   view.rerender(
-    <App connection={{ ...c, officer: false, accessGeneration: 1 }} />,
+    <Workspace connection={{ ...c, officer: false, accessGeneration: 1 }} />,
   );
   expect(
     screen.queryByRole("textbox", { name: "Search ignored players" }),
@@ -1946,7 +1955,7 @@ it("guards invitation account switching while an officer has unsaved report edit
     },
   });
   history.replaceState(null, "", "/?invite=" + "a".repeat(48));
-  render(<App connection={live} />);
+  render(<Workspace connection={live} />);
   await screen.findByRole("button", { name: "Switch Google account" });
   fireEvent.change(
     screen.getByRole("textbox", { name: "Warcraft Logs reports" }),

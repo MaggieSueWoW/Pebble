@@ -12,7 +12,7 @@ export type MissingPlayerDraft = {
   className: string;
   mainId: string;
 };
-export function useMissingPlayerEditor(connection?: LiveConnection) {
+export function useMissingPlayerEditor(connection: LiveConnection) {
   const [draft, setDraft] = useState<MissingPlayerDraft | null>(null);
   const [saving, setSaving] = useState(false);
   const pending = useRef(false);
@@ -42,7 +42,7 @@ export function useMissingPlayerEditor(connection?: LiveConnection) {
     setMessage("");
   }
   async function commit(value: MissingPlayerDraft) {
-    if (!connection?.officer || connection.busy || pending.current) return;
+    if (!connection.officer || connection.busy || pending.current) return;
     pending.current = true;
     setSaving(true);
     setError("");

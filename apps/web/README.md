@@ -76,8 +76,8 @@ Firestore/security (#3), and officer/public UX (#4).
 
 ## Code map
 
-- `app/Root.tsx` handles Firebase setup/loading and officer-access remounts. `app/App.tsx`
-  selects the connected workspace or the sample app.
+- `app/Root.tsx` handles Firebase setup, loading, and workspace remounts when
+  officer access changes.
 - `app/Workspace.tsx` coordinates navigation, editor hooks, draft guards, account
   actions and run submission. Editors stay mounted here across page changes so
   switching pages cannot silently discard a draft. `features/results/useResultsView.ts`
@@ -89,11 +89,6 @@ Firestore/security (#3), and officer/public UX (#4).
   Pages receive typed data, editor state and callbacks; saves and guarded
   transitions go through the workspace. Shared UI belongs in `components/`;
   feature-specific UI stays with its feature.
-- `demo/` owns sample fixtures, illustrative calculations, browser persistence,
-  simulated runs and prototype controls. Only `DemoApp` mounts `useDemoSession`;
-  the connected workspace never starts sample timers or reads sample storage.
-  Sample-only timing validation and the sample report link are supplied explicitly
-  to the shared UI. The existing sample storage key and schema are preserved.
 - `shared/model.ts` contains shared types, input validation/parsing and formatting.
   `shared/useVersionedEditor.ts` supplies the common versioned-draft lifecycle.
 - `data/firebase.ts` configures the Firebase client. `data/useFirestore.ts` is the
@@ -192,16 +187,6 @@ tokens file. It also runs as part of `npm run build`. Run `npm test` and
 `npm run test:browser` after structural changes; the browser suite includes
 keyboard behavior and narrow-screen overflow checks.
 
-## Sample mode
-
-Open http://127.0.0.1:5173/?demo=1 for the original standalone sample prototype.
-It uses localStorage and illustrative calculations, independently of Firestore.
-Prototype controls simulate offline/failing runs and reset sample data. The
-production Python fairness engine remains authoritative in the connected app.
-
-Sample mode illustrates Reports, Overrides and Bench Time. The connected officer
-app additionally exposes the real Roster and Settings editors.
-
 ## Officer workflow browser acceptance
 
 With Chrome, Java 21+ and the Firebase CLI installed (validated with CLI 15.22.4):
@@ -216,7 +201,9 @@ This starts a separate Vite server on port 5174 and Auth/Firestore emulators on
 Firebase configuration. It clears only that isolated emulator's Firestore data;
 keep these ports free. No worker is started. Editor tests assert zero run requests;
 workflow tests create only their expected synthetic requests in this demo
-project. Failure traces stay in ignored `test-results/`.
+project. The four-step officer workflow test queues runs through the app and
+publishes completed results through emulator fixtures. Failure traces stay in
+ignored `test-results/`.
 
 Shared browser helpers live in `e2e/support/`. Call `setupEmulator()` once at
 the top level of each spec, before scenario hooks: it loads the real rules,
@@ -259,9 +246,9 @@ draft-discard guards and held saves on the original night.
 Timing coverage adds save/cancel/reset, blank and detected values, ordering and
 paired break validation, delayed/denied commits, version conflicts, newer edits,
 and night/tab/page navigation. It also checks Pacific daylight-saving validation,
-wall-time presentation in a non-Pacific browser timezone, narrow-screen keyboard
-operation and standalone sample mode. Timing cases verify reports, availability,
-other nights and the empty run queue stay unchanged.
+wall-time presentation in a non-Pacific browser timezone, and narrow-screen
+keyboard operation. Timing cases verify reports, availability, other nights,
+and the empty run queue stay unchanged.
 
 Run-submission coverage includes held/repeated clicks, denied writes, a committed
 request whose acknowledgement is replaced with an error, recovery without duplicate
@@ -398,8 +385,7 @@ existing atomic completed-run loader supplies the fields with no extra reads.
 
 Played-breakdown coverage checks recorded values, zero/missing halves,
 public/officer visibility, period changes, keyboard details and narrow
-layout. The illustrative sample calculation supplies its own played halves only
-in sample mode. Published attendance, possible time and weekly P/B/O appear in
+layout. Published attendance, possible time and weekly P/B/O appear in
 season details; explanation and weekly tables use disclosures. Safe availability
 explanations, private officer diagnostics on Review Night and shareable links are implemented
 and accepted in #11.
@@ -407,9 +393,9 @@ and accepted in #11.
 Officer Settings edits the existing calculation parameters in Pacific time. Missing
 settings show the worker defaults; they are written only after an explicit edit
 and save. Saves use the document version, preserve stale drafts on conflicts and
-leave results unchanged until Run Pebble. Public and sample views do not expose
-this editor. Unit and isolated browser tests cover defaults, validation, guarded
-navigation, targeted saves, conflict recovery and narrow layouts.
+leave results unchanged until Run Pebble. Unit and isolated browser tests cover
+defaults, validation, guarded navigation, targeted saves, conflict recovery,
+and narrow layouts.
 
 Result links identify a view within the deployment's configured season:
 
@@ -424,11 +410,10 @@ and read failures. After completed results are ready, missing periods fall back
 to season totals and missing players to the period's full table, with an explicit
 message. Links follow the latest completed publication rather than pinning a run.
 
-Copy result link copies only the public view/period/player selection. Connected
-links exclude sample mode, configuration and auth parameters; explicit sample
-mode produces a sample link. The existing draft dialog and pending-save guard
-also protect browser Back/Forward, keeping both the editor and address unchanged
-when navigation is canceled or a save is still pending. Result navigation and
+Copy result link copies only the public view, period, and player selection.
+The draft dialog and pending-save guard also protect browser Back/Forward,
+keeping both the editor and address unchanged when navigation is canceled or a
+save is still pending. Result navigation and
 sharing create no input writes or run requests. UI-3 attendance, explanations,
 private diagnostics and parity acceptance are complete; see #11 and #14.
 

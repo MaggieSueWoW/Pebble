@@ -21,7 +21,7 @@ import { warningNights } from "../features/review/warnings";
 import { steps } from "./runStages";
 
 type SidebarProps = {
-  connection?: Pick<
+  connection: Pick<
     LiveConnection,
     "label" | "user" | "officer" | "signIn" | "signOut"
   >;
@@ -35,7 +35,6 @@ type SidebarProps = {
   authPending: boolean;
   accountAction: (action: () => Promise<void>) => Promise<void>;
   guard: (action: () => void) => void;
-  demoControls?: ReactNode;
   warnings?: string[];
   reviewWarnings: (night: string) => void;
 };
@@ -51,7 +50,6 @@ export function Sidebar({
   authPending,
   accountAction,
   guard,
-  demoControls,
   warnings,
   reviewWarnings,
 }: SidebarProps) {
@@ -79,8 +77,7 @@ export function Sidebar({
           <Sparkles size={18} />
         </span>
         <div>
-          <strong>{connection?.label ?? "Midnight"}</strong>
-          {!connection && <span>Season 1 · Sample data</span>}
+          <strong>{connection.label}</strong>
         </div>
       </div>
       <nav aria-label="Main navigation">
@@ -90,7 +87,7 @@ export function Sidebar({
             { id: "review", name: "Review Night", icon: ClipboardCheck },
             { id: "overrides", name: "Overrides", icon: SlidersHorizontal },
             { id: "results", name: "Bench Time", icon: BarChart3 },
-            ...(connection?.officer
+            ...(connection.officer
               ? [
                   {
                     id: "attendance" as const,
@@ -100,7 +97,7 @@ export function Sidebar({
                 ]
               : []),
             { id: "about", name: "About", icon: Info },
-            ...(connection?.officer
+            ...(connection.officer
               ? [
                   { id: "roster" as const, name: "Roster", icon: Users },
                   {
@@ -199,66 +196,54 @@ export function Sidebar({
             {online ? "Local bot online" : "Local bot offline"}
           </span>
         )}
-        {demoControls}
         <div className="officer">
           <span className="avatar">
-            {connection ? (
-              connection.user ? (
-                (connection.user.displayName || connection.user.email || "P")
-                  .slice(0, 2)
-                  .toUpperCase()
-              ) : (
-                <Users size={16} />
-              )
+            {connection.user ? (
+              (connection.user.displayName || connection.user.email || "P")
+                .slice(0, 2)
+                .toUpperCase()
             ) : (
-              "MS"
+              <Users size={16} />
             )}
           </span>
           <div>
             <strong>
-              {connection
-                ? connection.user
-                  ? connection.user.displayName ||
-                    connection.user.email ||
-                    "Signed in"
-                  : "Signed out"
-                : "Example Officer"}
+              {connection.user
+                ? connection.user.displayName ||
+                  connection.user.email ||
+                  "Signed in"
+                : "Signed out"}
             </strong>
             <span>
-              {connection
-                ? connection.officer
-                  ? "Officer"
-                  : connection.user
-                    ? "Officer access is not enabled"
-                    : "Public results"
-                : "Officer · Demo session"}
+              {connection.officer
+                ? "Officer"
+                : connection.user
+                  ? "Officer access is not enabled"
+                  : "Public results"}
             </span>
-            {connection && (
-              <div className="account-actions">
-                {!connection.user && (
-                  <button
-                    className="text-button"
-                    disabled={authPending}
-                    onClick={() => void accountAction(connection.signIn)}
-                  >
-                    Officer sign-in
-                  </button>
-                )}
-                {connection.user && (
-                  <button
-                    className="text-button"
-                    disabled={authPending}
-                    onClick={() =>
-                      guard(() => {
-                        void accountAction(connection.signOut);
-                      })
-                    }
-                  >
-                    Sign out
-                  </button>
-                )}
-              </div>
-            )}
+            <div className="account-actions">
+              {connection.user ? (
+                <button
+                  className="text-button"
+                  disabled={authPending}
+                  onClick={() =>
+                    guard(() => {
+                      void accountAction(connection.signOut);
+                    })
+                  }
+                >
+                  Sign out
+                </button>
+              ) : (
+                <button
+                  className="text-button"
+                  disabled={authPending}
+                  onClick={() => void accountAction(connection.signIn)}
+                >
+                  Officer sign-in
+                </button>
+              )}
+            </div>
           </div>
           {canManage && <ShieldCheck size={17} />}
         </div>

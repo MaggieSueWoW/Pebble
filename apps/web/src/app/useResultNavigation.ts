@@ -41,10 +41,8 @@ export function readResultLocation(defaultPage: Page): ResultLocation {
 /** Public result URLs identify a view within the deployment's configured season. */
 export function resultLink(
   selection: Pick<ResultLocation, "period" | "player">,
-  sample = false,
 ): string {
   const url = new URL(location.pathname, location.origin);
-  if (sample) url.searchParams.set("demo", "1");
   url.searchParams.set("view", "results");
   url.searchParams.set("period", selection.period);
   if (selection.player) url.searchParams.set("player", selection.player);
@@ -52,11 +50,7 @@ export function resultLink(
 }
 
 function navigationURL(selection: ResultLocation): string {
-  if (selection.page === "results")
-    return resultLink(
-      selection,
-      new URLSearchParams(location.search).get("demo") === "1",
-    );
+  if (selection.page === "results") return resultLink(selection);
   const url = new URL(location.href);
   for (const key of ["view", "period", "player"]) url.searchParams.delete(key);
   if (selection.page === "about") url.searchParams.set("view", "about");

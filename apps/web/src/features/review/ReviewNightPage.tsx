@@ -42,7 +42,7 @@ export function ReviewNightPage({
   editor: TimingEditorState;
   nextAction?: ReactNode;
   onRoster?: () => void;
-  connection?: LiveConnection;
+  connection: LiveConnection;
   playerEditor: MissingPlayerEditor;
   onPlayerAction: (player: MissingPlayer, mode: Resolution) => void;
 }) {
@@ -106,7 +106,7 @@ export function ReviewNightPage({
             }
             sources={sources}
           />
-          {connection?.officer && diagnostic?.missingPlayers ? (
+          {connection.officer && diagnostic?.missingPlayers ? (
             <MissingPlayers
               players={diagnostic.missingPlayers}
               connection={connection}

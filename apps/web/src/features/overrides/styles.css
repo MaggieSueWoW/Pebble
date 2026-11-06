@@ -19,6 +19,8 @@
     margin: 0;
   }
   .override-toolbar {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
     margin-bottom: var(--space-5);
   }
   .night-select {
@@ -183,6 +185,9 @@
   }
 
   @media (max-width: 70rem) {
+    .override-toolbar {
+      display: flex;
+    }
     .override-grid {
       grid-template-columns: minmax(0, 1fr);
     }

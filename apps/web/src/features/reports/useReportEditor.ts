@@ -9,7 +9,6 @@ export function useReportEditor(
   save: (changes: Report[], expected: Versions) => Promise<void>,
   deleteReport: (code: string, expected: number) => Promise<void>,
   busy = false,
-  demoNight = "",
 ) {
   const [text, updateText] = useState("");
   const [edits, setEdits] = useState<Record<string, boolean>>({});
@@ -79,7 +78,7 @@ export function useReportEditor(
         enabled: true,
         fetched: false,
         title: "",
-        night: demoNight,
+        night: "",
       })),
       Object.fromEntries(ready.map((p) => [`reports/${p.code}`, 0])),
       () => {

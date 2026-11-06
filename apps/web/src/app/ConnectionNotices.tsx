@@ -10,7 +10,7 @@ export function ConnectionNotices({
   authPending,
   showResults = true,
 }: {
-  connection?: LiveConnection;
+  connection: LiveConnection;
   canManage: boolean;
   switchAccount: () => void;
   authPending: boolean;
@@ -19,15 +19,14 @@ export function ConnectionNotices({
 }) {
   return (
     <>
-      {connection &&
-        !connection.user &&
+      {!connection.user &&
         new URLSearchParams(location.search).has("invite") && (
           <Notice>
             You've opened an officer invitation. Use Officer sign-in to continue
             with the invited Google account.
           </Notice>
         )}
-      {connection?.user && (
+      {connection.user && (
         <InvitationNotice
           user={connection.user}
           officer={connection.officer}
@@ -35,8 +34,8 @@ export function ConnectionNotices({
           authPending={authPending}
         />
       )}
-      {connection?.error && <Notice tone="amber">{connection.error}</Notice>}
-      {connection?.accessError && (
+      {connection.error && <Notice tone="amber">{connection.error}</Notice>}
+      {connection.accessError && (
         <Notice tone="amber">
           <span role="alert">{connection.accessError}</span>{" "}
           <button className="text-button" onClick={connection.retryAccess}>
@@ -44,7 +43,7 @@ export function ConnectionNotices({
           </button>
         </Notice>
       )}
-      {connection?.user && !connection.officer && !connection.accessError && (
+      {connection.user && !connection.officer && !connection.accessError && (
         <section className="notice" aria-labelledby="officer-access-title">
           <Info size={16} aria-hidden="true" />
           <div>
@@ -65,7 +64,7 @@ export function ConnectionNotices({
           </div>
         </section>
       )}
-      {showResults && connection?.resultsError && (
+      {showResults && connection.resultsError && (
         <Notice tone="amber">
           <span role="alert">{connection.resultsError}</span>{" "}
           <button
@@ -77,7 +76,6 @@ export function ConnectionNotices({
         </Notice>
       )}
       {showResults &&
-        connection &&
         !connection.hasResults &&
         !connection.resultsPending &&
         !connection.resultsError && (

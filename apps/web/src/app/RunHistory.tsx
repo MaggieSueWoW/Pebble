@@ -1,13 +1,7 @@
 import { Clock3, ChevronDown, Check, CircleAlert } from "lucide-react";
 import type { History } from "../shared/model";
 import { formatTime, formatRunDate } from "../shared/model";
-export function RunHistory({
-  history,
-  connected,
-}: {
-  history: History[];
-  connected: boolean;
-}) {
+export function RunHistory({ history }: { history: History[] }) {
   return (
     <details className="card run-history">
       <summary>
@@ -34,9 +28,7 @@ export function RunHistory({
             <div>
               <strong>
                 {h.status === "succeeded"
-                  ? connected
-                    ? "Computation completed"
-                    : "Results updated"
+                  ? "Computation completed"
                   : "Run failed"}
               </strong>
               <p>{h.message}</p>

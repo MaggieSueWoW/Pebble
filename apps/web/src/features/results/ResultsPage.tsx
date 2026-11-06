@@ -1,5 +1,4 @@
 import { FileText, Link2 } from "lucide-react";
-import { Notice } from "../../components/Feedback";
 import { AttendanceDetails } from "./AttendanceDetails";
 import { DataTable } from "../../components/DataTable";
 import { formatDate, type Player, type Results } from "../../shared/model";
@@ -16,7 +15,6 @@ export function ResultsPage({
   view,
   hasResults,
   canManage,
-  demo,
   runStatusMessage,
   completedAt,
   onEditAvailability,
@@ -26,7 +24,6 @@ export function ResultsPage({
   view: ResultsView;
   hasResults: boolean;
   canManage: boolean;
-  demo: boolean;
   runStatusMessage: string;
   completedAt?: string;
   onEditAvailability: (id: string) => void;
@@ -204,13 +201,6 @@ export function ResultsPage({
                 </details>
               ))}
             </section>
-          )}
-          {demo && (
-            <Notice>
-              These are illustrative sample calculations, not Pebble’s
-              production fairness engine. Notes and officer details are kept out
-              of the results view.
-            </Notice>
           )}
         </>
       )}

@@ -1,5 +1,4 @@
 import {
-  ArrowUpRight,
   Check,
   CircleAlert,
   ExternalLink,
@@ -18,12 +17,10 @@ function Badge({ children, tone }: { children: ReactNode; tone: string }) {
 export function ReportsPage({
   reports,
   editor,
-  sampleReportLink,
   nextAction,
 }: {
   reports: Report[];
   editor: ReportEditor;
-  sampleReportLink?: string;
   nextAction?: ReactNode;
 }) {
   const [direction, setDirection] = useState<"ascending" | "descending">(
@@ -146,18 +143,6 @@ export function ReportsPage({
             Paste a Warcraft Logs link or 16-character code. Adding a report
             won’t start the bot.
           </span>
-          <div className="button-row">
-            {sampleReportLink && (
-              <button
-                className="text-button"
-                onClick={() => {
-                  setReportText(sampleReportLink);
-                }}
-              >
-                Try a sample link <ArrowUpRight size={13} />
-              </button>
-            )}
-          </div>
         </div>
       </section>
       {nextAction}
