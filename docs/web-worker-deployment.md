@@ -27,12 +27,18 @@ remote Docker host; Compose refuses to create missing source paths.
 
 Copy `deploy/web.env.example` to ignored `deploy/private/deploy.env` on the Mac.
 Set the UID/GID to the owner of the private host files (a non-root identity).
+Keep this active configuration at its stable path across releases; update its
+image tag when releasing a new worker. `scripts/web-worker.sh` uses it by default.
 Put `WCL_CLIENT_ID`, `WCL_CLIENT_SECRET`, and the optional production-only
-`PEBBLE_HEALTHCHECKS_PING_URL` into ignored `deploy/private/wcl.env` (mode 600).
+`PEBBLE_HEALTHCHECKS_PING_URL` into ignored `deploy/private/worker.env` (mode 600).
+Reuse this stable secrets file across releases; do not copy it into release
+directories. The stable `deploy.env` selects the image and runtime paths.
 The Healthchecks value is the individual check's HTTPS UUID ping URL, not the
 project dashboard URL or a management API key. See [worker health](worker-health.md).
-`PEBBLE_WEB_ENV_FILE` is that absolute
-**Mac-side** path; Compose sends its values as container environment. Do not reuse
+Compose defaults to `deploy/private/worker.env` relative to the checkout.
+`PEBBLE_WEB_ENV_FILE` can override it with an absolute **Mac-side** path;
+keep it pointed at the stable secrets file. Compose sends its values as
+container environment. Do not reuse
 the legacy `.env`, which may override isolation config. Do not set
 `FIRESTORE_EMULATOR_HOST` for deployment. Docker administrators can inspect env
 values, as in the existing private deployment mechanism.
@@ -53,6 +59,19 @@ Mongo storage and Redis persistence are reused unchanged. Maintain host backups,
 verify Firestore recovery using [the recovery runbook](web-recovery.md), and keep
 protected recovery copies of private configuration and credentials. Containers are not backups.
 
+Keep `deploy/private/deploy.env`, `deploy/private/worker.env`, and the active
+Hosting configuration `deploy/private/web-release.json` when cleaning up local
+release files. Old release folders can be archived under
+`deploy/private/archive/releases/`; they are deployment history, not active
+configuration. Preserve `deploy/private/hosting-history/` for Hosting rollback.
+`deploy/private/web-release/` is generated staging output and is recreated by the
+Hosting release script. All of these private files are ignored by Git.
+
+Moving local configuration does not change a running container. Its Compose
+creation labels can still name the former file until the next worker update;
+use the stable path for subsequent operations. To select another config
+explicitly, use `scripts/web-worker.sh PRIVATE_DEPLOY_ENV ACTION`.
+
 ## Build, check, handoff and update
 
 Select the intended Docker context explicitly without changing the global
@@ -60,9 +79,9 @@ selection:
 
 ```sh
 export DOCKER_CONTEXT=YOUR_DEPLOYMENT_CONTEXT
-scripts/web-worker.sh deploy/private/deploy.env build
+scripts/web-worker.sh build
 # Set PEBBLE_WEB_IMAGE in deploy.env to pebble-web:<git rev-parse HEAD>.
-scripts/web-worker.sh deploy/private/deploy.env check
+scripts/web-worker.sh check
 ```
 
 Build requires a clean committed checkout. `check` verifies the local image's full
@@ -85,9 +104,9 @@ have stopped:
 
 ```sh
 export PEBBLE_WEB_SINGLETON_CONFIRMED=yes
-scripts/web-worker.sh deploy/private/deploy.env update
-scripts/web-worker.sh deploy/private/deploy.env status
-scripts/web-worker.sh deploy/private/deploy.env logs
+scripts/web-worker.sh update
+scripts/web-worker.sh status
+scripts/web-worker.sh logs
 ```
 
 For updates, ensure private config uses `run_timeout_seconds: 120` (or omits it);
@@ -111,10 +130,10 @@ success/failure fixtures with BOT-1/DATA-1/AUTH-1; do not alter live raid inputs
 merely to manufacture failures. Dependency checks alone are not full acceptance.
 
 ```sh
-scripts/web-worker.sh deploy/private/deploy.env stop
+scripts/web-worker.sh stop
 # Restore PEBBLE_WEB_IMAGE to the previous retained commit in deploy.env.
-scripts/web-worker.sh deploy/private/deploy.env check
-PEBBLE_WEB_SINGLETON_CONFIRMED=yes scripts/web-worker.sh deploy/private/deploy.env update
+scripts/web-worker.sh check
+PEBBLE_WEB_SINGLETON_CONFIRMED=yes scripts/web-worker.sh update
 ```
 
 To return ownership to the Mac, stop the container, verify exit, then start one

@@ -49,9 +49,13 @@ def deployment(tmp_path):
         "PEBBLE_WEB_SINGLETON_CONFIRMED": "yes",
     }
 
-    def run(action="update", **changes):
+    def run(action="update", config="unused.env", **changes):
+        args = ["bash", str(SCRIPT)]
+        if config is not None:
+            args.append(config)
+        args.append(action)
         result = subprocess.run(
-            ["bash", str(SCRIPT), "unused.env", action],
+            args,
             env={**env, **changes},
             capture_output=True,
             text=True,
@@ -65,6 +69,17 @@ def deployment(tmp_path):
         return result, calls
 
     return run
+
+
+@pytest.mark.parametrize("config", [None, "custom.env"])
+def test_status_uses_default_or_explicit_config(deployment, config):
+    result, calls = deployment(action="status", config=config)
+    assert result.returncode == 0, result.stderr
+    assert len(calls) == 1
+    assert calls[0][calls[0].index("--env-file") + 1] == (
+        config or "deploy/private/deploy.env"
+    )
+    assert calls[0][-2:] == ["ps", "web-worker"]
 
 
 @pytest.mark.parametrize("failure", ["bad-config", "missing-image", "runtime"])

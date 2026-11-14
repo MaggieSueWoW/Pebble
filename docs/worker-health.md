@@ -57,10 +57,12 @@ Simple schedule with Period **5 minutes** and Grace **60 minutes**: alerts occur
 deadline is exactly 60 minutes since the last success. `/fail` bypasses this grace.
 Enable the intended down/recovery notification integration and verify its delivery.
 
-Set `PEBBLE_HEALTHCHECKS_PING_URL` in the worker's private environment to the check's
+Set `PEBBLE_HEALTHCHECKS_PING_URL` in the shared private file
+`deploy/private/worker.env` to the check's
 `https://hc-ping.com/<check-uuid>` URL. Treat it as a secret. No management API key is
 needed by the worker. Only the designated production worker should have this
-value: development workers must leave it unset. Emulator and `--once` executions
+value: development workers must leave it unset, including in the root `.env`.
+All production releases reuse the same secrets file. Emulator and `--once` executions
 never send Healthchecks signals. With the URL unset, local health checks and site
 heartbeats still operate, but external notifications are disabled.
 

@@ -2,12 +2,16 @@
 # All operations target only the isolated web service. Never run legacy Compose.
 set -euo pipefail
 cd "$(dirname "$0")/.."
-if [[ $# != 2 ]]; then
-  echo "Usage: $0 PRIVATE_DEPLOY_ENV {build|check|update|stop|status|logs}" >&2
+if [[ $# == 1 ]]; then
+  deploy_env=deploy/private/deploy.env
+  action=$1
+elif [[ $# == 2 ]]; then
+  deploy_env=$1
+  action=$2
+else
+  echo "Usage: $0 [PRIVATE_DEPLOY_ENV] {build|check|update|stop|status|logs}" >&2
   exit 2
 fi
-deploy_env=$1
-action=$2
 compose=(docker compose --project-name pebble-web --env-file "$deploy_env" -f docker-compose.web.yaml)
 
 check_runtime() {

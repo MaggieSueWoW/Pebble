@@ -17,7 +17,8 @@ services:
       GOOGLE_APPLICATION_CREDENTIALS: /run/pebble/firestore.json
       TMPDIR: /run/pebble/locks
     env_file:
-      - ${PEBBLE_WEB_ENV_FILE:?Set the client-side private WCL env file}
+      # Shared production secrets stay outside individual release directories.
+      - ${PEBBLE_WEB_ENV_FILE:-./deploy/private/worker.env}
     volumes:
       - type: bind
         source: ${PEBBLE_WEB_RUNTIME_DIR:?Set an absolute deployment-host path}/config.yaml
