@@ -55,7 +55,7 @@ export function useFirestore(): {
       officer,
       accessGeneration: access.accessGeneration,
       label: seasonLabel,
-      online: state.now - state.heartbeat < 150000,
+      online: state.heartbeat > 0 && state.now - state.heartbeat < 600000,
       active: queue.active,
       versions: data.versions,
       unprocessed:

@@ -27,8 +27,11 @@ remote Docker host; Compose refuses to create missing source paths.
 
 Copy `deploy/web.env.example` to ignored `deploy/private/deploy.env` on the Mac.
 Set the UID/GID to the owner of the private host files (a non-root identity).
-Put only `WCL_CLIENT_ID` and `WCL_CLIENT_SECRET` into ignored
-`deploy/private/wcl.env` (mode 600). `PEBBLE_WEB_ENV_FILE` is that absolute
+Put `WCL_CLIENT_ID`, `WCL_CLIENT_SECRET`, and the optional production-only
+`PEBBLE_HEALTHCHECKS_PING_URL` into ignored `deploy/private/wcl.env` (mode 600).
+The Healthchecks value is the individual check's HTTPS UUID ping URL, not the
+project dashboard URL or a management API key. See [worker health](worker-health.md).
+`PEBBLE_WEB_ENV_FILE` is that absolute
 **Mac-side** path; Compose sends its values as container environment. Do not reuse
 the legacy `.env`, which may override isolation config. Do not set
 `FIRESTORE_EMULATOR_HOST` for deployment. Docker administrators can inspect env
@@ -87,7 +90,8 @@ scripts/web-worker.sh deploy/private/deploy.env status
 scripts/web-worker.sh deploy/private/deploy.env logs
 ```
 
-For updates, build the next commit, change the image tag, run `check`, then
+For updates, ensure private config uses `run_timeout_seconds: 120` (or omits it);
+larger values are rejected. Build the next commit, change the image tag, run `check`, then
 `update`. Updates repeat the image/runtime checks before stopping the healthy
 web container, then stop it before starting its replacement. A missing image,
 invalid mount, credential or dependency failure leaves the current worker running.
@@ -100,7 +104,7 @@ the UI. Logs rotate at 10 MiB, three files. Restart policy is unless-stopped.
 ## Acceptance and rollback
 
 Record image revision, dependency checks, credential permissions, process
-ownership, idle minute heartbeat and idle restart. Also verify a real run's live
+ownership, idle five-minute heartbeat and idle restart. Also verify a real run's live
 stages and complete public pointer, failed run preserving prior public results,
 queued requests after downtime, and no duplicate workers. Coordinate real
 success/failure fixtures with BOT-1/DATA-1/AUTH-1; do not alter live raid inputs

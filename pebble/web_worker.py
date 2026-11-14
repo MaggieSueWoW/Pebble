@@ -10,10 +10,14 @@ import os
 import signal
 import tempfile
 import threading
+import time
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 
+import pymongo
+import redis
+import requests
 import yaml
 from dotenv import load_dotenv
 from google.api_core import exceptions as api_errors
@@ -45,6 +49,9 @@ from .web_publication import publication_batches
 
 log = logging.getLogger(__name__)
 RPC_OPTIONS = {"timeout": 10, "retry": Retry(initial=0.2, maximum=1, timeout=10)}
+HEALTH_INTERVAL_SECONDS = 300
+QUEUED_STALE_SECONDS = 600
+RUNNING_STALE_SECONDS = 180
 
 
 class InputError(ValueError):
@@ -110,6 +117,8 @@ def load_worker_config(path: str) -> WorkerConfig:
     """Read local secrets and project configuration without contacting Sheets."""
     load_dotenv(override=False)
     data = yaml.safe_load(Path(path).read_text()) or {}
+    if os.getenv("PEBBLE_HEALTHCHECKS_PING_URL"):
+        data["healthchecks_ping_url"] = os.environ["PEBBLE_HEALTHCHECKS_PING_URL"]
     for section, fields in {
         "wcl": {"client_id": "WCL_CLIENT_ID", "client_secret": "WCL_CLIENT_SECRET"},
         "mongo": {"uri": "MONGODB_URI"},
@@ -456,11 +465,15 @@ class Worker:
 
     def __init__(self, config, client, mongo):
         self.config, self.client = config, client
+        self.mongo = mongo
         self.season = client.collection("seasons").document(config.firestore.season_id)
         identity = f"{config.firestore.project_id}/{config.firestore.season_id}"
         suffix = hashlib.sha256(identity.encode()).hexdigest()[:12]
         self.db = mongo[f"{config.mongo.db}_web_{suffix}"]
         self.current_run = None
+        self._next_health_at = 0.0
+        self._queued_observation: tuple[str, float] | None = None
+        self._attempted_queued_id: str | None = None
 
     def heartbeat(self):
         self.client.document("bot/status").set(
@@ -470,6 +483,95 @@ class Worker:
             },
             **RPC_OPTIONS,
         )
+
+    def ping_healthchecks(self, *, failed: bool = False) -> None:
+        """Report health without letting monitoring failures stop processing."""
+        secret = self.config.healthchecks_ping_url
+        if secret is None or os.getenv("FIRESTORE_EMULATOR_HOST"):
+            return
+        url = secret.get_secret_value() + ("/fail" if failed else "")
+        try:
+            # No private payload, redirects, or unbounded retries. The next
+            # five-minute probe retries delivery using fresh health evidence.
+            with requests.post(url, timeout=(3, 5), allow_redirects=False) as reply:
+                # Unknown UUIDs can return HTTP 200 with "OK (not found)".
+                if reply.status_code != 200 or reply.text.strip() != "OK":
+                    log.warning("Healthchecks did not accept worker health signal")
+        except requests.RequestException as exc:
+            log.warning("Healthchecks delivery failed (%s)", type(exc).__name__)
+
+    def pending_runs(self):
+        """Read the oldest outstanding request, using the existing queue index."""
+        return (
+            self.season.collection("runs")
+            .where(filter=FieldFilter("status", "in", ["queued", "running"]))
+            .order_by("requestedAt")
+            .limit(1)
+        )
+
+    def check_health(self) -> bool:
+        """Probe dependencies and outstanding work; return whether to drain work."""
+        now = time.monotonic()
+        self._next_health_at = now + HEALTH_INTERVAL_SECONDS
+        queued = False
+        try:
+            pending = list(self.pending_runs().stream(**RPC_OPTIONS))
+            queued = bool(pending and pending[0].to_dict().get("status") == "queued")
+            with pymongo.timeout(10):
+                self.mongo.admin.command("ping")
+            with redis.Redis.from_url(
+                self.config.redis.url,
+                socket_connect_timeout=5,
+                socket_timeout=5,
+                retry=redis.retry.Retry(redis.backoff.NoBackoff(), 0),
+            ) as cache:
+                cache.ping()
+
+            stale = None
+            if pending:
+                request = pending[0]
+                value = request.to_dict()
+                stamp = value.get("requestedAt" if queued else "startedAt")
+                # Use Firestore's read time to compare server timestamps.
+                if not isinstance(stamp, datetime) or stamp.tzinfo is None:
+                    stale = "missing request timestamp"
+                elif queued:
+                    if (
+                        self._queued_observation is None
+                        or self._queued_observation[0] != request.id
+                    ):
+                        self._queued_observation = (request.id, now)
+                    age = (request.read_time - stamp).total_seconds()
+                    observed = now - self._queued_observation[1]
+                    if age >= QUEUED_STALE_SECONDS:
+                        if (
+                            observed >= HEALTH_INTERVAL_SECONDS
+                            and self._attempted_queued_id == request.id
+                        ):
+                            stale = "queued request is not progressing"
+                        else:
+                            # Give recovery time without letting repeated
+                            # pre-claim crashes renew success on every restart.
+                            log.info("Waiting for older queued work to make progress")
+                            return True
+                elif (
+                    request.read_time - stamp
+                ).total_seconds() >= RUNNING_STALE_SECONDS:
+                    stale = "running request exceeded its deadline"
+            if not queued:
+                self._queued_observation = None
+            if stale:
+                log.warning("Worker health failed: %s", stale)
+                self.ping_healthchecks(failed=True)
+            else:
+                # This acknowledged write is the final dependency check and
+                # the only periodic status update used by the website.
+                self.heartbeat()
+                self.ping_healthchecks()
+        except Exception as exc:
+            self._queued_observation = None
+            log.warning("Worker health probe failed (%s)", type(exc).__name__)
+        return queued
 
     def fail_run(self, ref, message):
         """Settle pending/active work; never downgrade a committed success."""
@@ -557,6 +659,7 @@ class Worker:
         if not queued or (stop is not None and stop.is_set()):
             return False
         ref = queued[0].reference
+        self._attempted_queued_id = ref.id
 
         try:
             with run_deadline(self.config.run_timeout_seconds):
@@ -739,6 +842,8 @@ class Worker:
                 try:
                     if needs_recovery:
                         self.recover()
+                        self._queued_observation = None
+                        self._attempted_queued_id = None
                         needs_recovery = False
                     if watch is None:
                         watch = self.queued_runs().on_snapshot(changed)
@@ -748,13 +853,20 @@ class Worker:
                         watch.unsubscribe()
                         watch = None
                     else:
+                        if time.monotonic() >= self._next_health_at:
+                            if self.check_health():
+                                wake.set()
                         # This timeout only checks local listener health; it
                         # makes no Firestore query when there is no notification.
                         if not wake.wait(1):
                             continue
                         wake.clear()
                         while not stop.is_set() and self.process_next(stop=stop):
-                            pass
+                            if (
+                                not stop.is_set()
+                                and time.monotonic() >= self._next_health_at
+                            ):
+                                self.check_health()
                         retry_delay = 1
                         continue
                 except Exception as exc:
@@ -770,6 +882,8 @@ class Worker:
                     # A network failure during processing may leave a claimed
                     # run interrupted. Resolve it before accepting more work.
                     needs_recovery = True
+                    self._queued_observation = None
+                    self._attempted_queued_id = None
                 if stop.wait(retry_delay):
                     break
                 retry_delay = min(retry_delay * 2, 60)
@@ -794,28 +908,10 @@ class Worker:
                 ) from exc
             if once:
                 self.recover()
-                self.heartbeat()
                 self.process_next(stop=stop)
                 return
             stop = stop if stop is not None else threading.Event()
-
-            heartbeat_stop = threading.Event()
-
-            def beat():
-                while not heartbeat_stop.is_set():
-                    try:
-                        self.heartbeat()
-                    except Exception:
-                        log.warning("Could not update worker heartbeat")
-                    heartbeat_stop.wait(60)
-
-            thread = threading.Thread(target=beat, name="pebble-heartbeat", daemon=True)
-            thread.start()
             try:
                 self.listen(stop)
             finally:
                 stop.set()
-                heartbeat_stop.set()
-                thread.join(timeout=21)
-                if thread.is_alive():
-                    raise RuntimeError("Heartbeat failed to stop within the RPC budget")

@@ -28,7 +28,7 @@ cleanup() {
 }
 trap cleanup EXIT
 
-"${docker_cmd[@]}" build -t "$runtime_image" .
+"${docker_cmd[@]}" build -f Dockerfile.web -t "$runtime_image" .
 images+=("$runtime_image")
 cat > "$scratch/Dockerfile" <<EOF
 FROM $runtime_image
@@ -54,7 +54,7 @@ runner=$("${docker_cmd[@]}" create --name "$prefix-runner" --network "container:
   -e PEBBLE_TEST_MONGO_URI=mongodb://127.0.0.1:27017 \
   -e PEBBLE_TEST_REDIS_URL=redis://127.0.0.1:6379/0 \
   -e PYTHONPATH=/app --entrypoint python "$test_image" \
-  -m pytest -q /tmp/tests/test_web_worker.py /tmp/tests/test_web_worker_faults.py /tmp/tests/test_web_worker_lifecycle.py --tb=short -p no:cacheprovider "$@")
+  -m pytest -q /tmp/tests/test_web_worker.py /tmp/tests/test_web_worker_health.py /tmp/tests/test_web_worker_faults.py /tmp/tests/test_web_worker_lifecycle.py --tb=short -p no:cacheprovider "$@")
 created+=("$runner")
 "${docker_cmd[@]}" cp tests "$runner:/tmp/tests"
 "${docker_cmd[@]}" start -a "$runner"

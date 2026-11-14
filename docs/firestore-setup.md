@@ -45,14 +45,17 @@ requests change; it handles one run at a time and sleeps between notifications.
 The SDK resumes transient stream failures. If the listener stops, the worker
 recreates it with exponential retry delays from one second up to one minute;
 the initial snapshot picks up requests queued while disconnected. Startup and
-processing connection failures are retried too. Local listener-health checks do
-not query Firestore. The sole periodic Firestore write is a heartbeat once per minute for the UI;
-starting and finishing runs do not add heartbeat writes. The UI allows 150 seconds
-before showing the bot offline.
+processing connection failures are retried too. Every five minutes, the main loop
+reads the oldest queued/running request, pings Mongo and Redis, and writes the UI
+heartbeat only when the checks pass. Other idle listener checks stay local.
+The UI allows ten minutes before showing the bot offline. Runs have a two-minute
+deadline. See [worker health monitoring](worker-health.md) for Healthchecks setup,
+stale-request detection and alert timing.
 SIGTERM requests a graceful stop after the current run, with up to ten seconds of
 idle shutdown latency. Ctrl-C closes the listener; an interrupted run is recovered
 on the next start. `--once` processes at most one request without a listener. Queued requests wait while it is offline. A restarted
 worker marks interrupted runs failed; an officer can click Run Pebble again.
+The one-shot command does not update the heartbeat or ping Healthchecks.
 The previous complete results remain visible after a failed run.
 
 MongoDB computation data uses a dedicated season database derived from the config

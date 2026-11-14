@@ -36,13 +36,14 @@ never includes private failure details.
 
 ## Shutdown and bounds
 
-SIGTERM and SIGINT stop accepting requests and finish the current run. The heartbeat
-continues during draining, then its thread is stopped/joined; the listener unsubscribes
-and CLI clients close. Idle listener checks use a one-second local wait without
-idle queue reads. An outstanding service RPC can lengthen shutdown.
+SIGTERM and SIGINT stop accepting requests and finish the current run. The listener
+unsubscribes and CLI clients close. Health checks and heartbeats run on the main
+thread every five minutes, including while idle, and are deferred during a run.
+One-second local listener waits do not query Firestore between health checks.
+An outstanding service RPC can lengthen shutdown. See [worker health](worker-health.md).
 
-`run_timeout_seconds` in private worker YAML defaults to 1200 (20 minutes), accepts
-integers from 1 to 1200, and covers claim, capture, computation and publication. A
+`run_timeout_seconds` in private worker YAML defaults to 120 (two minutes), accepts
+integers from 1 to 120, and covers claim, capture, computation and publication. A
 POSIX main-thread alarm interrupts blocked Python HTTP operations and retry loops.
 Deadline failures are settled like other failed requests. Firestore reads/writes use
 10-second RPC and retry budgets; transactions retain the SDK's begin/commit/rollback
@@ -103,7 +104,7 @@ reconnection, permanent-source failure, and diagnostic redaction. Emulator fault
 tests separately cover claim reads/acknowledgements, capture, materialization,
 metadata/stage writes, root/batch upload, final commit, failure recording and lost
 successful-commit replies. Existing tests retain serial notification processing,
-minute heartbeat cadence, stage visibility, input privacy and fatal-thread cleanup.
+five-minute health cadence, stage visibility, input privacy and fatal-loop cleanup.
 
 These checks do not retire the old bot, change S2 editing authority, prove hosted
 login/migration parity, verify production backups, or deploy BOT-1 code. Those

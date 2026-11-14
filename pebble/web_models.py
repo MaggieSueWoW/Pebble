@@ -11,8 +11,10 @@ from pydantic import (
     BaseModel,
     ConfigDict,
     Field,
+    SecretStr,
     StrictBool,
     StrictInt,
+    field_validator,
     model_validator,
 )
 
@@ -259,7 +261,19 @@ class WorkerConfig(BaseModel):
     wcl: WCLConfig
     redis: RedisConfig = Field(default_factory=RedisConfig)
     time: TimeConfig = Field(default_factory=TimeConfig)
-    run_timeout_seconds: Annotated[int, Field(strict=True, ge=1, le=1200)] = 1200
+    run_timeout_seconds: Annotated[int, Field(strict=True, ge=1, le=120)] = 120
+    healthchecks_ping_url: SecretStr | None = None
+
+    @field_validator("healthchecks_ping_url")
+    @classmethod
+    def check_ping_url(cls, value: SecretStr | None) -> SecretStr | None:
+        """Accept only a single check's HTTPS URL, without exposing its secret."""
+        if value is not None and not re.fullmatch(
+            r"https://hc-ping\.com/[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}",
+            value.get_secret_value(),
+        ):
+            raise ValueError("Use a Healthchecks HTTPS UUID ping URL")
+        return value
 
 
 class CalculationInput(InputDocument):

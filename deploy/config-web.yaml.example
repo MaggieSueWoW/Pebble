@@ -1,3 +1,4 @@
+run_timeout_seconds: 120
 firestore:
   project_id: YOUR_FIREBASE_PROJECT_ID
   season_id: midnight-s2

@@ -1,4 +1,6 @@
 # Copy to config-web.yaml and adjust project/season to switch environments.
+run_timeout_seconds: 120
+# Optional production-only secret: PEBBLE_HEALTHCHECKS_PING_URL in private env.
 firestore:
   project_id: YOUR_FIREBASE_PROJECT_ID
   season_id: midnight-s2

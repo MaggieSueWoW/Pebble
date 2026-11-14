@@ -310,12 +310,13 @@ def test_startup_errors_are_sanitized(config, monkeypatch, boundary):
     assert {sig: signal.getsignal(sig) for sig in previous} == previous
 
 
-def test_fatal_loop_stops_heartbeat_thread(config, monkeypatch):
+def test_fatal_loop_cannot_leave_a_background_heartbeat(config, monkeypatch):
     worker = Worker(config, Mock(), mongomock.MongoClient())
     monkeypatch.setattr(worker, "heartbeat", Mock(side_effect=RuntimeError("PRIVATE")))
     monkeypatch.setattr(worker, "listen", Mock(side_effect=RuntimeError("fatal loop")))
     with pytest.raises(RuntimeError, match="fatal loop"):
         worker.run()
+    worker.heartbeat.assert_not_called()
     assert not any(t.name == "pebble-heartbeat" for t in threading.enumerate())
 
 

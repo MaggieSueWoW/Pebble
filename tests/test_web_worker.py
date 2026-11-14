@@ -3,8 +3,8 @@ from __future__ import annotations
 import json
 import os
 import threading
-from datetime import datetime, timezone
-from unittest.mock import Mock
+from datetime import datetime, timedelta, timezone
+from unittest.mock import MagicMock, Mock
 
 import mongomock
 import pytest
@@ -326,9 +326,55 @@ def test_real_firestore_run_publish_failure_and_revocation(
     assert interrupted_ref.get().to_dict()["status"] == "failed"
 
 
+def test_real_health_query_detects_stale_queue_and_running_work(
+    config, emulator, monkeypatch
+):
+    from pebble import web_worker as module
+
+    client, season = emulator
+    worker = Worker(config, client, mongomock.MongoClient())
+    cache = MagicMock()
+    cache.__enter__.return_value = cache
+    monkeypatch.setattr(module.redis.Redis, "from_url", Mock(return_value=cache))
+    signal_health = Mock()
+    monkeypatch.setattr(worker, "ping_healthchecks", signal_health)
+    worker.heartbeat()
+    stamp = client.document("bot/status").get().to_dict()["lastHeartbeatAt"]
+    ref = season.collection("runs").document("old-health-request")
+    ref.set(
+        {
+            "status": "queued",
+            "requestedBy": "test-officer",
+            "requestedAt": datetime.now(timezone.utc) - timedelta(hours=1),
+        }
+    )
+    assert worker.check_health()
+    signal_health.assert_not_called()
+    monkeypatch.setattr(worker, "claim", Mock(return_value=False))
+    assert worker.process_next()
+    worker._queued_observation = (ref.id, module.time.monotonic() - 301)
+    assert worker.check_health()
+    signal_health.assert_called_with(failed=True)
+    assert client.document("bot/status").get().to_dict()["lastHeartbeatAt"] == stamp
+    ref.update(
+        {
+            "status": "running",
+            "startedAt": datetime.now(timezone.utc) - timedelta(minutes=4),
+        }
+    )
+    assert not worker.check_health()
+    signal_health.assert_called_with(failed=True)
+    assert client.document("bot/status").get().to_dict()["lastHeartbeatAt"] == stamp
+    worker.fail_run(ref, "Interrupted test request")
+    assert not worker.check_health()
+    signal_health.assert_called_with()
+    assert client.document("bot/status").get().to_dict()["lastHeartbeatAt"] > stamp
+
+
 def test_listener_drains_requests_on_main_thread_and_unsubscribes(config, monkeypatch):
 
     worker = Worker(config, Mock(), mongomock.MongoClient())
+    worker._next_health_at = float("inf")  # Periodic probes have separate coverage.
     stop = threading.Event()
     watch = Mock(is_active=True)
     query = Mock()
@@ -353,7 +399,7 @@ def test_listener_drains_requests_on_main_thread_and_unsubscribes(config, monkey
     watch.unsubscribe.assert_called_once()
 
 
-def test_idle_listener_health_checks_do_not_query_firestore(config, monkeypatch):
+def test_idle_listener_waits_do_not_query_firestore_between_probes(config, monkeypatch):
 
     stop = threading.Event()
     waits = []
@@ -366,6 +412,7 @@ def test_idle_listener_health_checks_do_not_query_firestore(config, monkeypatch)
             return False
 
     worker = Worker(config, Mock(), mongomock.MongoClient())
+    worker._next_health_at = float("inf")
     watch = Mock(is_active=True)
     query = Mock()
     query.on_snapshot.return_value = watch
@@ -384,6 +431,7 @@ def test_idle_listener_health_checks_do_not_query_firestore(config, monkeypatch)
 def test_listener_retries_startup_and_stopped_watch_with_backoff(config, monkeypatch):
 
     worker = Worker(config, Mock(), mongomock.MongoClient())
+    worker._next_health_at = float("inf")
     stop = Mock()
     stop.is_set.return_value = False
     stop.wait.return_value = False
@@ -448,6 +496,7 @@ def test_listener_receives_real_firestore_requests_and_restarts(
 ):
     client, season = emulator
     worker = Worker(config, client, mongomock.MongoClient())
+    worker._next_health_at = float("inf")
     stop = threading.Event()
     finished = threading.Event()
     first_finished = threading.Event()
@@ -533,31 +582,6 @@ def test_listener_receives_real_firestore_requests_and_restarts(
         stop.set()
         thread.join(timeout=12)
         assert not thread.is_alive()
-
-
-def test_worker_heartbeat_runs_at_most_once_per_minute(config, monkeypatch):
-    worker = Worker(config, Mock(), mongomock.MongoClient())
-    stop = threading.Event()
-    waited = threading.Event()
-    intervals = []
-
-    original_wait = threading.Event.wait
-
-    def wait(event, interval=None):
-        if interval == 60:
-            intervals.append(interval)
-            stop.set()
-            event.set()
-            waited.set()
-            return True
-        return original_wait(event, interval)
-
-    monkeypatch.setattr(threading.Event, "wait", wait)
-    monkeypatch.setattr(worker, "heartbeat", Mock())
-    monkeypatch.setattr(worker, "listen", lambda _: waited.wait(1))
-    worker.run(stop=stop)
-    worker.heartbeat.assert_called_once()
-    assert intervals == [60]
 
 
 @pytest.mark.parametrize(

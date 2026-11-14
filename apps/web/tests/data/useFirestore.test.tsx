@@ -216,6 +216,29 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
+it("keeps a five-minute heartbeat online and expires it after ten minutes", () => {
+  vi.useFakeTimers();
+  try {
+    const { result, unmount } = renderHook(useFirestore);
+    login();
+    grant();
+    expect(result.current.connection.online).toBe(false);
+    loadPrivate();
+    const checkedAt = Date.now();
+    send("bot/status", { lastHeartbeatAt: { toMillis: () => checkedAt } });
+    expect(result.current.connection.online).toBe(true);
+    act(() => vi.advanceTimersByTime(5 * 60 * 1000));
+    expect(result.current.connection.online).toBe(true);
+    act(() => vi.advanceTimersByTime(5 * 60 * 1000));
+    expect(result.current.connection.online).toBe(false);
+    send("bot/status", { lastHeartbeatAt: { toMillis: () => Date.now() } });
+    expect(result.current.connection.online).toBe(true);
+    unmount();
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
 it("maps recorded report check timestamps and follows the newest available summary", () => {
   const { result } = renderHook(useFirestore);
   login();
